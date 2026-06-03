@@ -30,6 +30,7 @@ Before a release:
   a fuller SBOM before public release.
 - Confirm signing and notarization status for each platform.
 - Document rollback steps.
+- Confirm roadmap, ADR, maintainer guide, and security response docs are current.
 
 ## Packaging Targets
 
@@ -66,6 +67,16 @@ Every release should include:
 - migration rollback notes or forward-fix plan
 - known incompatible data changes
 - support window for security fixes
+
+## Maintainer Handoff
+
+Before a public release, maintainers should also review:
+
+- `docs/maintainer-guide.md`
+- `docs/security-response-playbook.md`
+- `docs/dependency-policy.md`
+- `docs/roadmap-workflow.md`
+- accepted ADRs under `docs/adr/`
 
 ## Phase 9 Commands
 

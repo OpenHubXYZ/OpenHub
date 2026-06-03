@@ -2,9 +2,10 @@
 
 Thank you for helping improve TheOpenHub Skills Studio.
 
-This project is currently in its foundation phase. Until the workspace scaffold
-lands, contributions should focus on documentation, planning accuracy, security
-model clarity, and repository hygiene.
+The project has a working pnpm TypeScript workspace, Electron shell, SQLite
+domain model, local management loop, governance, sync, plugin runtime, and
+release-readiness tooling. Contributions should preserve the local-first
+security model and include tests for public behavior.
 
 ## Ground Rules
 
@@ -18,7 +19,7 @@ model clarity, and repository hygiene.
 
 ## Development Flow
 
-After Phase 1 lands:
+Use this local flow before opening a pull request:
 
 ```sh
 pnpm install
@@ -26,6 +27,8 @@ pnpm lint
 pnpm typecheck
 pnpm test
 pnpm build
+pnpm package:desktop
+pnpm release:smoke
 ```
 
 Pull requests should include:
@@ -63,3 +66,7 @@ ci: add workspace verification
 
 Fixtures must be synthetic. Do not commit real private skills, tokens, user
 paths, customer names, API keys, or full local agent directory snapshots.
+
+See `docs/contributor-recipes.md` for adding adapters, security rules, sync
+drivers, and fixtures. See `docs/fixture-contribution.md` for fixture review
+rules.

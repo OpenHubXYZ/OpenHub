@@ -139,6 +139,19 @@ CI must run the same gates.
   migrations, the Phase 4 import/install flow, first-launch window options, and
   redacted release logs.
 
+## Phase 10 Maintainer Operations Coverage
+
+- Maintainer operations tests verify ADR template and accepted ADRs for
+  Electron, SQLite source of truth, sync disabled by default, and plugin
+  permissions.
+- Governance docs cover maintainer guide, triage policy, issue labels,
+  dependency policy, security response playbook, fixture contribution rules, and
+  public roadmap workflow.
+- Contributor recipes explain how to add an adapter, security rule, sync driver,
+  and fixture.
+- CI runs package and release smoke gates after lint, typecheck, test, and
+  build.
+
 ## Unit Test Targets
 
 - `SKILL.md` parser.
@@ -152,6 +165,7 @@ CI must run the same gates.
 - Plugin manifest validation.
 - Plugin host permission and registry behavior.
 - Release readiness script and packaging config coverage.
+- Maintainer operations documentation coverage.
 
 ## Integration Test Targets
 
@@ -165,6 +179,7 @@ CI must run the same gates.
 - Optional sync push/pull.
 - Plugin enable/disable with fixture roots.
 - Current-platform package payload smoke.
+- Maintainer workflow and ADR coverage.
 - Large skill indexing.
 
 ## E2E And Smoke Targets

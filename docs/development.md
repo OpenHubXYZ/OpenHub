@@ -1,11 +1,11 @@
 # Development
 
-The repository is currently in Phase 9 and contains a pnpm TypeScript
+The repository is currently in Phase 10 and contains a pnpm TypeScript
 workspace, an Electron + Vite + React desktop shell, SQLite domain storage,
 agent indexing, import/export/install core services, security governance
 services, version/collection services, optional sync state and drivers,
 constrained plugin runtime services, release packaging scripts, smoke tests,
-linting, formatting, and CI.
+maintainer operations docs, ADRs, linting, formatting, and CI.
 
 ## Prerequisites
 
@@ -56,8 +56,8 @@ Each phase should:
 - Run the acceptance commands.
 - Commit only the phase work.
 
-Do not pre-build maintainer operations or database features before their
-roadmap phases.
+Future work should be added through roadmap updates, ADRs when architecture is
+affected, and focused tests.
 
 ## Local Data Safety
 

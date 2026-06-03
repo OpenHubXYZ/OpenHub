@@ -44,3 +44,9 @@ jobs:
 
       - name: Build
         run: pnpm build
+
+      - name: Package desktop
+        run: pnpm package:desktop
+
+      - name: Release smoke
+        run: pnpm release:smoke

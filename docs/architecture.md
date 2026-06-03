@@ -275,3 +275,21 @@ generated artifacts:
 - `release:smoke` validates package entrypoints, privacy defaults, database
   migration coverage, Phase 4 import/install smoke, first-launch window
   options, and redacted release logs.
+
+## Phase 10 Maintainer Operations
+
+The Phase 10 implementation adds long-term open-source operating structure:
+
+- ADRs under `docs/adr/` capture major architecture decisions.
+- `docs/maintainer-guide.md` gives maintainers a single triage, release, and
+  security intake workflow.
+- `docs/triage-policy.md` and `docs/issue-labels.md` standardize issue intake.
+- `docs/dependency-policy.md` defines dependency risk notes and required
+  verification.
+- `docs/security-response-playbook.md` defines private vulnerability handling.
+- `docs/fixture-contribution.md` prevents committing real skill contents,
+  tokens, user paths, or agent snapshots.
+- `docs/roadmap-workflow.md` keeps roadmap changes public and reviewable.
+- `docs/contributor-recipes.md` teaches safe adapter, security rule, sync
+  driver, and fixture contributions.
+- CI now includes desktop packaging and release smoke gates.

@@ -11,7 +11,7 @@ review, optional sync, and constrained plugin capabilities.
 
 ## Current Status
 
-This repository is in Phase 9: packaging, release, and OSS launch readiness. The desktop
+This repository is in Phase 10: maintainer operations and long-term quality. The desktop
 shell renders the product name, empty/indexed library states, the P0
 import/install flow state, and Security Center state for queue, risk, findings,
 history, exemptions, version history, diffs, collections, Sync Center state, and
@@ -39,7 +39,9 @@ and entry integrity, require declared permissions to be explicitly authorized,
 register capabilities through a restricted host API, and remove capabilities
 from the registry when disabled. The repository now includes current-platform
 desktop packaging, release checksums, dependency inventory generation, release
-smoke checks, and launch-ready contributor onboarding.
+smoke checks, launch-ready contributor onboarding, maintainer triage policy,
+ADRs, dependency policy, fixture rules, security response playbook, and public
+roadmap workflow.
 
 The tracked planning inputs are:
 
@@ -102,8 +104,9 @@ SQLite:
 - `packages/db`: SQLite schema, migrations, repositories, fixtures.
 - `packages/adapters`: Codex, Claude, Gemini, OpenCode, and future adapters.
 
-See `docs/architecture.md`, `docs/sync-model.md`, and `docs/plugin-api.md` for
-the design baseline, sync model, plugin API, and security boundaries.
+See `docs/architecture.md`, `docs/sync-model.md`, `docs/plugin-api.md`, and
+`docs/maintainer-guide.md` for the design baseline, sync model, plugin API,
+security boundaries, and maintainer workflow.
 
 ## Development Commands
 

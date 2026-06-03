@@ -1,6 +1,6 @@
 export const corePackage = {
   name: '@theopenhub/core',
-  phase: 'Phase 9 release readiness'
+  phase: 'Phase 10 maintainer operations'
 } as const;
 
 export { createCollectionService } from './collection-service';

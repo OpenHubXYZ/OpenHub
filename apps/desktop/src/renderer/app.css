@@ -723,17 +723,20 @@ h1 {
 
   .sidebar {
     flex-direction: row;
-    align-items: center;
+    align-items: flex-start;
     gap: 16px;
     min-width: 0;
     padding: 16px;
-    overflow: hidden;
+    overflow: visible;
   }
 
   .nav-list {
     display: flex;
+    flex: 1 1 auto;
+    flex-wrap: wrap;
+    gap: 8px;
     min-width: 0;
-    overflow-x: auto;
+    overflow-x: visible;
     scrollbar-width: none;
   }
 

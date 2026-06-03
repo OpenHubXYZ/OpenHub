@@ -64,3 +64,9 @@ after the first release.
 - Release checksum, dependency inventory, and redacted smoke-test scripts.
 - README Quick Start and release-readiness documentation for contributor
   onboarding.
+- ADR template and accepted ADRs for Electron, SQLite source of truth, sync
+  defaults, and plugin permissions.
+- Maintainer guide, triage policy, issue labels, dependency policy, security
+  response playbook, fixture contribution rules, roadmap workflow, and
+  contributor recipes.
+- CI package and release smoke gates for long-term quality.

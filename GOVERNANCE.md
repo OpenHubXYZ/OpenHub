@@ -24,11 +24,14 @@ Maintainers are responsible for:
 - Requiring tests for public contracts.
 - Documenting architecture decisions that affect contributors.
 - Avoiding accidental collection of private skill contents or user paths.
+- Following `docs/maintainer-guide.md` for triage, releases, and security
+  intake.
 
 ## Decision Process
 
 Small implementation decisions can be made in pull requests. Larger decisions
-should be captured in docs or ADRs before implementation, including:
+should be captured in docs or ADRs under `docs/adr/` before implementation,
+including:
 
 - Storage model changes.
 - Renderer privilege changes.
@@ -45,3 +48,11 @@ more reversible.
 Security reports follow `SECURITY.md`. Public disclosure should wait until a
 fix or mitigation is available, unless the issue is already public or active
 exploitation requires faster communication.
+
+Operational policies:
+
+- Triage: `docs/triage-policy.md`
+- Labels: `docs/issue-labels.md`
+- Dependency updates: `docs/dependency-policy.md`
+- Security response: `docs/security-response-playbook.md`
+- Roadmap changes: `docs/roadmap-workflow.md`
