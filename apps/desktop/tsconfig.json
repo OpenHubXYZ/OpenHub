@@ -1,0 +1,9 @@
+{
+  "extends": "../../tsconfig.base.json",
+  "compilerOptions": {
+    "rootDir": ".",
+    "outDir": "dist",
+    "types": ["node", "vite/client", "vitest", "@testing-library/jest-dom"]
+  },
+  "include": ["src", "*.config.ts"]
+}

@@ -11,15 +11,16 @@ review, optional sync, and constrained plugin capabilities.
 
 ## Current Status
 
-This repository is in Phase 0: open-source repository foundation. Product code
-has not landed yet. The tracked planning inputs are:
+This repository is in Phase 1: workspace, tooling, CI, and Electron app shell
+baseline. The desktop shell renders the product name and an empty library state;
+SQLite, indexing, imports, installs, sync, security center, and plugins are
+still future roadmap phases.
+
+The tracked planning inputs are:
 
 - `references/deep-research-report.md`
 - `references/2026-06-03-electron-react-node-sqlite-development-plan.md`
 - `references/2026-06-03-high-standard-open-source-goal-development-plan.md`
-
-Do not expect build, test, or development scripts until the Phase 1 workspace
-scaffold is committed.
 
 ## Product Principles
 
@@ -51,8 +52,7 @@ See `docs/architecture.md` for the design baseline and security boundaries.
 
 ## Development Commands
 
-Phase 0 contains documentation only. After Phase 1 lands, the standard commands
-will be:
+The standard commands are:
 
 ```sh
 pnpm install

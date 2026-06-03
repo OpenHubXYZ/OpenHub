@@ -15,3 +15,8 @@ after the first release.
 - Community health files.
 - Architecture, development, testing, release, and roadmap documentation.
 - Trackable planning references.
+- pnpm TypeScript workspace.
+- Electron, Vite, and React desktop shell.
+- Baseline shared, core, database, and adapters packages.
+- Vitest, ESLint, Prettier, and GitHub Actions CI baseline.
+- Typed shell IPC contract tests and renderer empty-state smoke coverage.

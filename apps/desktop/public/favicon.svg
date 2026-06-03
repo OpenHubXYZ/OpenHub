@@ -1,0 +1,8 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" role="img" aria-label="TheOpenHub">
+  <rect width="64" height="64" rx="12" fill="#162033" />
+  <rect x="13" y="13" width="38" height="38" rx="8" fill="#2f8a7d" />
+  <path
+    d="M21 32c0-7 4.6-12 11-12s11 5 11 12-4.6 12-11 12-11-5-11-12Zm7 0c0 3.8 1.5 6 4 6s4-2.2 4-6-1.5-6-4-6-4 2.2-4 6Z"
+    fill="#fff"
+  />
+</svg>

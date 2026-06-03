@@ -1,7 +1,7 @@
 # Testing
 
-Testing follows the roadmap phases. Phase 0 has no executable product code, so
-verification is limited to repository status and documentation review.
+Testing follows the roadmap phases. Phase 1 introduces the baseline command
+gates and shell contract tests.
 
 ## Phase 0 Checks
 
@@ -15,9 +15,7 @@ Expected evidence:
 - Open-source files are visible.
 - No product source code is included.
 
-## Planned Command Gates
-
-After Phase 1:
+## Phase 1 Command Gates
 
 ```sh
 pnpm lint
@@ -27,6 +25,16 @@ pnpm build
 ```
 
 CI must run the same gates.
+
+## Phase 1 Contract Coverage
+
+- Electron `BrowserWindow` options keep `contextIsolation: true`,
+  `nodeIntegration: false`, and `sandbox: true`.
+- The renderer shell displays the product name and empty library state.
+- The shared IPC contract validates the `app.info` channel and rejects unknown
+  channels.
+- Static renderer search must not find direct Node, filesystem, SQLite, or
+  `ipcRenderer` access.
 
 ## Unit Test Targets
 

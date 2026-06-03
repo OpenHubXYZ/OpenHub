@@ -1,7 +1,8 @@
 # Development
 
-The repository is currently in Phase 0 and contains planning and open-source
-foundation files only.
+The repository is currently in Phase 1 and contains a pnpm TypeScript
+workspace, an Electron + Vite + React desktop shell, baseline packages, tests,
+linting, formatting, and CI.
 
 ## Prerequisites
 
@@ -12,12 +13,10 @@ The planned implementation will require:
 - Git
 - A supported desktop operating system for Electron development
 
-Exact version requirements will be pinned when Phase 1 creates `package.json`
-and the workspace lockfile.
+Version requirements are declared in `package.json`. The current package manager
+is `pnpm@10.33.2`.
 
-## Planned Commands
-
-After Phase 1:
+## Commands
 
 ```sh
 pnpm install
@@ -28,8 +27,6 @@ pnpm test
 pnpm build
 ```
 
-Do not report these commands as available until the workspace scaffold exists.
-
 ## Repository Layout
 
 Current:
@@ -37,9 +34,6 @@ Current:
 - `references/`: research and implementation plans.
 - `docs/`: architecture, roadmap, development, testing, and release docs.
 - `.github/`: issue, pull request, and discussion templates.
-
-Planned:
-
 - `apps/desktop`
 - `packages/shared`
 - `packages/core`
@@ -56,8 +50,8 @@ Each phase should:
 - Run the acceptance commands.
 - Commit only the phase work.
 
-Do not pre-build sync, plugins, or release packaging while working on P0 import
-or database foundations.
+Do not pre-build sync, plugins, release packaging, or database features before
+their roadmap phases.
 
 ## Local Data Safety
 
