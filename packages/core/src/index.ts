@@ -1,6 +1,6 @@
 export const corePackage = {
   name: '@theopenhub/core',
-  phase: 'Phase 8 plugin runtime'
+  phase: 'Phase 9 release readiness'
 } as const;
 
 export { createCollectionService } from './collection-service';

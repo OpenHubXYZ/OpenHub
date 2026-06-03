@@ -11,11 +11,11 @@ describe('desktop app shell', () => {
     cleanup();
   });
 
-  it('shows the product name and Phase 8 empty state', () => {
+  it('shows the product name and Phase 9 empty state', () => {
     render(<App />);
 
     expect(screen.getByRole('heading', { name: 'TheOpenHub Skills Studio' })).toBeInTheDocument();
-    expect(screen.getByText('Phase 8 plugin runtime')).toBeInTheDocument();
+    expect(screen.getByText('Phase 9 release readiness')).toBeInTheDocument();
     expect(screen.getByText('No skills indexed yet')).toBeInTheDocument();
     expect(screen.getByText('SQLite source of truth')).toBeInTheDocument();
   });

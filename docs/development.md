@@ -1,10 +1,11 @@
 # Development
 
-The repository is currently in Phase 8 and contains a pnpm TypeScript
+The repository is currently in Phase 9 and contains a pnpm TypeScript
 workspace, an Electron + Vite + React desktop shell, SQLite domain storage,
 agent indexing, import/export/install core services, security governance
 services, version/collection services, optional sync state and drivers,
-constrained plugin runtime services, tests, linting, formatting, and CI.
+constrained plugin runtime services, release packaging scripts, smoke tests,
+linting, formatting, and CI.
 
 ## Prerequisites
 
@@ -27,6 +28,9 @@ pnpm lint
 pnpm typecheck
 pnpm test
 pnpm build
+pnpm package:desktop
+pnpm release:smoke
+pnpm release:inventory
 ```
 
 ## Repository Layout
@@ -52,8 +56,8 @@ Each phase should:
 - Run the acceptance commands.
 - Commit only the phase work.
 
-Do not pre-build release packaging or database features before their roadmap
-phases.
+Do not pre-build maintainer operations or database features before their
+roadmap phases.
 
 ## Local Data Safety
 
@@ -100,6 +104,11 @@ Plugin tests should use in-memory SQLite and temporary plugin roots. Fixtures
 must prove manifest validation, integrity checking, explicit permission
 authorization, restricted host registration, malicious entry blocking, disabled
 capability removal, and Plugins UI state.
+
+Release smoke tests should use generated `out/` artifacts only. They must
+verify package payload entrypoints, database migration, the Phase 4
+import/install smoke path, first-launch Electron window options, privacy
+defaults, and redacted release logs.
 
 ## Dependency Changes
 

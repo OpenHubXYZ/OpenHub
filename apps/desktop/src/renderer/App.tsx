@@ -153,7 +153,7 @@ export function App({
       <section className="workspace" aria-labelledby="app-title">
         <header className="workspace-header">
           <div>
-            <p className="phase-label">Phase 8 plugin runtime</p>
+            <p className="phase-label">Phase 9 release readiness</p>
             <h1 id="app-title">TheOpenHub Skills Studio</h1>
           </div>
           <span className="status-chip">Local-first</span>

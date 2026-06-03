@@ -59,3 +59,8 @@ after the first release.
   enable/disable registry behavior.
 - Renderer Plugins status, capabilities, permissions, and error logs panel.
 - Plugin API documentation for minimal adapter plugins.
+- Desktop packaging target config for macOS, Windows, and Linux.
+- Current-platform package script for reproducible unpacked desktop payloads.
+- Release checksum, dependency inventory, and redacted smoke-test scripts.
+- README Quick Start and release-readiness documentation for contributor
+  onboarding.

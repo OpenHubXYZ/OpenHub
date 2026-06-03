@@ -124,6 +124,21 @@ CI must run the same gates.
 - Renderer tests cover Plugins status, capabilities, permissions, and error
   logs.
 
+## Phase 9 Release Readiness Coverage
+
+- Release readiness tests verify packaging scripts, checksum script, dependency
+  inventory script, release smoke script, platform packaging target config,
+  community health files, and README Quick Start coverage.
+- `pnpm package:desktop` builds the workspace and writes a current-platform
+  unpacked desktop payload under `out/packages`.
+- `pnpm release:checksums` writes sha256 checksums for the generated package
+  payload.
+- `pnpm release:inventory` writes a dependency inventory for root and workspace
+  package manifests.
+- `pnpm release:smoke` verifies package entrypoints, privacy defaults, database
+  migrations, the Phase 4 import/install flow, first-launch window options, and
+  redacted release logs.
+
 ## Unit Test Targets
 
 - `SKILL.md` parser.
@@ -136,6 +151,7 @@ CI must run the same gates.
 - IPC payload validation.
 - Plugin manifest validation.
 - Plugin host permission and registry behavior.
+- Release readiness script and packaging config coverage.
 
 ## Integration Test Targets
 
@@ -148,6 +164,7 @@ CI must run the same gates.
 - Rollback.
 - Optional sync push/pull.
 - Plugin enable/disable with fixture roots.
+- Current-platform package payload smoke.
 - Large skill indexing.
 
 ## E2E And Smoke Targets
@@ -162,6 +179,7 @@ CI must run the same gates.
 - Optional sync remains disabled until a profile is enabled.
 - Plugins remain disabled until permissions are authorized and the plugin is
   enabled.
+- Checksums and dependency inventory are generated for release artifacts.
 
 ## Security Fixtures
 

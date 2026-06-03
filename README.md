@@ -11,7 +11,7 @@ review, optional sync, and constrained plugin capabilities.
 
 ## Current Status
 
-This repository is in Phase 8: constrained plugin runtime. The desktop
+This repository is in Phase 9: packaging, release, and OSS launch readiness. The desktop
 shell renders the product name, empty/indexed library states, the P0
 import/install flow state, and Security Center state for queue, risk, findings,
 history, exemptions, version history, diffs, collections, Sync Center state, and
@@ -37,13 +37,44 @@ shared-folder, Git, and mock REST package drivers, and records conflicts for
 explicit resolution. Plugins are disabled by default, validate manifest fields
 and entry integrity, require declared permissions to be explicitly authorized,
 register capabilities through a restricted host API, and remove capabilities
-from the registry when disabled.
+from the registry when disabled. The repository now includes current-platform
+desktop packaging, release checksums, dependency inventory generation, release
+smoke checks, and launch-ready contributor onboarding.
 
 The tracked planning inputs are:
 
 - `references/deep-research-report.md`
 - `references/2026-06-03-electron-react-node-sqlite-development-plan.md`
 - `references/2026-06-03-high-standard-open-source-goal-development-plan.md`
+
+## Quick Start
+
+Prerequisites: Node.js 20.19 or newer, pnpm 10 or newer, and Git.
+
+```sh
+pnpm install
+pnpm dev
+```
+
+Open the Electron shell from the dev command. In a second terminal, run the
+core verification gates:
+
+```sh
+pnpm lint
+pnpm typecheck
+pnpm test
+pnpm build
+```
+
+For release-readiness checks on the current platform:
+
+```sh
+pnpm package:desktop
+pnpm release:smoke
+pnpm release:inventory
+```
+
+Generated release artifacts are written under `out/`, which is ignored by Git.
 
 ## Product Principles
 
@@ -85,6 +116,8 @@ pnpm lint
 pnpm typecheck
 pnpm test
 pnpm build
+pnpm package:desktop
+pnpm release:smoke
 ```
 
 The CI workflow will run the same install, lint, typecheck, test, and build

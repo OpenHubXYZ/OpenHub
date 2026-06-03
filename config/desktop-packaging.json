@@ -1,0 +1,21 @@
+{
+  "appId": "io.theopenhub.skills-studio",
+  "productName": "TheOpenHub Skills Studio",
+  "artifactName": "theopenhub-skills-studio",
+  "unpackedDirectory": "out/packages",
+  "releaseDirectory": "out/release",
+  "targets": {
+    "darwin": {
+      "formats": ["dir", "dmg"],
+      "signing": "required-for-public-release"
+    },
+    "win32": {
+      "formats": ["dir", "nsis"],
+      "signing": "required-for-public-release"
+    },
+    "linux": {
+      "formats": ["dir", "AppImage", "deb"],
+      "signing": "checksum-required"
+    }
+  }
+}

@@ -255,3 +255,23 @@ The Phase 8 implementation adds a disabled-by-default plugin management layer:
   marks it disabled in SQLite.
 - The renderer can display Plugins state for install status, capabilities,
   permissions, and error logs without privileged access.
+
+## Phase 9 Release Packaging
+
+The Phase 9 implementation adds release-readiness tooling without checking in
+generated artifacts:
+
+- `config/desktop-packaging.json` records product identity and macOS, Windows,
+  and Linux package target metadata.
+- `package:desktop` builds the workspace and writes a current-platform unpacked
+  payload under `out/packages`.
+- The package payload includes renderer, main, preload, package metadata,
+  license, changelog, README, security policy, and a release manifest.
+- The release manifest records entrypoints and privacy defaults: no telemetry,
+  no automatic sync profile, and no automatically enabled plugin.
+- `release:checksums` writes sha256 checksums for package payload files.
+- `release:inventory` writes a dependency inventory for root and workspace
+  package manifests.
+- `release:smoke` validates package entrypoints, privacy defaults, database
+  migration coverage, Phase 4 import/install smoke, first-launch window
+  options, and redacted release logs.
