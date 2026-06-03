@@ -36,6 +36,15 @@ CI must run the same gates.
 - Static renderer search must not find direct Node, filesystem, SQLite, or
   `ipcRenderer` access.
 
+## Phase 2 Database Coverage
+
+- Migrations run from empty database to latest and are idempotent.
+- Required domain tables and the `skill_search` FTS5 table exist.
+- Repository tests cover create, list, update, FTS search, and delete.
+- Test data uses `:memory:` SQLite databases.
+- App data directory tests inject fake home paths and do not touch real user
+  directories.
+
 ## Unit Test Targets
 
 - `SKILL.md` parser.

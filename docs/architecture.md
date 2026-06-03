@@ -68,6 +68,23 @@ SQLite stores the authoritative state:
 Agent directories are deployment projections. The app records what it writes so
 uninstall and rollback can avoid deleting unknown user files.
 
+## Phase 2 Database Implementation
+
+The Phase 2 implementation lives in `packages/db` and uses `better-sqlite3`.
+The migration runner applies migrations transactionally and records them in
+`schema_migrations` so running from an empty database to latest is idempotent.
+
+Implemented migrations:
+
+- `001_domain_schema`: skills, skill versions, skill files, blob objects,
+  sources, agents, agent roots, installations, collections, collection items,
+  security scans, and security findings.
+- `002_skill_search_fts`: FTS5 search over skill name, description, tags, and
+  file paths.
+
+Repository tests use `:memory:` databases. They do not write to real user
+directories or agent roots.
+
 ## Data Flow
 
 1. Importers stage local folders, Git repositories, or archives in isolated

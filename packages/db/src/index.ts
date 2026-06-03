@@ -1,4 +1,17 @@
 export const dbPackage = {
   name: '@theopenhub/db',
-  phase: 'Phase 1 tooling baseline'
+  phase: 'Phase 2 SQLite domain foundation'
 } as const;
+
+export { resolveAppDataDirectory } from './app-data';
+export { createMemoryDatabase, getCurrentSchemaVersion, runMigrations } from './migrations';
+export { createSkillRepository } from './skill-repository';
+
+export type { AppDataDirectoryInput } from './app-data';
+export type { MigrationResult, SqliteDatabase } from './migrations';
+export type {
+  CreateSkillInput,
+  SkillRecord,
+  SkillRepository,
+  UpdateSkillMetadataInput
+} from './skill-repository';

@@ -20,3 +20,7 @@ after the first release.
 - Baseline shared, core, database, and adapters packages.
 - Vitest, ESLint, Prettier, and GitHub Actions CI baseline.
 - Typed shell IPC contract tests and renderer empty-state smoke coverage.
+- SQLite migration runner with Phase 2 domain schema.
+- FTS5 skill search table.
+- Skill repository create, list, update, search, and delete coverage.
+- App data directory resolver tests that avoid real user directories.

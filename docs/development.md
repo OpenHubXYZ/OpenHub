@@ -66,7 +66,15 @@ and fixtures for:
 - Git import fixtures
 - path traversal and symlink escape fixtures
 
+Database unit tests should use `createMemoryDatabase()` from `packages/db`.
+Filesystem-backed SQLite tests must use temporary directories created by the
+test runner, never the user's application data directory.
+
 ## Dependency Changes
 
 Dependency changes require a short risk note in the pull request. The lockfile
 must be committed after Phase 1 creates the workspace.
+
+Native dependencies with install scripts must be listed in
+`package.json#pnpm.onlyBuiltDependencies`. Current approved native/build
+dependencies are `better-sqlite3`, `electron`, and `esbuild`.

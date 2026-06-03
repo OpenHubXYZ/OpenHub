@@ -3,10 +3,10 @@ import { describe, expect, it } from 'vitest';
 import { dbPackage } from './index';
 
 describe('db package baseline', () => {
-  it('keeps SQLite implementation out of Phase 1', () => {
+  it('identifies the SQLite foundation package phase', () => {
     expect(dbPackage).toEqual({
       name: '@theopenhub/db',
-      phase: 'Phase 1 tooling baseline'
+      phase: 'Phase 2 SQLite domain foundation'
     });
   });
 });

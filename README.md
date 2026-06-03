@@ -11,10 +11,11 @@ review, optional sync, and constrained plugin capabilities.
 
 ## Current Status
 
-This repository is in Phase 1: workspace, tooling, CI, and Electron app shell
-baseline. The desktop shell renders the product name and an empty library state;
-SQLite, indexing, imports, installs, sync, security center, and plugins are
-still future roadmap phases.
+This repository is in Phase 2: SQLite domain foundation. The desktop shell
+renders the product name and an empty library state, and `packages/db` now has
+idempotent SQLite migrations, required domain tables, FTS5 skill search, app
+data directory resolution, and repository tests. Agent indexing, imports,
+installs, sync, security center UI, and plugins are still future roadmap phases.
 
 The tracked planning inputs are:
 
