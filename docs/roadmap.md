@@ -57,8 +57,8 @@ tests pass.
 
 ## Phase 6: Version History, Blob Store, Collections
 
-- Add content-addressed file storage, version creation, diff, rollback,
-  collections, and batch operations.
+- Extend the content-addressed file storage with version creation, diff,
+  rollback, collections, and batch operations.
 
 Acceptance: dedupe, versioning, diff, rollback, and collection tests pass.
 

@@ -70,6 +70,20 @@ CI must run the same gates.
 - Renderer tests cover the import queue, install plan, and install result flow
   panels.
 
+## Phase 5 Security Governance Coverage
+
+- Rule engine tests cover dangerous shell commands, external data transfer,
+  sensitive file reads, path traversal references, executable scripts, and
+  oversized files through the initial ruleset.
+- High-risk fixtures are blocked before install.
+- Medium-risk fixtures can install and return warnings.
+- Security exemptions include reason, timestamp, and scope, and revoked
+  exemptions no longer allow blocked installs.
+- Batch rescans upsert the version/ruleset scan row instead of creating noisy
+  duplicates.
+- Renderer tests cover Security Center queue, risk score, rule details,
+  history, and exemptions.
+
 ## Unit Test Targets
 
 - `SKILL.md` parser.

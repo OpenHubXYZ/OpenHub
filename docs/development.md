@@ -1,9 +1,9 @@
 # Development
 
-The repository is currently in Phase 4 and contains a pnpm TypeScript
+The repository is currently in Phase 5 and contains a pnpm TypeScript
 workspace, an Electron + Vite + React desktop shell, SQLite domain storage,
-agent indexing, import/export/install core services, tests, linting,
-formatting, and CI.
+agent indexing, import/export/install core services, security governance
+services, tests, linting, formatting, and CI.
 
 ## Prerequisites
 
@@ -79,6 +79,11 @@ Import tests must stage inputs under a temp directory and must not write to real
 agent roots. ZIP slip fixtures should use raw malicious archive entries rather
 than ZIP helper APIs that normalize traversal away before the app can inspect
 it.
+
+Security tests should use imported temp fixtures and in-memory SQLite. High-risk
+fixtures must prove install blocking before any target-root write. Exemption
+fixtures must include a concrete reason and scope, and revocation should be
+verified through policy evaluation.
 
 ## Dependency Changes
 

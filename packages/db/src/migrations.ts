@@ -185,6 +185,31 @@ const migrations: Migration[] = [
         create index idx_installation_files_installation on installation_files(installation_id);
       `);
     }
+  },
+  {
+    version: 4,
+    name: '004_security_exemptions',
+    up(database) {
+      database.exec(`
+        create unique index idx_security_scans_version_ruleset
+          on security_scans(skill_version_id, ruleset_version);
+
+        create table security_exemptions (
+          id text primary key,
+          skill_id text not null references skills(id) on delete cascade,
+          scope text not null,
+          reason text not null,
+          created_at text not null default current_timestamp,
+          revoked_at text
+        );
+
+        create index idx_security_exemptions_skill on security_exemptions(skill_id);
+
+        create unique index idx_security_exemptions_active_scope
+          on security_exemptions(skill_id, scope)
+          where revoked_at is null;
+      `);
+    }
   }
 ];
 

@@ -6,6 +6,8 @@ import type { SqliteDatabase } from '@theopenhub/db';
 
 import type { ContentStore } from './content-store';
 import { assertZipEntryPathSafe, ensurePathInsideRoot } from './path-safety';
+import { createSecurityService } from './security-service';
+import type { InstallPolicyResult, SecurityFinding, SecurityLevel, SecurityService } from './security-service';
 
 export type InstallConflictState = 'clean' | 'conflict';
 export type InstallWriteConflict = 'none' | 'exists';
@@ -13,6 +15,7 @@ export type InstallWriteConflict = 'none' | 'exists';
 export interface CreateInstallServiceInput {
   database: SqliteDatabase;
   contentStore: ContentStore;
+  securityService?: SecurityService;
 }
 
 export interface InstallPlanWrite {
@@ -41,6 +44,10 @@ export interface InstallPlan {
 export interface InstallResult {
   status: 'installed';
   installationId: string;
+  security: {
+    level: SecurityLevel;
+    warnings: SecurityFinding[];
+  };
 }
 
 export interface InstallService {
@@ -56,6 +63,15 @@ export interface InstallService {
   uninstall(input: { installationId: string }): Promise<void>;
 }
 
+export class InstallBlockedError extends Error {
+  public readonly code = 'install_blocked';
+
+  constructor(public readonly policy: InstallPolicyResult) {
+    super(`Install blocked by security policy: ${policy.level}`);
+    this.name = 'InstallBlockedError';
+  }
+}
+
 interface SkillFileRow {
   skillId: string;
   skillName: string;
@@ -67,6 +83,8 @@ interface SkillFileRow {
 }
 
 export function createInstallService(input: CreateInstallServiceInput): InstallService {
+  const securityService = input.securityService ?? createSecurityService(input);
+
   return {
     async createInstallPlan(planInput) {
       const files = getLatestSkillFiles(input.database, planInput.skillId);
@@ -122,6 +140,14 @@ export function createInstallService(input: CreateInstallServiceInput): InstallS
         }
       }
 
+      const policy = await securityService.evaluateInstallPolicy({
+        skillId: plan.skillId,
+        scope: plan.scope
+      });
+      if (!policy.allowed) {
+        throw new InstallBlockedError(policy);
+      }
+
       for (const write of plan.writes) {
         const safeTargetPath = await ensurePathInsideRoot(plan.targetRoot, write.targetPath);
         const content = await input.contentStore.readBlob(write.hash);
@@ -133,7 +159,11 @@ export function createInstallService(input: CreateInstallServiceInput): InstallS
       const installationId = recordInstallation(input.database, plan);
       return {
         status: 'installed',
-        installationId
+        installationId,
+        security: {
+          level: policy.level,
+          warnings: policy.scan.findings
+        }
       };
     },
 

@@ -7,11 +7,11 @@ import { describe, expect, it } from 'vitest';
 import { App } from './App';
 
 describe('desktop app shell', () => {
-  it('shows the product name and Phase 4 empty state', () => {
+  it('shows the product name and Phase 5 empty state', () => {
     render(<App />);
 
     expect(screen.getByRole('heading', { name: 'TheOpenHub Skills Studio' })).toBeInTheDocument();
-    expect(screen.getByText('Phase 4 P0 import and install loop')).toBeInTheDocument();
+    expect(screen.getByText('Phase 5 security governance')).toBeInTheDocument();
     expect(screen.getByText('No skills indexed yet')).toBeInTheDocument();
     expect(screen.getByText('SQLite source of truth')).toBeInTheDocument();
   });
@@ -62,5 +62,27 @@ describe('desktop app shell', () => {
     expect(screen.getByText('/tmp/.codex/skills')).toBeInTheDocument();
     expect(screen.getByRole('heading', { name: 'Install Result' })).toBeInTheDocument();
     expect(screen.getByText('Installed 2 files by copy projection.')).toBeInTheDocument();
+  });
+
+  it('shows the Security Center queue, score, findings, history, and exemptions', () => {
+    render(
+      <App
+        initialSecurityCenter={{
+          queue: [{ skillName: 'High Risk Helper', status: 'blocked' }],
+          riskScore: 95,
+          level: 'critical',
+          findings: [{ ruleName: 'Dangerous shell command', severity: 'critical' }],
+          history: [{ skillName: 'Medium Risk Helper', level: 'medium' }],
+          exemptions: [{ skillName: 'High Risk Helper', scope: 'user', reason: 'Reviewed by maintainer' }]
+        }}
+      />
+    );
+
+    expect(screen.getByRole('heading', { name: 'Security Center' })).toBeInTheDocument();
+    expect(screen.getByText('Risk Score')).toBeInTheDocument();
+    expect(screen.getByText('95')).toBeInTheDocument();
+    expect(screen.getByText('Dangerous shell command')).toBeInTheDocument();
+    expect(screen.getByText('Medium Risk Helper')).toBeInTheDocument();
+    expect(screen.getByText('Reviewed by maintainer')).toBeInTheDocument();
   });
 });

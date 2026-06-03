@@ -15,6 +15,7 @@ const plannedSurfaces = ['Library', 'Import', 'Install Plan', 'Security Center',
 export interface AppProps {
   initialLibrarySkills?: LibrarySkillSummary[];
   initialManagementFlow?: ManagementFlowState | null;
+  initialSecurityCenter?: SecurityCenterState | null;
 }
 
 export interface ManagementFlowState {
@@ -34,7 +35,33 @@ export interface ManagementFlowState {
   };
 }
 
-export function App({ initialLibrarySkills = [], initialManagementFlow = null }: AppProps): ReactElement {
+export interface SecurityCenterState {
+  queue: Array<{
+    skillName: string;
+    status: string;
+  }>;
+  riskScore: number;
+  level: string;
+  findings: Array<{
+    ruleName: string;
+    severity: string;
+  }>;
+  history: Array<{
+    skillName: string;
+    level: string;
+  }>;
+  exemptions: Array<{
+    skillName: string;
+    scope: string;
+    reason: string;
+  }>;
+}
+
+export function App({
+  initialLibrarySkills = [],
+  initialManagementFlow = null,
+  initialSecurityCenter = null
+}: AppProps): ReactElement {
   const [librarySkills, setLibrarySkills] = useState(initialLibrarySkills);
 
   useEffect(() => {
@@ -63,7 +90,7 @@ export function App({ initialLibrarySkills = [], initialManagementFlow = null }:
       <section className="workspace" aria-labelledby="app-title">
         <header className="workspace-header">
           <div>
-            <p className="phase-label">Phase 4 P0 import and install loop</p>
+            <p className="phase-label">Phase 5 security governance</p>
             <h1 id="app-title">TheOpenHub Skills Studio</h1>
           </div>
           <span className="status-chip">Local-first</span>
@@ -103,6 +130,7 @@ export function App({ initialLibrarySkills = [], initialManagementFlow = null }:
         )}
 
         {initialManagementFlow ? <ManagementFlow flow={initialManagementFlow} /> : null}
+        {initialSecurityCenter ? <SecurityCenter state={initialSecurityCenter} /> : null}
 
         <section className="principle-grid" aria-label="Product constraints">
           {principles.map((principle) => (
@@ -114,6 +142,71 @@ export function App({ initialLibrarySkills = [], initialManagementFlow = null }:
         </section>
       </section>
     </main>
+  );
+}
+
+function SecurityCenter({ state }: { state: SecurityCenterState }): ReactElement {
+  return (
+    <section className="security-center" aria-labelledby="security-center-title">
+      <div className="security-summary">
+        <div>
+          <h2 id="security-center-title">Security Center</h2>
+          <p>Risk Score</p>
+        </div>
+        <strong>{state.riskScore}</strong>
+        <span>{state.level}</span>
+      </div>
+
+      <div className="security-grid">
+        <article className="security-panel">
+          <h3>Scan Queue</h3>
+          <ul>
+            {state.queue.map((item) => (
+              <li key={`${item.skillName}:${item.status}`}>
+                <span>{item.skillName}</span>
+                <strong>{item.status}</strong>
+              </li>
+            ))}
+          </ul>
+        </article>
+
+        <article className="security-panel">
+          <h3>Rule Details</h3>
+          <ul>
+            {state.findings.map((finding) => (
+              <li key={`${finding.ruleName}:${finding.severity}`}>
+                <span>{finding.ruleName}</span>
+                <strong>{finding.severity}</strong>
+              </li>
+            ))}
+          </ul>
+        </article>
+
+        <article className="security-panel">
+          <h3>History</h3>
+          <ul>
+            {state.history.map((item) => (
+              <li key={`${item.skillName}:${item.level}`}>
+                <span>{item.skillName}</span>
+                <strong>{item.level}</strong>
+              </li>
+            ))}
+          </ul>
+        </article>
+
+        <article className="security-panel">
+          <h3>Exemptions</h3>
+          <ul>
+            {state.exemptions.map((item) => (
+              <li key={`${item.skillName}:${item.scope}:${item.reason}`}>
+                <span>{item.reason}</span>
+                <strong>{item.scope}</strong>
+              </li>
+            ))}
+          </ul>
+        </article>
+      </div>
+    </section>
   );
 }
 

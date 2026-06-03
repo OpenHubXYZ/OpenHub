@@ -36,3 +36,10 @@ after the first release.
 - Uninstall service that removes only app-recorded files.
 - Portable skill export packages with manifest, files, and SHA-256 hashes.
 - Renderer import queue, install plan, and install result flow panels.
+- Security rule engine with initial command, network, sensitive-file, traversal,
+  executable-script, and oversized-file rules.
+- Pre-install security policy that blocks high-risk skills unless an active
+  scoped exemption exists.
+- Security exemption migration with reason, timestamp, scope, and revocation.
+- Batch rescan upsert behavior that avoids duplicate scan records per ruleset.
+- Renderer Security Center queue, score, findings, history, and exemptions panel.

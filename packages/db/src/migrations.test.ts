@@ -12,10 +12,11 @@ describe('SQLite migrations', () => {
     expect(firstRun.applied).toEqual([
       '001_domain_schema',
       '002_skill_search_fts',
-      '003_installation_files'
+      '003_installation_files',
+      '004_security_exemptions'
     ]);
     expect(secondRun.applied).toEqual([]);
-    expect(getCurrentSchemaVersion(db)).toBe(3);
+    expect(getCurrentSchemaVersion(db)).toBe(4);
   });
 
   it('creates the required Phase 2 domain tables and FTS table', () => {
@@ -39,6 +40,7 @@ describe('SQLite migrations', () => {
         'installations',
         'installation_files',
         'security_findings',
+        'security_exemptions',
         'security_scans',
         'skill_files',
         'skill_search',

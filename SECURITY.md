@@ -50,6 +50,12 @@ apply to the default branch.
 
 ## Security Scanning Limits
 
-The planned Security Center can identify risky patterns and block high-risk
-installs, but it is not an execution sandbox guarantee. Users should still
-review skills before installing them into agent environments.
+The Security Center can identify risky patterns and block high-risk installs,
+but it is not an execution sandbox guarantee. Users should still review skills
+before installing them into agent environments.
+
+The initial ruleset checks for dangerous shell commands, external data
+transfer, sensitive file reads, path traversal references, executable scripts,
+and oversized files. Low- and medium-risk findings are warnings. High and
+critical findings block install by default unless a scoped exemption with a
+reason is active.

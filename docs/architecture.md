@@ -83,6 +83,8 @@ Implemented migrations:
   file paths.
 - `003_installation_files`: app-owned install file records used by uninstall
   and rollback-safe file projection.
+- `004_security_exemptions`: unique security scan records per version/ruleset
+  plus scoped exemptions with reason, timestamp, and revocation.
 
 Repository tests use `:memory:` databases. They do not write to real user
 directories or agent roots.
@@ -148,3 +150,24 @@ keeping SQLite authoritative:
   and recorded hashes.
 - The renderer shows the P0 import queue, install plan, and install result
   state without direct Node, filesystem, SQLite, or `ipcRenderer` access.
+
+## Phase 5 Security Governance
+
+The Phase 5 implementation adds pre-install security governance:
+
+- `security-service` defines `SecurityRule`, scan results, findings, risk
+  scoring, and install policy results.
+- Initial rules cover dangerous shell commands, external data transfer,
+  sensitive file reads, path traversal references, executable scripts, and
+  oversized files.
+- Scans are recorded in `security_scans` and `security_findings`; rescans use a
+  stable version/ruleset key so repeated batch rescans update existing records
+  instead of creating noisy duplicates.
+- `createInstallService()` evaluates the current security policy before writing
+  files. High and critical results are blocked by default.
+- Scoped exemptions are recorded in `security_exemptions` with reason and
+  timestamp and can be revoked. Active exemptions allow a blocked install for
+  the matching skill and scope.
+- Low and medium findings are returned as install warnings.
+- The renderer can display Security Center state for scan queue, risk score,
+  rule details, scan history, and exemptions without privileged access.
