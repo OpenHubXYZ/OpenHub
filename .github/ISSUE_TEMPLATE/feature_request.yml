@@ -1,0 +1,44 @@
+name: Feature request
+description: Propose a scoped feature.
+title: "feat: "
+labels:
+  - enhancement
+body:
+  - type: textarea
+    id: problem
+    attributes:
+      label: Problem
+      description: What user problem should this solve?
+    validations:
+      required: true
+  - type: textarea
+    id: proposal
+    attributes:
+      label: Proposal
+      description: Describe the smallest useful version.
+    validations:
+      required: true
+  - type: dropdown
+    id: phase
+    attributes:
+      label: Roadmap phase
+      options:
+        - Phase 0 repository foundation
+        - Phase 1 workspace and tooling
+        - Phase 2 SQLite foundation
+        - Phase 3 agent detection and indexing
+        - Phase 4 import/export/install/uninstall
+        - Phase 5 security center
+        - Phase 6 version history and collections
+        - Phase 7 sync
+        - Phase 8 plugins
+        - Phase 9 release
+        - Phase 10 maintainer operations
+        - Unsure
+    validations:
+      required: true
+  - type: textarea
+    id: risks
+    attributes:
+      label: Security, privacy, or compatibility risks
+      description: Include any filesystem, sync, plugin, IPC, or migration impact.

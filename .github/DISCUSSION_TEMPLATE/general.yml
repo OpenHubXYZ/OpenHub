@@ -1,0 +1,16 @@
+title: "Discussion: "
+labels:
+  - discussion
+body:
+  - type: textarea
+    id: topic
+    attributes:
+      label: Topic
+      description: What should the community discuss?
+    validations:
+      required: true
+  - type: textarea
+    id: context
+    attributes:
+      label: Context
+      description: Link related docs, issues, or roadmap phases.

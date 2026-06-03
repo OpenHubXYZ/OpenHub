@@ -1,1 +1,50 @@
-/references
+.DS_Store
+Thumbs.db
+
+# Dependencies
+node_modules/
+.pnpm-store/
+
+# Build outputs
+dist/
+build/
+out/
+release/
+coverage/
+.vite/
+.turbo/
+.cache/
+
+# Electron and package artifacts
+*.dmg
+*.pkg
+*.AppImage
+*.deb
+*.rpm
+*.exe
+*.msi
+*.snap
+*.blockmap
+
+# Local databases and generated state
+*.sqlite
+*.sqlite3
+*.db
+*.db-shm
+*.db-wal
+*.log
+
+# Environment and secrets
+.env
+.env.*
+!.env.example
+
+# Editor and OS state
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# Keep planning references trackable.
+!references/
+!references/*.md

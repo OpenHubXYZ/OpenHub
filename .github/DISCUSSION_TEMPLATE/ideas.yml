@@ -1,0 +1,23 @@
+title: "Idea: "
+labels:
+  - idea
+body:
+  - type: textarea
+    id: idea
+    attributes:
+      label: Idea
+      description: What should TheOpenHub Skills Studio consider?
+    validations:
+      required: true
+  - type: textarea
+    id: value
+    attributes:
+      label: User value
+      description: Who benefits and how?
+    validations:
+      required: true
+  - type: textarea
+    id: constraints
+    attributes:
+      label: Constraints
+      description: Note local-first, privacy, security, or compatibility concerns.
