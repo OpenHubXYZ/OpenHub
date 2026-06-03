@@ -1,10 +1,10 @@
 # TheOpenHub Skills Studio
 
-TheOpenHub Skills Studio is a planned MIT licensed, local-first desktop
+TheOpenHub Skills Studio is an MIT-licensed, local-first desktop
 application for managing AI coding agent skills across Codex, Claude, Gemini,
 OpenCode, and other local agent environments.
 
-The product goal is not another file browser. The app will treat SQLite as the
+The product goal is not another file browser. The app treats SQLite as the
 authoritative local source of truth, keep agent skill directories as deployment
 projections, and provide import, install, uninstall, version history, security
 review, optional sync, and constrained plugin capabilities.
@@ -96,9 +96,9 @@ Generated release artifacts are written under `out/`, which is ignored by Git.
 - Imported folders, Git repositories, and archives must be isolated and path
   checked before they can affect an agent directory.
 
-## Planned Architecture
+## Architecture
 
-The planned workspace uses pnpm, TypeScript, Electron, Vite, React, Node, and
+The workspace uses pnpm, TypeScript, Electron, Vite, React, Node, and
 SQLite:
 
 - `apps/desktop`: Electron main process, Vite React renderer, preload IPC.
@@ -127,7 +127,7 @@ pnpm package:desktop
 pnpm release:smoke
 ```
 
-The CI workflow will run the same install, lint, typecheck, test, and build
+The CI workflow runs the same install, lint, typecheck, test, and build
 commands so local and hosted verification stay aligned.
 
 ## Privacy Defaults
@@ -160,7 +160,7 @@ See `docs/roadmap.md` for acceptance gates.
 
 ## Contributing
 
-Contributions are welcome once implementation starts. Please read
+Contributions are welcome. Please read
 `CONTRIBUTING.md`, `CODE_OF_CONDUCT.md`, `SECURITY.md`, and the docs under
 `docs/` before opening a pull request.
 

@@ -1,5 +1,6 @@
 import { spawn } from 'node:child_process';
-import { mkdir, readdir, readFile, writeFile } from 'node:fs/promises';
+import { mkdir, mkdtemp, readdir, readFile, rm, writeFile } from 'node:fs/promises';
+import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
@@ -12,6 +13,7 @@ const manifest = JSON.parse(await readFile(path.join(packageDirectory, 'release-
 for (const entrypoint of Object.values(manifest.entrypoints)) {
   await readFile(path.join(packageDirectory, entrypoint));
 }
+await readFile(path.join(packageDirectory, 'resources/app/node_modules/better-sqlite3/package.json'));
 
 if (manifest.privacyDefaults.telemetry !== false) {
   throw new Error('Release manifest must keep telemetry disabled');
@@ -24,6 +26,7 @@ if (manifest.privacyDefaults.pluginEnabled !== false) {
 }
 
 await runSmokeTests();
+await runPackagedStartupSmoke();
 await mkdir(releaseDirectory, { recursive: true });
 
 const logContent = [
@@ -31,6 +34,7 @@ const logContent = [
   `platform=${process.platform}`,
   `arch=${process.arch}`,
   'package_payload=verified',
+  'package_startup=verified',
   'database_migration=verified',
   'phase4_import_install=verified',
   'desktop_runtime=verified',
@@ -75,10 +79,45 @@ async function runSmokeTests() {
   }
 }
 
-function spawnForResult(command, args) {
+async function runPackagedStartupSmoke() {
+  const smokeDataDirectory = await mkdtemp(path.join(tmpdir(), 'theopenhub-package-smoke-'));
+  const result = await spawnForResult(
+    'pnpm',
+    [
+      'exec',
+      'electron',
+      path.join(packageDirectory, manifest.entrypoints.main),
+      '--release-smoke',
+      `--smoke-data-dir=${smokeDataDirectory}`
+    ],
+    { env: { ...process.env, ELECTRON_RUN_AS_NODE: '1' }, timeoutMs: 45000 }
+  );
+
+  await rm(smokeDataDirectory, { recursive: true, force: true });
+
+  if (result.code !== 0) {
+    throw new Error(`Packaged startup smoke failed:\n${result.output}`);
+  }
+  if (!result.output.includes('"status":"passed"')) {
+    throw new Error(`Packaged startup smoke did not report success:\n${result.output}`);
+  }
+}
+
+function spawnForResult(command, args, options = {}) {
   return new Promise((resolve, reject) => {
-    const child = spawn(command, args, { cwd: rootDirectory, stdio: ['ignore', 'pipe', 'pipe'] });
+    const child = spawn(command, args, {
+      cwd: rootDirectory,
+      env: options.env ?? process.env,
+      stdio: ['ignore', 'pipe', 'pipe']
+    });
     let output = '';
+    const timeout = options.timeoutMs
+      ? setTimeout(() => {
+          child.kill('SIGTERM');
+          resolve({ code: 124, output: `${output}\nTimed out after ${options.timeoutMs}ms` });
+        }, options.timeoutMs)
+      : null;
+
     child.stdout.on('data', (chunk) => {
       output += chunk.toString();
     });
@@ -87,6 +126,9 @@ function spawnForResult(command, args) {
     });
     child.on('error', reject);
     child.on('close', (code) => {
+      if (timeout) {
+        clearTimeout(timeout);
+      }
       resolve({ code, output });
     });
   });

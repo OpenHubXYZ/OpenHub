@@ -41,6 +41,9 @@ describe('release readiness', () => {
 
     expect(packageScript).toContain('runtimeExternalDependencies');
     expect(packageScript).toContain('better-sqlite3');
+    expect(packageScript).toContain('copyRuntimeExternalDependencies');
+    expect(packageScript).toContain('installElectronNativeRuntime');
+    expect(packageScript).toContain('prebuild-install');
     expect(packageScript).not.toContain('dependencies: desktopPackage.dependencies');
   });
 
@@ -49,6 +52,10 @@ describe('release readiness', () => {
 
     expect(smokeScript).toContain('apps/desktop/src/main/desktop-runtime.test.ts');
     expect(smokeScript).toContain('desktop_runtime=verified');
+    expect(smokeScript).toContain('runPackagedStartupSmoke');
+    expect(smokeScript).toContain('--release-smoke');
+    expect(smokeScript).toContain('ELECTRON_RUN_AS_NODE');
+    expect(smokeScript).toContain('package_startup=verified');
   });
 
   it('keeps community health files and 15-minute quick start visible', async () => {

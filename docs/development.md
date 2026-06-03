@@ -10,7 +10,7 @@ formatting, and CI.
 
 ## Prerequisites
 
-The planned implementation will require:
+Local development requires:
 
 - Node.js LTS
 - pnpm
@@ -112,9 +112,10 @@ authorization, restricted host registration, malicious entry blocking, disabled
 capability removal, and Plugins UI state.
 
 Release smoke tests should use generated `out/` artifacts only. They must
-verify package payload entrypoints, database migration, the Phase 4
-import/install smoke path, first-launch Electron window options, privacy
-defaults, and redacted release logs.
+verify package payload entrypoints, packaged main startup under the Electron
+runtime, database migration, the Phase 4 import/install smoke path,
+first-launch Electron window options, privacy defaults, and redacted release
+logs.
 
 ## Dependency Changes
 

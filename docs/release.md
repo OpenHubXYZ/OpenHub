@@ -17,6 +17,7 @@ Before a release:
 
 - Verify `pnpm lint`, `pnpm typecheck`, `pnpm test`, and `pnpm build`.
 - Run `pnpm package:desktop` and `pnpm release:smoke` on the current platform.
+- Verify packaged main startup under the Electron runtime.
 - Verify database migrations from empty and previous supported versions.
 - Verify first launch and Phase 4 import/install/uninstall smoke flow.
 - Verify optional sync remains disabled until a profile is enabled.
@@ -44,9 +45,10 @@ Release artifacts must be reproducible from committed source, lockfile, and CI
 configuration.
 
 The current Phase 9 package script produces a reproducible unpacked payload
-under `out/packages/` for the current platform. Public native installers still
-require signing/notarization credentials and platform-specific CI before a
-published release.
+under `out/packages/` for the current platform. It copies runtime external
+dependencies and installs the Electron ABI native SQLite runtime before writing
+checksums. Public native installers still require signing/notarization
+credentials and platform-specific CI before a published release.
 
 ## Privacy Checks
 

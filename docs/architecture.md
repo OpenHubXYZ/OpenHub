@@ -1,6 +1,6 @@
 # Architecture
 
-TheOpenHub Skills Studio is planned as a local-first Electron desktop
+TheOpenHub Skills Studio is a local-first Electron desktop
 application for managing AI coding agent skills.
 
 ## Stack Choice
@@ -21,7 +21,7 @@ alternative for the initial open-source project.
 ## Process Boundaries
 
 Renderer code is untrusted relative to local data and must not directly access
-Node, the filesystem, or SQLite. The planned desktop shell must use:
+Node, the filesystem, or SQLite. The desktop shell uses:
 
 - `contextIsolation: true`
 - `nodeIntegration: false`
@@ -41,7 +41,7 @@ The Electron main process owns privileged services:
 
 ## Workspace Layout
 
-Planned packages:
+Workspace packages:
 
 - `apps/desktop`: Electron main process, preload IPC, Vite React renderer.
 - `packages/shared`: shared types, schemas, IPC contracts, constants.
@@ -290,15 +290,16 @@ generated artifacts:
 - `package:desktop` builds the workspace and writes a current-platform unpacked
   payload under `out/packages`.
 - The package payload includes renderer, main, preload, package metadata,
-  license, changelog, README, security policy, and a release manifest.
+  runtime external dependencies, Electron ABI native SQLite runtime, license,
+  changelog, README, security policy, and a release manifest.
 - The release manifest records entrypoints and privacy defaults: no telemetry,
   no automatic sync profile, and no automatically enabled plugin.
 - `release:checksums` writes sha256 checksums for package payload files.
 - `release:inventory` writes a dependency inventory for root and workspace
   package manifests.
-- `release:smoke` validates package entrypoints, privacy defaults, database
-  migration coverage, Phase 4 import/install smoke, first-launch window
-  options, and redacted release logs.
+- `release:smoke` validates package entrypoints, packaged main startup under
+  the Electron runtime, privacy defaults, database migration coverage, Phase 4
+  import/install smoke, first-launch window options, and redacted release logs.
 
 ## Phase 10 Maintainer Operations
 

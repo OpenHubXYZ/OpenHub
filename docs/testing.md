@@ -140,9 +140,10 @@ CI must run the same gates.
   payload.
 - `pnpm release:inventory` writes a dependency inventory for root and workspace
   package manifests.
-- `pnpm release:smoke` verifies package entrypoints, privacy defaults, database
-  migrations, the Phase 4 import/install flow, first-launch window options, and
-  desktop runtime IPC coverage, and redacted release logs.
+- `pnpm release:smoke` verifies package entrypoints, packaged main startup under
+  the Electron runtime, privacy defaults, database migrations, the Phase 4
+  import/install flow, first-launch window options, desktop runtime IPC
+  coverage, and redacted release logs.
 
 ## Phase 10 Maintainer Operations Coverage
 
@@ -195,7 +196,8 @@ CI must run the same gates.
 - Security scan blocks a high-risk skill.
 - Install to personal and project scopes.
 - Resolve a sync conflict after sync exists.
-- Packaged app starts and completes the Phase 4 core flow.
+- Packaged main startup smoke completes the Phase 4 core flow under the Electron
+  runtime.
 - Optional sync remains disabled until a profile is enabled.
 - Plugins remain disabled until permissions are authorized and the plugin is
   enabled.

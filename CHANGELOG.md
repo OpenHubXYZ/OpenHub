@@ -76,3 +76,5 @@ after the first release.
 - Renderer controls for agent-root scanning, local folder import, install plan
   creation, and install application through the preload bridge.
 - Release smoke coverage for desktop runtime IPC import/install/library flows.
+- Packaged startup smoke coverage for Electron runtime native SQLite and the
+  Phase 4 import/install flow.
