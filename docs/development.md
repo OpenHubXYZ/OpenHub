@@ -70,6 +70,10 @@ Database unit tests should use `createMemoryDatabase()` from `packages/db`.
 Filesystem-backed SQLite tests must use temporary directories created by the
 test runner, never the user's application data directory.
 
+Agent indexing tests should inject a fake `homeDirectory` into
+`createBuiltInAgentAdapters()`. Do not scan real `~/.codex`, `~/.claude`,
+`~/.gemini`, or `~/.opencode` directories in automated tests.
+
 ## Dependency Changes
 
 Dependency changes require a short risk note in the pull request. The lockfile

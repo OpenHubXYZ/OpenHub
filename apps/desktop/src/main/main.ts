@@ -18,6 +18,11 @@ function registerIpcHandlers(): void {
     parseIpcRequest(desktopShellContract.appInfo.channel, payload);
     return appInfo;
   });
+
+  ipcMain.handle(desktopShellContract.libraryList.channel, (_event, payload: unknown) => {
+    parseIpcRequest(desktopShellContract.libraryList.channel, payload);
+    return [];
+  });
 }
 
 async function createMainWindow(): Promise<void> {

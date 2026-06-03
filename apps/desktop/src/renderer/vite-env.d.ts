@@ -1,11 +1,12 @@
 /// <reference types="vite/client" />
 
-import type { AppInfo } from '@theopenhub/shared';
+import type { AppInfo, LibrarySkillSummary } from '@theopenhub/shared';
 
 declare global {
   interface Window {
     theOpenHub?: {
       getAppInfo(): Promise<AppInfo>;
+      listLibrarySkills(): Promise<LibrarySkillSummary[]>;
     };
   }
 }

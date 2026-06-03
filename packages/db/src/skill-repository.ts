@@ -20,6 +20,7 @@ export interface CreateSkillInput {
 
 export interface SkillRecord {
   id: string;
+  versionId: string;
   slug: string;
   name: string;
   description: string;
@@ -158,6 +159,7 @@ export function createSkillRepository(database: SqliteDatabase): SkillRepository
               s.name,
               s.description,
               s.tags_json as tagsJson,
+              sv.id as versionId,
               max(sv.version_no) as versionNo
             from skills s
             join skill_versions sv on sv.skill_id = s.id
@@ -213,6 +215,7 @@ export function createSkillRepository(database: SqliteDatabase): SkillRepository
               s.name,
               s.description,
               s.tags_json as tagsJson,
+              sv.id as versionId,
               max(sv.version_no) as versionNo
             from skill_search ss
             join skills s on s.id = ss.skill_id
@@ -247,6 +250,7 @@ function getSkillRecord(database: SqliteDatabase, skillId: string): SkillRecord 
           s.name,
           s.description,
           s.tags_json as tagsJson,
+          sv.id as versionId,
           max(sv.version_no) as versionNo
         from skills s
         join skill_versions sv on sv.skill_id = s.id
@@ -307,11 +311,13 @@ function skillRow(row: unknown): SkillRecord {
     name: string;
     description: string;
     tagsJson: string;
+    versionId: string;
     versionNo: number;
   };
 
   return {
     id: typed.id,
+    versionId: typed.versionId,
     slug: typed.slug,
     name: typed.name,
     description: typed.description,

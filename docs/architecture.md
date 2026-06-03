@@ -108,3 +108,20 @@ transactions, outbox and inbox records, conflict objects, and explicit drivers.
 Plugins are planned as constrained extensions for adapters, importers, security
 rules, and sync drivers. They must declare permissions and should not receive
 broad filesystem or network access by default.
+
+## Phase 3 Agent Indexing
+
+The Phase 3 implementation adds a read-only indexing path:
+
+- `packages/adapters` defines `AgentAdapter` and built-in adapters for Codex,
+  Claude, Gemini, and OpenCode.
+- Built-in adapters detect default user skill roots under the provided home
+  directory and list installed skill directories that contain `SKILL.md`.
+- `packages/core` parses YAML frontmatter from `SKILL.md` and returns
+  explainable errors for missing or malformed metadata.
+- The scanner reads fixture roots, writes skills, versions, files, agents,
+  roots, and installation records into SQLite, and keeps invalid skills as scan
+  errors instead of crashing.
+- `library.list` is a typed IPC channel for renderer library queries.
+
+Install, uninstall, conflict planning, and write projection remain Phase 4.

@@ -133,6 +133,61 @@ h1 {
   box-shadow: 0 18px 42px rgb(31 41 55 / 8%);
 }
 
+.library-list {
+  display: grid;
+  gap: 12px;
+}
+
+.skill-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 24px;
+  align-items: center;
+  padding: 18px 20px;
+  border: 1px solid #d9deea;
+  border-radius: 8px;
+  background: #ffffff;
+  box-shadow: 0 12px 28px rgb(31 41 55 / 6%);
+}
+
+.skill-row h2 {
+  color: #17202f;
+  font-size: 18px;
+  font-weight: 740;
+  line-height: 1.2;
+  letter-spacing: 0;
+}
+
+.skill-row p {
+  margin-top: 6px;
+  color: #667085;
+  font-size: 13px;
+  line-height: 1.45;
+  overflow-wrap: anywhere;
+}
+
+.skill-row dl {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(96px, max-content));
+  gap: 14px;
+  margin: 0;
+}
+
+.skill-row dt {
+  color: #667085;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0;
+  text-transform: uppercase;
+}
+
+.skill-row dd {
+  margin: 4px 0 0;
+  color: #1f2937;
+  font-size: 14px;
+  font-weight: 700;
+}
+
 .empty-icon {
   display: grid;
   width: 72px;
@@ -228,7 +283,8 @@ h1 {
   }
 
   .workspace-header,
-  .empty-state {
+  .empty-state,
+  .skill-row {
     grid-template-columns: 1fr;
   }
 
@@ -238,5 +294,9 @@ h1 {
 
   .principle-grid {
     grid-template-columns: 1fr;
+  }
+
+  .skill-row dl {
+    grid-template-columns: 1fr 1fr;
   }
 }

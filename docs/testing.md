@@ -45,6 +45,16 @@ CI must run the same gates.
 - App data directory tests inject fake home paths and do not touch real user
   directories.
 
+## Phase 3 Library Indexing Coverage
+
+- Fixture roots for `.codex/skills`, `.claude/skills`, `.gemini/skills`, and
+  `.opencode/skills` scan successfully.
+- Missing `SKILL.md` and malformed metadata produce explainable scan errors.
+- Indexed library rows preserve skill name, source agent, path, and install
+  status.
+- IPC contract tests cover `library.list`.
+- Renderer tests cover both empty and indexed library states.
+
 ## Unit Test Targets
 
 - `SKILL.md` parser.

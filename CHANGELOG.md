@@ -24,3 +24,7 @@ after the first release.
 - FTS5 skill search table.
 - Skill repository create, list, update, search, and delete coverage.
 - App data directory resolver tests that avoid real user directories.
+- Codex, Claude, Gemini, and OpenCode root detection adapters.
+- `SKILL.md` parser with explainable malformed-file errors.
+- Agent library scanner that indexes fixture roots into SQLite.
+- Library list IPC contract and renderer rows for indexed skills.

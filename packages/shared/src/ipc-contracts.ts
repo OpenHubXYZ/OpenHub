@@ -13,6 +13,18 @@ export const appInfoResponseSchema = z
 
 export type AppInfo = z.infer<typeof appInfoResponseSchema>;
 
+export const librarySkillSummarySchema = z
+  .object({
+    id: z.string().min(1),
+    name: z.string().min(1),
+    sourceAgent: z.string().min(1),
+    path: z.string().min(1),
+    installStatus: z.string().min(1)
+  })
+  .strict();
+
+export type LibrarySkillSummary = z.infer<typeof librarySkillSummarySchema>;
+
 export const appInfo: AppInfo = {
   productName: PRODUCT_NAME,
   phase: CURRENT_PHASE,
@@ -26,22 +38,42 @@ export const desktopShellContract = {
     channel: 'app.info',
     request: emptyRequestSchema,
     response: appInfoResponseSchema
+  },
+  libraryList: {
+    channel: 'library.list',
+    request: emptyRequestSchema,
+    response: z.array(librarySkillSummarySchema)
   }
 } as const;
 
 export type IpcChannel = (typeof desktopShellContract)[keyof typeof desktopShellContract]['channel'];
 
 export function parseIpcRequest(channel: string, payload: unknown): Record<string, never> {
-  if (channel === desktopShellContract.appInfo.channel) {
+  if (
+    channel === desktopShellContract.appInfo.channel ||
+    channel === desktopShellContract.libraryList.channel
+  ) {
     return desktopShellContract.appInfo.request.parse(payload);
   }
 
   throw new Error(`Unknown IPC channel: ${channel}`);
 }
 
-export function parseIpcResponse(channel: string, payload: unknown): AppInfo {
+export function parseIpcResponse(
+  channel: typeof desktopShellContract.appInfo.channel,
+  payload: unknown
+): AppInfo;
+export function parseIpcResponse(
+  channel: typeof desktopShellContract.libraryList.channel,
+  payload: unknown
+): LibrarySkillSummary[];
+export function parseIpcResponse(channel: string, payload: unknown): AppInfo | LibrarySkillSummary[] {
   if (channel === desktopShellContract.appInfo.channel) {
     return desktopShellContract.appInfo.response.parse(payload);
+  }
+
+  if (channel === desktopShellContract.libraryList.channel) {
+    return desktopShellContract.libraryList.response.parse(payload);
   }
 
   throw new Error(`Unknown IPC channel: ${channel}`);

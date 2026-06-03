@@ -11,11 +11,14 @@ review, optional sync, and constrained plugin capabilities.
 
 ## Current Status
 
-This repository is in Phase 2: SQLite domain foundation. The desktop shell
-renders the product name and an empty library state, and `packages/db` now has
-idempotent SQLite migrations, required domain tables, FTS5 skill search, app
-data directory resolution, and repository tests. Agent indexing, imports,
-installs, sync, security center UI, and plugins are still future roadmap phases.
+This repository is in Phase 3: agent detection and local library indexing. The
+desktop shell renders the product name and empty/indexed library states.
+`packages/db` has idempotent SQLite migrations, required domain tables, FTS5
+skill search, app data directory resolution, and repository tests.
+`packages/adapters` detects Codex, Claude, Gemini, and OpenCode skill roots.
+`packages/core` parses `SKILL.md`, indexes fixture roots into SQLite, and
+records explainable scan errors. Imports, installs, sync, security center UI,
+and plugins are still future roadmap phases.
 
 The tracked planning inputs are:
 

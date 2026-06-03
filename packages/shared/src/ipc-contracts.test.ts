@@ -21,4 +21,20 @@ describe('desktop shell IPC contract', () => {
   it('rejects unknown IPC channels before dispatch', () => {
     expect(() => parseIpcRequest('unknown.channel', {})).toThrow(/Unknown IPC channel/);
   });
+
+  it('defines the library list channel and response shape', () => {
+    expect(desktopShellContract.libraryList.channel).toBe('library.list');
+
+    const response = desktopShellContract.libraryList.response.parse([
+      {
+        id: 'skill-1',
+        name: 'Path Safety Scanner',
+        sourceAgent: 'Codex',
+        path: '/tmp/.codex/skills/path-safety',
+        installStatus: 'installed'
+      }
+    ]);
+
+    expect(response[0]?.sourceAgent).toBe('Codex');
+  });
 });
