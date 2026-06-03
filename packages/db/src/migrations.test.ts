@@ -13,10 +13,11 @@ describe('SQLite migrations', () => {
       '001_domain_schema',
       '002_skill_search_fts',
       '003_installation_files',
-      '004_security_exemptions'
+      '004_security_exemptions',
+      '005_sync_state'
     ]);
     expect(secondRun.applied).toEqual([]);
-    expect(getCurrentSchemaVersion(db)).toBe(4);
+    expect(getCurrentSchemaVersion(db)).toBe(5);
   });
 
   it('creates the required Phase 2 domain tables and FTS table', () => {
@@ -46,7 +47,12 @@ describe('SQLite migrations', () => {
         'skill_search',
         'skill_versions',
         'skills',
-        'sources'
+        'sources',
+        'sync_conflicts',
+        'sync_events',
+        'sync_inbox',
+        'sync_outbox',
+        'sync_profiles'
       ])
     );
   });

@@ -45,6 +45,9 @@ apply to the default branch.
 - Credentials must be stored in the operating system keychain, not SQLite,
   localStorage, plain JSON, or logs.
 - Sync and plugins must be disabled by default.
+- Sync profiles must not upload skill contents unless the user explicitly
+  enables a profile and chooses a remote. Remote authentication references must
+  point to keychain-backed credentials when implemented.
 - Plugins must declare capabilities and receive explicit user authorization.
 - Logs must redact secrets, full skill contents, and sensitive path fragments.
 

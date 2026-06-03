@@ -85,6 +85,8 @@ Implemented migrations:
   and rollback-safe file projection.
 - `004_security_exemptions`: unique security scan records per version/ruleset
   plus scoped exemptions with reason, timestamp, and revocation.
+- `005_sync_state`: disabled-by-default sync profiles, local outbox, remote
+  inbox, conflict records, and sync events.
 
 Repository tests use `:memory:` databases. They do not write to real user
 directories or agent roots.
@@ -105,8 +107,19 @@ directories or agent roots.
 ## Offline And Sync
 
 The app starts offline and performs no sync activity without a user-created
-sync profile. Sync is planned as an optional layer on top of local SQLite
-transactions, outbox and inbox records, conflict objects, and explicit drivers.
+sync profile. Phase 7 implements sync as an optional layer on top of local
+SQLite transactions, outbox and inbox records, conflict objects, and explicit
+drivers.
+
+Local writes must exist in SQLite before they can be queued in `sync_outbox`.
+Drivers exchange portable change packages; they do not bypass the database as
+the local source of truth. The first drivers cover shared-folder package files
+and Git-backed package commits. A mock REST mode exists for service contracts
+and conflict lifecycle tests without introducing live network behavior.
+
+Conflicts are stored in `sync_conflicts` with base, local, remote, status, and
+resolution payloads so UI and future main-process workflows can require an
+explicit choice before applying divergent remote state.
 
 ## Plugin Boundary
 
@@ -190,3 +203,23 @@ content-addressed blob store:
   portable package, and imports that package into a fresh SQLite database.
 - The renderer can display History, Diff, and Collections state without
   privileged access.
+
+## Phase 7 Offline-First Sync
+
+The Phase 7 implementation keeps sync opt-in and local-first:
+
+- `sync_profiles` controls mode, remote location, enabled state, and last sync
+  timestamp. No profile means no startup sync activity.
+- `sync_outbox` records local entity changes after the local entity exists in
+  SQLite.
+- `sync_inbox` records pulled remote packages with a unique remote event key per
+  profile.
+- `sync_events` captures inbound, outbound, and conflict lifecycle events.
+- `sync_conflicts` stores local, remote, and base payloads until an explicit
+  resolution is recorded.
+- `sync-service` exposes shared-folder, Git, and mock REST mode contracts. The
+  shared-folder driver writes package JSON to an outbox directory and reads
+  inbox package JSON. The Git driver initializes a package repository, writes
+  package files, commits queued changes, and reads package files back.
+- The renderer can display Sync Center state for profiles, outbox, inbox, and
+  conflicts without privileged access.

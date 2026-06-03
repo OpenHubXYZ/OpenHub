@@ -210,6 +210,76 @@ const migrations: Migration[] = [
           where revoked_at is null;
       `);
     }
+  },
+  {
+    version: 5,
+    name: '005_sync_state',
+    up(database) {
+      database.exec(`
+        create table sync_profiles (
+          id text primary key,
+          mode text not null,
+          remote_url text not null,
+          auth_ref text,
+          enabled integer not null default 0,
+          last_synced_at text,
+          created_at text not null default current_timestamp
+        );
+
+        create table sync_outbox (
+          id text primary key,
+          profile_id text not null references sync_profiles(id) on delete cascade,
+          entity_type text not null,
+          entity_id text not null,
+          payload_json text not null,
+          status text not null,
+          created_at text not null default current_timestamp,
+          sent_at text
+        );
+
+        create table sync_inbox (
+          id text primary key,
+          profile_id text not null references sync_profiles(id) on delete cascade,
+          remote_event_id text not null,
+          entity_type text not null,
+          entity_id text not null,
+          payload_json text not null,
+          status text not null,
+          received_at text not null default current_timestamp,
+          applied_at text,
+          unique(profile_id, remote_event_id)
+        );
+
+        create table sync_conflicts (
+          id text primary key,
+          profile_id text not null references sync_profiles(id) on delete cascade,
+          entity_type text not null,
+          entity_id text not null,
+          base_json text not null,
+          local_json text not null,
+          remote_json text not null,
+          status text not null,
+          resolution_json text,
+          created_at text not null default current_timestamp,
+          resolved_at text
+        );
+
+        create table sync_events (
+          id text primary key,
+          profile_id text not null references sync_profiles(id) on delete cascade,
+          direction text not null,
+          status text not null,
+          entity_type text not null,
+          entity_id text not null,
+          conflict_id text references sync_conflicts(id) on delete set null,
+          occurred_at text not null default current_timestamp
+        );
+
+        create index idx_sync_outbox_profile_status on sync_outbox(profile_id, status);
+        create index idx_sync_inbox_profile_status on sync_inbox(profile_id, status);
+        create index idx_sync_conflicts_profile_status on sync_conflicts(profile_id, status);
+      `);
+    }
   }
 ];
 

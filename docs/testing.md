@@ -95,6 +95,20 @@ CI must run the same gates.
   fresh database.
 - Renderer tests cover History, Diff, and Collections state.
 
+## Phase 7 Offline-First Sync Coverage
+
+- With no sync profile, startup planning returns no sync activity and leaves
+  outbox/events empty.
+- Local changes are queued only after the referenced local skill version exists
+  in SQLite.
+- Shared-folder sync writes queued package JSON and pulls inbox package JSON
+  without applying remote state directly to skill tables.
+- Git sync initializes a package repository, commits queued packages, and pulls
+  package records back.
+- Conflict lifecycle tests open a base/local/remote conflict and record an
+  explicit resolution.
+- Renderer tests cover Sync Center profiles, outbox, inbox, and conflicts.
+
 ## Unit Test Targets
 
 - `SKILL.md` parser.
@@ -127,6 +141,7 @@ CI must run the same gates.
 - Install to personal and project scopes.
 - Resolve a sync conflict after sync exists.
 - Packaged app starts and completes the Phase 4 core flow.
+- Optional sync remains disabled until a profile is enabled.
 
 ## Security Fixtures
 

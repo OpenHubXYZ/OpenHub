@@ -19,6 +19,7 @@ Before a release:
 - Run package smoke tests on the current platform.
 - Verify database migrations from empty and previous supported versions.
 - Verify first launch and Phase 4 import/install/uninstall smoke flow.
+- Verify optional sync remains disabled until a profile is enabled.
 - Review logs for tokens, full skill contents, and sensitive paths.
 - Update `CHANGELOG.md`.
 - Generate checksums for release artifacts.

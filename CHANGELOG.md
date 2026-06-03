@@ -48,3 +48,8 @@ after the first release.
 - Collection service for collection creation, batch export packages, and
   collection import into a fresh database.
 - Renderer History, Diff, and Collections state panel.
+- Sync state migration for profiles, outbox, inbox, conflicts, and events.
+- Optional sync service with disabled-by-default startup planning,
+  shared-folder, Git, and mock REST package drivers, and conflict open/resolve
+  lifecycle.
+- Renderer Sync Center profiles, outbox, inbox, and conflicts panel.

@@ -1,9 +1,10 @@
 # Development
 
-The repository is currently in Phase 6 and contains a pnpm TypeScript
+The repository is currently in Phase 7 and contains a pnpm TypeScript
 workspace, an Electron + Vite + React desktop shell, SQLite domain storage,
 agent indexing, import/export/install core services, security governance
-services, version/collection services, tests, linting, formatting, and CI.
+services, version/collection services, optional sync state and drivers, tests,
+linting, formatting, and CI.
 
 ## Prerequisites
 
@@ -51,8 +52,8 @@ Each phase should:
 - Run the acceptance commands.
 - Commit only the phase work.
 
-Do not pre-build sync, plugins, release packaging, or database features before
-their roadmap phases.
+Do not pre-build plugins, release packaging, or database features before their
+roadmap phases.
 
 ## Local Data Safety
 
@@ -89,6 +90,11 @@ Version and collection tests should use temporary directories for install roots
 and exported packages. Rollback tests must verify both restored files and
 deleted app-owned files from newer versions. Collection import tests should use a
 fresh database so slug conflicts do not obscure package behavior.
+
+Sync tests should use in-memory SQLite and temporary directories for
+shared-folder and Git fixtures. A test must prove the disabled-by-default
+startup plan, outbox enqueue after local persistence, shared-folder push/pull,
+Git package commit/pull, and conflict open/resolve lifecycle.
 
 ## Dependency Changes
 

@@ -428,6 +428,101 @@ h1 {
   overflow-wrap: anywhere;
 }
 
+.sync-center {
+  display: grid;
+  gap: 14px;
+}
+
+.sync-summary {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 16px;
+  padding: 20px;
+  border: 1px solid #d9deea;
+  border-radius: 8px;
+  background: #ffffff;
+}
+
+.sync-summary h2 {
+  color: #17202f;
+  font-size: 22px;
+  font-weight: 760;
+  line-height: 1.15;
+  letter-spacing: 0;
+}
+
+.sync-summary p {
+  margin-top: 6px;
+  color: #667085;
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.sync-summary > span {
+  padding: 6px 10px;
+  border-radius: 999px;
+  color: #27423e;
+  background: #e7f3ef;
+  font-size: 12px;
+  font-weight: 760;
+  overflow-wrap: anywhere;
+}
+
+.sync-grid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 14px;
+}
+
+.sync-panel {
+  display: grid;
+  align-content: start;
+  gap: 14px;
+  min-height: 142px;
+  padding: 16px;
+  border: 1px solid #d9deea;
+  border-radius: 8px;
+  background: #ffffff;
+}
+
+.sync-panel h3 {
+  margin: 0;
+  color: #17202f;
+  font-size: 15px;
+  font-weight: 750;
+  letter-spacing: 0;
+}
+
+.sync-panel ul {
+  display: grid;
+  gap: 10px;
+  margin: 0;
+  padding: 0;
+}
+
+.sync-panel li {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 10px;
+  align-items: center;
+  list-style: none;
+}
+
+.sync-panel li span {
+  color: #4b5563;
+  font-size: 13px;
+  font-weight: 650;
+  line-height: 1.35;
+  overflow-wrap: anywhere;
+}
+
+.sync-panel li strong {
+  color: #1f2937;
+  font-size: 12px;
+  font-weight: 760;
+}
+
 .empty-icon {
   display: grid;
   width: 72px;
@@ -565,7 +660,9 @@ h1 {
 
   .security-summary,
   .security-grid,
-  .governance-grid {
+  .governance-grid,
+  .sync-summary,
+  .sync-grid {
     grid-template-columns: 1fr;
   }
 

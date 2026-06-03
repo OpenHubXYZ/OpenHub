@@ -17,6 +17,7 @@ export interface AppProps {
   initialManagementFlow?: ManagementFlowState | null;
   initialSecurityCenter?: SecurityCenterState | null;
   initialGovernance?: GovernanceState | null;
+  initialSyncCenter?: SyncCenterState | null;
 }
 
 export interface ManagementFlowState {
@@ -73,11 +74,31 @@ export interface GovernanceState {
   }>;
 }
 
+export interface SyncCenterState {
+  profiles: Array<{
+    mode: string;
+    status: string;
+  }>;
+  outbox: Array<{
+    entityType: string;
+    status: string;
+  }>;
+  inbox: Array<{
+    entityType: string;
+    status: string;
+  }>;
+  conflicts: Array<{
+    entityType: string;
+    status: string;
+  }>;
+}
+
 export function App({
   initialLibrarySkills = [],
   initialManagementFlow = null,
   initialSecurityCenter = null,
-  initialGovernance = null
+  initialGovernance = null,
+  initialSyncCenter = null
 }: AppProps): ReactElement {
   const [librarySkills, setLibrarySkills] = useState(initialLibrarySkills);
 
@@ -107,7 +128,7 @@ export function App({
       <section className="workspace" aria-labelledby="app-title">
         <header className="workspace-header">
           <div>
-            <p className="phase-label">Phase 6 history and collections</p>
+            <p className="phase-label">Phase 7 offline sync</p>
             <h1 id="app-title">TheOpenHub Skills Studio</h1>
           </div>
           <span className="status-chip">Local-first</span>
@@ -149,6 +170,7 @@ export function App({
         {initialManagementFlow ? <ManagementFlow flow={initialManagementFlow} /> : null}
         {initialSecurityCenter ? <SecurityCenter state={initialSecurityCenter} /> : null}
         {initialGovernance ? <Governance state={initialGovernance} /> : null}
+        {initialSyncCenter ? <SyncCenter state={initialSyncCenter} /> : null}
 
         <section className="principle-grid" aria-label="Product constraints">
           {principles.map((principle) => (
@@ -160,6 +182,61 @@ export function App({
         </section>
       </section>
     </main>
+  );
+}
+
+function SyncCenter({ state }: { state: SyncCenterState }): ReactElement {
+  return (
+    <section className="sync-center" aria-labelledby="sync-center-title">
+      <header className="sync-summary">
+        <div>
+          <h2 id="sync-center-title">Sync Center</h2>
+          <p>Optional offline-first sync state</p>
+        </div>
+        <span>Disabled until a profile is enabled</span>
+      </header>
+
+      <div className="sync-grid">
+        <SyncPanel
+          title="Profiles"
+          rows={state.profiles.map((profile) => ({ label: profile.mode, value: profile.status }))}
+        />
+        <SyncPanel
+          title="Outbox"
+          rows={state.outbox.map((record) => ({ label: record.entityType, value: record.status }))}
+        />
+        <SyncPanel
+          title="Inbox"
+          rows={state.inbox.map((record) => ({ label: record.entityType, value: record.status }))}
+        />
+        <SyncPanel
+          title="Conflicts"
+          rows={state.conflicts.map((conflict) => ({ label: conflict.entityType, value: conflict.status }))}
+        />
+      </div>
+    </section>
+  );
+}
+
+function SyncPanel({
+  title,
+  rows
+}: {
+  title: string;
+  rows: Array<{ label: string; value: string }>;
+}): ReactElement {
+  return (
+    <article className="sync-panel">
+      <h3>{title}</h3>
+      <ul>
+        {rows.map((row) => (
+          <li key={`${row.label}:${row.value}`}>
+            <span>{row.label}</span>
+            <strong>{row.value}</strong>
+          </li>
+        ))}
+      </ul>
+    </article>
   );
 }
 

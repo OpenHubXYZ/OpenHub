@@ -1,6 +1,6 @@
 export const corePackage = {
   name: '@theopenhub/core',
-  phase: 'Phase 6 history and collections'
+  phase: 'Phase 7 offline sync'
 } as const;
 
 export { createCollectionService } from './collection-service';
@@ -11,6 +11,12 @@ export { InstallBlockedError, createInstallService } from './install-service';
 export { scanAgentLibraries } from './library-scanner';
 export { PathSafetyError, assertZipEntryPathSafe, ensurePathInsideRoot } from './path-safety';
 export { createSecurityService, defaultSecurityRules } from './security-service';
+export {
+  createGitSyncDriver,
+  createMockRestSyncDriver,
+  createSharedFolderSyncDriver,
+  createSyncService
+} from './sync-service';
 export { createVersionService } from './version-service';
 export { SkillParseError, parseSkillManifest } from './skill-parser';
 
@@ -65,6 +71,17 @@ export type {
   SecurityService,
   SecuritySeverity
 } from './security-service';
+export type {
+  CreateSyncServiceInput,
+  SyncConflictRecord,
+  SyncDriver,
+  SyncInboxRecord,
+  SyncMode,
+  SyncOutboxRecord,
+  SyncPackage,
+  SyncProfile,
+  SyncService
+} from './sync-service';
 export type {
   CreateVersionServiceInput,
   FileChangeType,

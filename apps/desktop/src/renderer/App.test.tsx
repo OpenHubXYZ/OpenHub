@@ -11,11 +11,11 @@ describe('desktop app shell', () => {
     cleanup();
   });
 
-  it('shows the product name and Phase 6 empty state', () => {
+  it('shows the product name and Phase 7 empty state', () => {
     render(<App />);
 
     expect(screen.getByRole('heading', { name: 'TheOpenHub Skills Studio' })).toBeInTheDocument();
-    expect(screen.getByText('Phase 6 history and collections')).toBeInTheDocument();
+    expect(screen.getByText('Phase 7 offline sync')).toBeInTheDocument();
     expect(screen.getByText('No skills indexed yet')).toBeInTheDocument();
     expect(screen.getByText('SQLite source of truth')).toBeInTheDocument();
   });
@@ -110,5 +110,24 @@ describe('desktop app shell', () => {
     expect(screen.getByText('references/new.txt')).toBeInTheDocument();
     expect(screen.getByRole('heading', { name: 'Collections' })).toBeInTheDocument();
     expect(screen.getByText('Starter Pack')).toBeInTheDocument();
+  });
+
+  it('shows Sync Center profiles, outbox, inbox, and conflicts', () => {
+    render(
+      <App
+        initialSyncCenter={{
+          profiles: [{ mode: 'shared-folder', status: 'enabled' }],
+          outbox: [{ entityType: 'skill_version', status: 'queued' }],
+          inbox: [{ entityType: 'skill_version', status: 'received' }],
+          conflicts: [{ entityType: 'skill_version', status: 'open' }]
+        }}
+      />
+    );
+
+    expect(screen.getByRole('heading', { name: 'Sync Center' })).toBeInTheDocument();
+    expect(screen.getByText('shared-folder')).toBeInTheDocument();
+    expect(screen.getByText('queued')).toBeInTheDocument();
+    expect(screen.getByText('received')).toBeInTheDocument();
+    expect(screen.getByText('open')).toBeInTheDocument();
   });
 });
