@@ -11,7 +11,7 @@ describe('desktop shell IPC contract', () => {
   it('validates app info responses', () => {
     const response = desktopShellContract.appInfo.response.parse({
       productName: 'TheOpenHub Skills Studio',
-      phase: 'Phase 1',
+      phase: 'Phase 4',
       localFirst: true
     });
 

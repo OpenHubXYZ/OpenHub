@@ -6,7 +6,7 @@ describe('core package baseline', () => {
   it('identifies the library indexing package phase', () => {
     expect(corePackage).toEqual({
       name: '@theopenhub/core',
-      phase: 'Phase 3 library indexing baseline'
+      phase: 'Phase 4 P0 import and install loop'
     });
   });
 });

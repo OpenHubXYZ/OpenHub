@@ -81,6 +81,8 @@ Implemented migrations:
   security scans, and security findings.
 - `002_skill_search_fts`: FTS5 search over skill name, description, tags, and
   file paths.
+- `003_installation_files`: app-owned install file records used by uninstall
+  and rollback-safe file projection.
 
 Repository tests use `:memory:` databases. They do not write to real user
 directories or agent roots.
@@ -93,9 +95,10 @@ directories or agent roots.
    allowed roots.
 3. Parsed skill metadata and file hashes are written to SQLite.
 4. File contents are stored in a content-addressed blob store.
-5. Installation creates a plan, runs security checks, resolves conflicts, then
-   projects files into an agent root.
-6. Verification compares recorded hashes with target files.
+5. Installation creates a plan, reports conflicts, then clean plans project
+   files into an agent root and record app-owned targets.
+6. Later security and verification phases will compare recorded hashes with
+   target files before broader release gates.
 
 ## Offline And Sync
 
@@ -124,4 +127,24 @@ The Phase 3 implementation adds a read-only indexing path:
   errors instead of crashing.
 - `library.list` is a typed IPC channel for renderer library queries.
 
-Install, uninstall, conflict planning, and write projection remain Phase 4.
+## Phase 4 Import And Install Loop
+
+The Phase 4 implementation adds the first write-capable management loop while
+keeping SQLite authoritative:
+
+- `packages/core` stages local folders, Git clones, and ZIP archives under an
+  isolated temp directory before parsing `SKILL.md`.
+- `path-safety` canonicalizes roots and candidate paths, rejects symlink escape,
+  and rejects ZIP entries with absolute paths or `..` traversal.
+- `content-store` writes file contents by SHA-256 hash so database blob metadata
+  and file bytes stay linked.
+- Install planning computes target root, skill directory, writes, and conflict
+  state before any agent directory write occurs.
+- Install application copies blobs into the agent root and records every
+  app-owned target file in `installation_files`.
+- Uninstall deletes only those recorded file paths and leaves unknown user files
+  in place.
+- Export writes `manifest.json` plus a `files/` tree containing the skill files
+  and recorded hashes.
+- The renderer shows the P0 import queue, install plan, and install result
+  state without direct Node, filesystem, SQLite, or `ipcRenderer` access.

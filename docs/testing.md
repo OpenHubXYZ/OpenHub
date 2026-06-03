@@ -55,6 +55,21 @@ CI must run the same gates.
 - IPC contract tests cover `library.list`.
 - Renderer tests cover both empty and indexed library states.
 
+## Phase 4 Import And Install Coverage
+
+- Local folder, Git URL, and ZIP fixtures import into SQLite and the
+  content-addressed blob store.
+- ZIP slip and symlink escape fixtures are rejected before they can leave the
+  staging boundary.
+- Install plans report existing-file conflicts before writing to an agent root.
+- Clean install plans copy blobs into the target root and record app-owned file
+  paths.
+- Uninstall removes recorded files only and leaves unknown user files in place.
+- Export writes a portable package with `manifest.json`, file paths, and
+  SHA-256 hashes.
+- Renderer tests cover the import queue, install plan, and install result flow
+  panels.
+
 ## Unit Test Targets
 
 - `SKILL.md` parser.

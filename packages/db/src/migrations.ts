@@ -166,6 +166,25 @@ const migrations: Migration[] = [
         );
       `);
     }
+  },
+  {
+    version: 3,
+    name: '003_installation_files',
+    up(database) {
+      database.exec(`
+        create table installation_files (
+          id text primary key,
+          installation_id text not null references installations(id) on delete cascade,
+          relative_path text not null,
+          target_path text not null,
+          blob_hash text not null references blob_objects(hash),
+          created_at text not null default current_timestamp,
+          unique(installation_id, relative_path)
+        );
+
+        create index idx_installation_files_installation on installation_files(installation_id);
+      `);
+    }
   }
 ];
 

@@ -28,3 +28,11 @@ after the first release.
 - `SKILL.md` parser with explainable malformed-file errors.
 - Agent library scanner that indexes fixture roots into SQLite.
 - Library list IPC contract and renderer rows for indexed skills.
+- Installation file ownership migration for safe uninstall bookkeeping.
+- Content-addressed blob store for imported skill files.
+- Local folder, Git URL, and ZIP import services with isolated staging.
+- Path safety checks for root boundaries, symlink escape, and ZIP slip.
+- Conflict-aware install plans with copy projection into agent roots.
+- Uninstall service that removes only app-recorded files.
+- Portable skill export packages with manifest, files, and SHA-256 hashes.
+- Renderer import queue, install plan, and install result flow panels.

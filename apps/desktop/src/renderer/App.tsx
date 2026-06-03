@@ -14,9 +14,27 @@ const plannedSurfaces = ['Library', 'Import', 'Install Plan', 'Security Center',
 
 export interface AppProps {
   initialLibrarySkills?: LibrarySkillSummary[];
+  initialManagementFlow?: ManagementFlowState | null;
 }
 
-export function App({ initialLibrarySkills = [] }: AppProps): ReactElement {
+export interface ManagementFlowState {
+  importItems: Array<{
+    label: string;
+    status: string;
+  }>;
+  installPlan: {
+    skillName: string;
+    targetRoot: string;
+    conflictState: string;
+    writeCount: number;
+  };
+  installResult: {
+    status: string;
+    message: string;
+  };
+}
+
+export function App({ initialLibrarySkills = [], initialManagementFlow = null }: AppProps): ReactElement {
   const [librarySkills, setLibrarySkills] = useState(initialLibrarySkills);
 
   useEffect(() => {
@@ -45,7 +63,7 @@ export function App({ initialLibrarySkills = [] }: AppProps): ReactElement {
       <section className="workspace" aria-labelledby="app-title">
         <header className="workspace-header">
           <div>
-            <p className="phase-label">Phase 3 library indexing baseline</p>
+            <p className="phase-label">Phase 4 P0 import and install loop</p>
             <h1 id="app-title">TheOpenHub Skills Studio</h1>
           </div>
           <span className="status-chip">Local-first</span>
@@ -84,6 +102,8 @@ export function App({ initialLibrarySkills = [] }: AppProps): ReactElement {
           </section>
         )}
 
+        {initialManagementFlow ? <ManagementFlow flow={initialManagementFlow} /> : null}
+
         <section className="principle-grid" aria-label="Product constraints">
           {principles.map((principle) => (
             <article className="principle" key={principle}>
@@ -94,5 +114,55 @@ export function App({ initialLibrarySkills = [] }: AppProps): ReactElement {
         </section>
       </section>
     </main>
+  );
+}
+
+function ManagementFlow({ flow }: { flow: ManagementFlowState }): ReactElement {
+  return (
+    <section className="management-flow" aria-label="P0 management flow">
+      <article className="flow-panel">
+        <header>
+          <h2>Import Queue</h2>
+          <span>{flow.importItems.length}</span>
+        </header>
+        <ul>
+          {flow.importItems.map((item) => (
+            <li key={`${item.label}:${item.status}`}>
+              <span>{item.label}</span>
+              <strong>{item.status}</strong>
+            </li>
+          ))}
+        </ul>
+      </article>
+
+      <article className="flow-panel">
+        <header>
+          <h2>Install Plan</h2>
+          <span>{flow.installPlan.conflictState}</span>
+        </header>
+        <dl className="flow-details">
+          <div>
+            <dt>Skill</dt>
+            <dd>{flow.installPlan.skillName}</dd>
+          </div>
+          <div>
+            <dt>Target</dt>
+            <dd>{flow.installPlan.targetRoot}</dd>
+          </div>
+          <div>
+            <dt>Writes</dt>
+            <dd>{flow.installPlan.writeCount}</dd>
+          </div>
+        </dl>
+      </article>
+
+      <article className="flow-panel">
+        <header>
+          <h2>Install Result</h2>
+          <span>{flow.installResult.status}</span>
+        </header>
+        <p>{flow.installResult.message}</p>
+      </article>
+    </section>
   );
 }

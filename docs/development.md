@@ -1,8 +1,9 @@
 # Development
 
-The repository is currently in Phase 1 and contains a pnpm TypeScript
-workspace, an Electron + Vite + React desktop shell, baseline packages, tests,
-linting, formatting, and CI.
+The repository is currently in Phase 4 and contains a pnpm TypeScript
+workspace, an Electron + Vite + React desktop shell, SQLite domain storage,
+agent indexing, import/export/install core services, tests, linting,
+formatting, and CI.
 
 ## Prerequisites
 
@@ -73,6 +74,11 @@ test runner, never the user's application data directory.
 Agent indexing tests should inject a fake `homeDirectory` into
 `createBuiltInAgentAdapters()`. Do not scan real `~/.codex`, `~/.claude`,
 `~/.gemini`, or `~/.opencode` directories in automated tests.
+
+Import tests must stage inputs under a temp directory and must not write to real
+agent roots. ZIP slip fixtures should use raw malicious archive entries rather
+than ZIP helper APIs that normalize traversal away before the app can inspect
+it.
 
 ## Dependency Changes
 

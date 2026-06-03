@@ -11,14 +11,20 @@ review, optional sync, and constrained plugin capabilities.
 
 ## Current Status
 
-This repository is in Phase 3: agent detection and local library indexing. The
-desktop shell renders the product name and empty/indexed library states.
+This repository is in Phase 4: import, export, install, and uninstall loop. The
+desktop shell renders the product name, empty/indexed library states, and the
+P0 import/install flow state.
 `packages/db` has idempotent SQLite migrations, required domain tables, FTS5
-skill search, app data directory resolution, and repository tests.
+skill search, app data directory resolution, installation file ownership
+records, and repository tests.
 `packages/adapters` detects Codex, Claude, Gemini, and OpenCode skill roots.
 `packages/core` parses `SKILL.md`, indexes fixture roots into SQLite, and
-records explainable scan errors. Imports, installs, sync, security center UI,
-and plugins are still future roadmap phases.
+records explainable scan errors. It now imports local folders, Git repositories,
+and ZIP archives through isolated staging directories, writes file blobs to a
+content-addressed store, creates conflict-aware install plans, projects files by
+copy into agent roots, uninstalls only app-owned files, and exports portable
+packages with file hashes. Sync, security center UI, and plugins are still
+future roadmap phases.
 
 The tracked planning inputs are:
 

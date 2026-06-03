@@ -78,6 +78,7 @@ select {
   grid-template-rows: auto auto auto;
   align-content: start;
   gap: 28px;
+  min-width: 0;
   padding: 40px clamp(28px, 5vw, 64px);
 }
 
@@ -104,10 +105,11 @@ p {
 
 h1 {
   color: #17202f;
-  font-size: clamp(34px, 5vw, 56px);
+  font-size: 56px;
   font-weight: 780;
   line-height: 1.02;
   letter-spacing: 0;
+  overflow-wrap: anywhere;
 }
 
 .status-chip {
@@ -186,6 +188,91 @@ h1 {
   color: #1f2937;
   font-size: 14px;
   font-weight: 700;
+}
+
+.management-flow {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 14px;
+}
+
+.flow-panel {
+  display: grid;
+  align-content: start;
+  gap: 18px;
+  min-height: 188px;
+  padding: 18px;
+  border: 1px solid #d9deea;
+  border-radius: 8px;
+  background: #ffffff;
+}
+
+.flow-panel header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+}
+
+.flow-panel h2 {
+  color: #17202f;
+  font-size: 17px;
+  font-weight: 740;
+  line-height: 1.2;
+  letter-spacing: 0;
+}
+
+.flow-panel header span {
+  max-width: 132px;
+  padding: 5px 8px;
+  border-radius: 999px;
+  color: #27423e;
+  background: #e7f3ef;
+  font-size: 12px;
+  font-weight: 750;
+  overflow-wrap: anywhere;
+}
+
+.flow-panel ul,
+.flow-details {
+  display: grid;
+  gap: 12px;
+  margin: 0;
+  padding: 0;
+}
+
+.flow-panel li,
+.flow-details div {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 12px;
+}
+
+.flow-panel li {
+  list-style: none;
+}
+
+.flow-panel li span,
+.flow-details dt {
+  color: #667085;
+  font-size: 13px;
+  font-weight: 650;
+}
+
+.flow-panel li strong,
+.flow-details dd {
+  margin: 0;
+  color: #1f2937;
+  font-size: 13px;
+  font-weight: 750;
+  overflow-wrap: anywhere;
+}
+
+.flow-panel p {
+  color: #4b5563;
+  font-size: 14px;
+  line-height: 1.55;
 }
 
 .empty-icon {
@@ -269,17 +356,30 @@ h1 {
     flex-direction: row;
     align-items: center;
     gap: 16px;
+    min-width: 0;
     padding: 16px;
+    overflow: hidden;
   }
 
   .nav-list {
-    grid-auto-flow: column;
-    grid-auto-columns: max-content;
+    display: flex;
+    min-width: 0;
     overflow-x: auto;
+    scrollbar-width: none;
+  }
+
+  .nav-list::-webkit-scrollbar {
+    display: none;
+  }
+
+  .nav-item {
+    flex: 0 0 auto;
   }
 
   .workspace {
+    width: 100%;
     padding: 28px 18px;
+    overflow-x: hidden;
   }
 
   .workspace-header,
@@ -292,7 +392,21 @@ h1 {
     display: grid;
   }
 
+  h1 {
+    font-size: 38px;
+    line-height: 1.08;
+  }
+
+  .status-chip {
+    justify-self: start;
+    max-width: 100%;
+  }
+
   .principle-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .management-flow {
     grid-template-columns: 1fr;
   }
 

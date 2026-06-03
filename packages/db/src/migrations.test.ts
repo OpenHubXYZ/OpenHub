@@ -9,9 +9,13 @@ describe('SQLite migrations', () => {
     const firstRun = runMigrations(db);
     const secondRun = runMigrations(db);
 
-    expect(firstRun.applied).toEqual(['001_domain_schema', '002_skill_search_fts']);
+    expect(firstRun.applied).toEqual([
+      '001_domain_schema',
+      '002_skill_search_fts',
+      '003_installation_files'
+    ]);
     expect(secondRun.applied).toEqual([]);
-    expect(getCurrentSchemaVersion(db)).toBe(2);
+    expect(getCurrentSchemaVersion(db)).toBe(3);
   });
 
   it('creates the required Phase 2 domain tables and FTS table', () => {
@@ -33,6 +37,7 @@ describe('SQLite migrations', () => {
         'collections',
         'collection_items',
         'installations',
+        'installation_files',
         'security_findings',
         'security_scans',
         'skill_files',
