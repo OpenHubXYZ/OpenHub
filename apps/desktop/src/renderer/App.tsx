@@ -10,7 +10,15 @@ const principles = [
   'Offline by default'
 ] as const;
 
-const plannedSurfaces = ['Library', 'Import', 'Install Plan', 'Security Center', 'Settings'] as const;
+const plannedSurfaces = [
+  'Library',
+  'Import',
+  'Install Plan',
+  'Security Center',
+  'Sync Center',
+  'Plugins',
+  'Settings'
+] as const;
 
 export interface AppProps {
   initialLibrarySkills?: LibrarySkillSummary[];
@@ -18,6 +26,7 @@ export interface AppProps {
   initialSecurityCenter?: SecurityCenterState | null;
   initialGovernance?: GovernanceState | null;
   initialSyncCenter?: SyncCenterState | null;
+  initialPlugins?: PluginsState | null;
 }
 
 export interface ManagementFlowState {
@@ -93,12 +102,28 @@ export interface SyncCenterState {
   }>;
 }
 
+export interface PluginsState {
+  plugins: Array<{
+    name: string;
+    status: string;
+    capabilities: string[];
+    permissions: Array<{
+      name: string;
+      status: string;
+    }>;
+    errors: Array<{
+      message: string;
+    }>;
+  }>;
+}
+
 export function App({
   initialLibrarySkills = [],
   initialManagementFlow = null,
   initialSecurityCenter = null,
   initialGovernance = null,
-  initialSyncCenter = null
+  initialSyncCenter = null,
+  initialPlugins = null
 }: AppProps): ReactElement {
   const [librarySkills, setLibrarySkills] = useState(initialLibrarySkills);
 
@@ -128,7 +153,7 @@ export function App({
       <section className="workspace" aria-labelledby="app-title">
         <header className="workspace-header">
           <div>
-            <p className="phase-label">Phase 7 offline sync</p>
+            <p className="phase-label">Phase 8 plugin runtime</p>
             <h1 id="app-title">TheOpenHub Skills Studio</h1>
           </div>
           <span className="status-chip">Local-first</span>
@@ -171,6 +196,7 @@ export function App({
         {initialSecurityCenter ? <SecurityCenter state={initialSecurityCenter} /> : null}
         {initialGovernance ? <Governance state={initialGovernance} /> : null}
         {initialSyncCenter ? <SyncCenter state={initialSyncCenter} /> : null}
+        {initialPlugins ? <Plugins state={initialPlugins} /> : null}
 
         <section className="principle-grid" aria-label="Product constraints">
           {principles.map((principle) => (
@@ -182,6 +208,54 @@ export function App({
         </section>
       </section>
     </main>
+  );
+}
+
+function Plugins({ state }: { state: PluginsState }): ReactElement {
+  return (
+    <section className="plugins-center" aria-labelledby="plugins-title">
+      <header className="plugins-summary">
+        <div>
+          <h2 id="plugins-title">Plugins</h2>
+          <p>Constrained extension runtime</p>
+        </div>
+        <span>Explicit permissions required</span>
+      </header>
+
+      <div className="plugins-grid">
+        {state.plugins.map((plugin) => (
+          <article className="plugin-panel" key={`${plugin.name}:${plugin.status}`}>
+            <header>
+              <h3>{plugin.name}</h3>
+              <span>{plugin.status}</span>
+            </header>
+
+            <PluginList title="Capabilities" rows={plugin.capabilities.map((capability) => [capability, 'declared'])} />
+            <PluginList
+              title="Permissions"
+              rows={plugin.permissions.map((permission) => [permission.name, permission.status])}
+            />
+            <PluginList title="Errors" rows={plugin.errors.map((error) => [error.message, 'logged'])} />
+          </article>
+        ))}
+      </div>
+    </section>
+  );
+}
+
+function PluginList({ title, rows }: { title: string; rows: Array<[string, string]> }): ReactElement {
+  return (
+    <section className="plugin-list" aria-label={title}>
+      <h4>{title}</h4>
+      <ul>
+        {rows.map(([label, value]) => (
+          <li key={`${label}:${value}`}>
+            <span>{label}</span>
+            <strong>{value}</strong>
+          </li>
+        ))}
+      </ul>
+    </section>
   );
 }
 

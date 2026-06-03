@@ -87,6 +87,8 @@ Implemented migrations:
   plus scoped exemptions with reason, timestamp, and revocation.
 - `005_sync_state`: disabled-by-default sync profiles, local outbox, remote
   inbox, conflict records, and sync events.
+- `006_plugin_runtime`: plugin manifests, declared permission grants, and
+  plugin error logs.
 
 Repository tests use `:memory:` databases. They do not write to real user
 directories or agent roots.
@@ -123,9 +125,17 @@ explicit choice before applying divergent remote state.
 
 ## Plugin Boundary
 
-Plugins are planned as constrained extensions for adapters, importers, security
-rules, and sync drivers. They must declare permissions and should not receive
-broad filesystem or network access by default.
+Plugins are constrained extensions for adapters, importers, security rules, and
+sync drivers. They must declare capabilities and permissions in `plugin.json`,
+pass integrity validation for their entry file, and receive explicit permission
+authorization before enabling.
+
+Phase 8 executes the v1 plugin entry through a restricted host API that exposes
+registration methods only. It does not expose filesystem, network, shell,
+process, or SQLite APIs to plugin code. The implementation also preflights
+entry source for unsafe runtime escape patterns. This is a governance and
+capability boundary, not a substitute for reviewing untrusted plugin code before
+installation.
 
 ## Phase 3 Agent Indexing
 
@@ -223,3 +233,25 @@ The Phase 7 implementation keeps sync opt-in and local-first:
   package files, commits queued changes, and reads package files back.
 - The renderer can display Sync Center state for profiles, outbox, inbox, and
   conflicts without privileged access.
+
+## Phase 8 Plugin Runtime
+
+The Phase 8 implementation adds a disabled-by-default plugin management layer:
+
+- `plugin_manifests` stores manifest metadata, capabilities, permissions,
+  integrity metadata, root path, status, and enabled state.
+- `plugin_permission_grants` records explicit permission authorizations with a
+  reason and revocation slot.
+- `plugin_errors` records host execution, unsafe entry, and permission errors
+  for Plugins UI review.
+- `plugin-service` validates required manifest fields, supported API version,
+  known capability types, known permissions, safe entry paths, and sha256 entry
+  integrity.
+- Enabling a plugin requires all declared permissions to have active grants.
+- The restricted host API supports registration for agent adapters, importers,
+  security rules, and sync drivers. Each registration must match a declared
+  capability.
+- Disabling a plugin removes its capabilities from the in-memory registry and
+  marks it disabled in SQLite.
+- The renderer can display Plugins state for install status, capabilities,
+  permissions, and error logs without privileged access.

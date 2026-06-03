@@ -523,6 +523,127 @@ h1 {
   font-weight: 760;
 }
 
+.plugins-center {
+  display: grid;
+  gap: 14px;
+}
+
+.plugins-summary {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 16px;
+  padding: 20px;
+  border: 1px solid #d9deea;
+  border-radius: 8px;
+  background: #ffffff;
+}
+
+.plugins-summary h2 {
+  color: #17202f;
+  font-size: 22px;
+  font-weight: 760;
+  line-height: 1.15;
+  letter-spacing: 0;
+}
+
+.plugins-summary p {
+  margin-top: 6px;
+  color: #667085;
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.plugins-summary > span {
+  padding: 6px 10px;
+  border-radius: 999px;
+  color: #27423e;
+  background: #e7f3ef;
+  font-size: 12px;
+  font-weight: 760;
+  overflow-wrap: anywhere;
+}
+
+.plugins-grid {
+  display: grid;
+  gap: 14px;
+}
+
+.plugin-panel {
+  display: grid;
+  gap: 16px;
+  padding: 18px;
+  border: 1px solid #d9deea;
+  border-radius: 8px;
+  background: #ffffff;
+}
+
+.plugin-panel > header {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 12px;
+}
+
+.plugin-panel h3 {
+  margin: 0;
+  color: #17202f;
+  font-size: 17px;
+  font-weight: 750;
+  letter-spacing: 0;
+}
+
+.plugin-panel > header span {
+  padding: 5px 8px;
+  border-radius: 999px;
+  color: #27423e;
+  background: #e7f3ef;
+  font-size: 12px;
+  font-weight: 760;
+}
+
+.plugin-list {
+  display: grid;
+  gap: 10px;
+}
+
+.plugin-list h4 {
+  margin: 0;
+  color: #667085;
+  font-size: 12px;
+  font-weight: 760;
+  letter-spacing: 0;
+  text-transform: uppercase;
+}
+
+.plugin-list ul {
+  display: grid;
+  gap: 8px;
+  margin: 0;
+  padding: 0;
+}
+
+.plugin-list li {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 10px;
+  list-style: none;
+}
+
+.plugin-list li span {
+  color: #4b5563;
+  font-size: 13px;
+  font-weight: 650;
+  line-height: 1.35;
+  overflow-wrap: anywhere;
+}
+
+.plugin-list li strong {
+  color: #1f2937;
+  font-size: 12px;
+  font-weight: 760;
+}
+
 .empty-icon {
   display: grid;
   width: 72px;
@@ -662,7 +783,9 @@ h1 {
   .security-grid,
   .governance-grid,
   .sync-summary,
-  .sync-grid {
+  .sync-grid,
+  .plugins-summary,
+  .plugin-panel > header {
     grid-template-columns: 1fr;
   }
 

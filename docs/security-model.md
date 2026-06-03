@@ -13,6 +13,9 @@ It is not an execution sandbox.
 - Agent directories are projections; SQLite records the app-owned files.
 - Security scans run before install writes.
 - High and critical findings block installs unless a scoped exemption exists.
+- Sync and plugins are disabled by default.
+- Plugins register capabilities through a restricted host API and require
+  explicit permission authorization before enabling.
 
 ## Initial Ruleset
 
@@ -39,5 +42,7 @@ policy evaluate the skill normally again.
 
 Security scanning is pattern-based. It can miss obfuscated or novel behavior,
 and it cannot prevent a trusted agent from executing installed skill content.
-Users and maintainers should treat scan results as a governance signal, not as a
-runtime containment guarantee.
+The Phase 8 plugin host reduces exposed APIs and blocks obvious escape patterns,
+but it is not a complete sandbox for arbitrary untrusted JavaScript. Users and
+maintainers should treat scan results and plugin host checks as governance
+signals, not as runtime containment guarantees.

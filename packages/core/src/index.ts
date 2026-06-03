@@ -1,6 +1,6 @@
 export const corePackage = {
   name: '@theopenhub/core',
-  phase: 'Phase 7 offline sync'
+  phase: 'Phase 8 plugin runtime'
 } as const;
 
 export { createCollectionService } from './collection-service';
@@ -10,6 +10,7 @@ export { createImportService } from './import-service';
 export { InstallBlockedError, createInstallService } from './install-service';
 export { scanAgentLibraries } from './library-scanner';
 export { PathSafetyError, assertZipEntryPathSafe, ensurePathInsideRoot } from './path-safety';
+export { PluginHostError, PluginManifestError, createPluginService } from './plugin-service';
 export { createSecurityService, defaultSecurityRules } from './security-service';
 export {
   createGitSyncDriver,
@@ -58,6 +59,22 @@ export type {
   ScanErrorResult
 } from './library-scanner';
 export type { PathSafetyErrorCode } from './path-safety';
+export type {
+  CreatePluginServiceInput,
+  InstalledPlugin,
+  PluginAgentAdapterRegistration,
+  PluginCapability,
+  PluginCapabilityType,
+  PluginCenterState,
+  PluginHostErrorCode,
+  PluginIntegrity,
+  PluginManifest,
+  PluginManifestErrorCode,
+  PluginPermission,
+  PluginRegistry,
+  PluginService,
+  PluginStatus
+} from './plugin-service';
 export type {
   CreateSecurityServiceInput,
   InstallPolicyResult,

@@ -53,3 +53,9 @@ after the first release.
   shared-folder, Git, and mock REST package drivers, and conflict open/resolve
   lifecycle.
 - Renderer Sync Center profiles, outbox, inbox, and conflicts panel.
+- Plugin runtime migration for manifests, permission grants, and error logs.
+- Plugin service with manifest validation, sha256 entry integrity, explicit
+  permission grants, restricted host registration, malicious entry blocking, and
+  enable/disable registry behavior.
+- Renderer Plugins status, capabilities, permissions, and error logs panel.
+- Plugin API documentation for minimal adapter plugins.

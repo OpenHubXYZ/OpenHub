@@ -11,11 +11,11 @@ describe('desktop app shell', () => {
     cleanup();
   });
 
-  it('shows the product name and Phase 7 empty state', () => {
+  it('shows the product name and Phase 8 empty state', () => {
     render(<App />);
 
     expect(screen.getByRole('heading', { name: 'TheOpenHub Skills Studio' })).toBeInTheDocument();
-    expect(screen.getByText('Phase 7 offline sync')).toBeInTheDocument();
+    expect(screen.getByText('Phase 8 plugin runtime')).toBeInTheDocument();
     expect(screen.getByText('No skills indexed yet')).toBeInTheDocument();
     expect(screen.getByText('SQLite source of truth')).toBeInTheDocument();
   });
@@ -129,5 +129,31 @@ describe('desktop app shell', () => {
     expect(screen.getByText('queued')).toBeInTheDocument();
     expect(screen.getByText('received')).toBeInTheDocument();
     expect(screen.getByText('open')).toBeInTheDocument();
+  });
+
+  it('shows Plugins install, enable, permission, capability, and error state', () => {
+    render(
+      <App
+        initialPlugins={{
+          plugins: [
+            {
+              name: 'Mock Agent Plugin',
+              status: 'enabled',
+              capabilities: ['agent-adapter:mock-agent'],
+              permissions: [{ name: 'network:fetch', status: 'authorized' }],
+              errors: [{ message: 'Unsafe plugin entry blocked' }]
+            }
+          ]
+        }}
+      />
+    );
+
+    expect(screen.getByRole('heading', { name: 'Plugins' })).toBeInTheDocument();
+    expect(screen.getByText('Mock Agent Plugin')).toBeInTheDocument();
+    expect(screen.getByText('enabled')).toBeInTheDocument();
+    expect(screen.getByText('agent-adapter:mock-agent')).toBeInTheDocument();
+    expect(screen.getByText('network:fetch')).toBeInTheDocument();
+    expect(screen.getByText('authorized')).toBeInTheDocument();
+    expect(screen.getByText('Unsafe plugin entry blocked')).toBeInTheDocument();
   });
 });

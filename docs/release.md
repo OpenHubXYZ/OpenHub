@@ -20,6 +20,8 @@ Before a release:
 - Verify database migrations from empty and previous supported versions.
 - Verify first launch and Phase 4 import/install/uninstall smoke flow.
 - Verify optional sync remains disabled until a profile is enabled.
+- Verify plugins remain disabled until permissions are authorized and the plugin
+  is enabled.
 - Review logs for tokens, full skill contents, and sensitive paths.
 - Update `CHANGELOG.md`.
 - Generate checksums for release artifacts.
@@ -44,6 +46,7 @@ Release validation must confirm:
 
 - no telemetry is enabled by default
 - no sync profile is created automatically
+- no plugin is enabled automatically
 - no skill contents are uploaded
 - crash or diagnostic logs are redacted
 - credentials use OS keychain storage

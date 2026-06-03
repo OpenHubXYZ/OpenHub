@@ -280,6 +280,54 @@ const migrations: Migration[] = [
         create index idx_sync_conflicts_profile_status on sync_conflicts(profile_id, status);
       `);
     }
+  },
+  {
+    version: 6,
+    name: '006_plugin_runtime',
+    up(database) {
+      database.exec(`
+        create table plugin_manifests (
+          id text primary key,
+          name text not null,
+          version text not null,
+          api_version integer not null,
+          entry text not null,
+          capabilities_json text not null,
+          permissions_json text not null,
+          integrity_json text not null,
+          root_path text not null,
+          enabled integer not null default 0,
+          status text not null default 'disabled',
+          created_at text not null default current_timestamp,
+          updated_at text not null default current_timestamp
+        );
+
+        create table plugin_permission_grants (
+          id text primary key,
+          plugin_id text not null references plugin_manifests(id) on delete cascade,
+          permission text not null,
+          reason text not null,
+          created_at text not null default current_timestamp,
+          revoked_at text
+        );
+
+        create table plugin_errors (
+          id text primary key,
+          plugin_id text not null references plugin_manifests(id) on delete cascade,
+          message text not null,
+          created_at text not null default current_timestamp
+        );
+
+        create index idx_plugin_permission_grants_plugin
+          on plugin_permission_grants(plugin_id, permission);
+
+        create unique index idx_plugin_permission_grants_active
+          on plugin_permission_grants(plugin_id, permission)
+          where revoked_at is null;
+
+        create index idx_plugin_errors_plugin on plugin_errors(plugin_id, created_at desc);
+      `);
+    }
   }
 ];
 

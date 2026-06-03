@@ -11,14 +11,16 @@ review, optional sync, and constrained plugin capabilities.
 
 ## Current Status
 
-This repository is in Phase 7: optional offline-first sync. The desktop
+This repository is in Phase 8: constrained plugin runtime. The desktop
 shell renders the product name, empty/indexed library states, the P0
 import/install flow state, and Security Center state for queue, risk, findings,
-history, exemptions, version history, diffs, collections, and Sync Center state.
+history, exemptions, version history, diffs, collections, Sync Center state, and
+Plugins state.
 `packages/db` has idempotent SQLite migrations, required domain tables, FTS5
 skill search, app data directory resolution, installation file ownership
 records, security scan records, active exemption records, sync profiles,
-outbox, inbox, conflicts, events, and repository tests.
+outbox, inbox, conflicts, events, plugin manifests, plugin permission grants,
+plugin errors, and repository tests.
 `packages/adapters` detects Codex, Claude, Gemini, and OpenCode skill roots.
 `packages/core` parses `SKILL.md`, indexes fixture roots into SQLite, and
 records explainable scan errors. It now imports local folders, Git repositories,
@@ -32,7 +34,10 @@ operations, diffs version files, rolls installed projections back to older
 versions, and batch-exports/imports collections. Sync is disabled unless a user
 creates an enabled profile, stores local writes before outbox enqueue, supports
 shared-folder, Git, and mock REST package drivers, and records conflicts for
-explicit resolution. Plugins are still a future roadmap phase.
+explicit resolution. Plugins are disabled by default, validate manifest fields
+and entry integrity, require declared permissions to be explicitly authorized,
+register capabilities through a restricted host API, and remove capabilities
+from the registry when disabled.
 
 The tracked planning inputs are:
 
@@ -66,8 +71,8 @@ SQLite:
 - `packages/db`: SQLite schema, migrations, repositories, fixtures.
 - `packages/adapters`: Codex, Claude, Gemini, OpenCode, and future adapters.
 
-See `docs/architecture.md` and `docs/sync-model.md` for the design baseline,
-sync model, and security boundaries.
+See `docs/architecture.md`, `docs/sync-model.md`, and `docs/plugin-api.md` for
+the design baseline, sync model, plugin API, and security boundaries.
 
 ## Development Commands
 

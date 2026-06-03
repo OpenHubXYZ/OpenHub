@@ -109,6 +109,21 @@ CI must run the same gates.
   explicit resolution.
 - Renderer tests cover Sync Center profiles, outbox, inbox, and conflicts.
 
+## Phase 8 Plugin Runtime Coverage
+
+- Manifest validation rejects missing fields, unknown permissions, unknown
+  capabilities, incompatible API versions, unsafe entry paths, and integrity
+  mismatches.
+- Plugins with declared permissions cannot be enabled until those permissions
+  have explicit active grants.
+- The restricted host API registers only declared capabilities.
+- An example plugin adds a mock agent adapter through the host API.
+- Malicious fixtures with filesystem, network, process, dynamic import, or
+  shell escape patterns are blocked before registration.
+- Disabling a plugin removes its capabilities from the runtime registry.
+- Renderer tests cover Plugins status, capabilities, permissions, and error
+  logs.
+
 ## Unit Test Targets
 
 - `SKILL.md` parser.
@@ -120,6 +135,7 @@ CI must run the same gates.
 - Security rules.
 - IPC payload validation.
 - Plugin manifest validation.
+- Plugin host permission and registry behavior.
 
 ## Integration Test Targets
 
@@ -130,6 +146,8 @@ CI must run the same gates.
 - Install and uninstall safety.
 - Export and re-import.
 - Rollback.
+- Optional sync push/pull.
+- Plugin enable/disable with fixture roots.
 - Large skill indexing.
 
 ## E2E And Smoke Targets
@@ -142,6 +160,8 @@ CI must run the same gates.
 - Resolve a sync conflict after sync exists.
 - Packaged app starts and completes the Phase 4 core flow.
 - Optional sync remains disabled until a profile is enabled.
+- Plugins remain disabled until permissions are authorized and the plugin is
+  enabled.
 
 ## Security Fixtures
 

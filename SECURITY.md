@@ -48,7 +48,11 @@ apply to the default branch.
 - Sync profiles must not upload skill contents unless the user explicitly
   enables a profile and chooses a remote. Remote authentication references must
   point to keychain-backed credentials when implemented.
-- Plugins must declare capabilities and receive explicit user authorization.
+- Plugins must declare capabilities and permissions, pass entry integrity
+  checks, and receive explicit authorization before enabling.
+- Plugin entries must not receive filesystem, network, shell, process, or
+  SQLite APIs through the host. The Phase 8 host is a constrained governance
+  boundary, not a complete sandbox for arbitrary untrusted JavaScript.
 - Logs must redact secrets, full skill contents, and sensitive path fragments.
 
 ## Security Scanning Limits
