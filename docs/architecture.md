@@ -171,3 +171,22 @@ The Phase 5 implementation adds pre-install security governance:
 - Low and medium findings are returned as install warnings.
 - The renderer can display Security Center state for scan queue, risk score,
   rule details, scan history, and exemptions without privileged access.
+
+## Phase 6 History And Collections
+
+The Phase 6 implementation adds governance history on top of the existing
+content-addressed blob store:
+
+- `version-service` creates new `skill_versions` rows for content-changing
+  operations, writes `skill_files`, and dedupes identical blob hashes through
+  `blob_objects`.
+- Version listing exposes newest-first history.
+- File diffs classify added, modified, and deleted paths by comparing version
+  file hashes.
+- Installation rollback rewrites only the app-owned projection for a target
+  installation and version, removes files that are no longer in the target
+  version, and updates install file ownership records.
+- `collection-service` creates collections, exports all latest skill files in a
+  portable package, and imports that package into a fresh SQLite database.
+- The renderer can display History, Diff, and Collections state without
+  privileged access.

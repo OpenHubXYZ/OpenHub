@@ -11,10 +11,10 @@ review, optional sync, and constrained plugin capabilities.
 
 ## Current Status
 
-This repository is in Phase 5: Security Center and governance. The desktop
+This repository is in Phase 6: version history, diff, rollback, and collections. The desktop
 shell renders the product name, empty/indexed library states, the P0
 import/install flow state, and Security Center state for queue, risk, findings,
-history, and exemptions.
+history, exemptions, version history, diffs, and collections.
 `packages/db` has idempotent SQLite migrations, required domain tables, FTS5
 skill search, app data directory resolution, installation file ownership
 records, security scan records, active exemption records, and repository tests.
@@ -26,7 +26,10 @@ content-addressed store, creates conflict-aware install plans, projects files by
 copy into agent roots, uninstalls only app-owned files, and exports portable
 packages with file hashes. It also scans skills before install, scores security
 findings, blocks high-risk installs by default, and allows scoped exemptions
-that can be revoked. Sync and plugins are still future roadmap phases.
+that can be revoked. It now creates new skill versions for content-changing
+operations, diffs version files, rolls installed projections back to older
+versions, and batch-exports/imports collections. Sync and plugins are still
+future roadmap phases.
 
 The tracked planning inputs are:
 

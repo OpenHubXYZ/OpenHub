@@ -6,7 +6,7 @@ describe('core package baseline', () => {
   it('identifies the library indexing package phase', () => {
     expect(corePackage).toEqual({
       name: '@theopenhub/core',
-      phase: 'Phase 5 security governance'
+      phase: 'Phase 6 history and collections'
     });
   });
 });

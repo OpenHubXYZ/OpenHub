@@ -1,9 +1,9 @@
 # Development
 
-The repository is currently in Phase 5 and contains a pnpm TypeScript
+The repository is currently in Phase 6 and contains a pnpm TypeScript
 workspace, an Electron + Vite + React desktop shell, SQLite domain storage,
 agent indexing, import/export/install core services, security governance
-services, tests, linting, formatting, and CI.
+services, version/collection services, tests, linting, formatting, and CI.
 
 ## Prerequisites
 
@@ -84,6 +84,11 @@ Security tests should use imported temp fixtures and in-memory SQLite. High-risk
 fixtures must prove install blocking before any target-root write. Exemption
 fixtures must include a concrete reason and scope, and revocation should be
 verified through policy evaluation.
+
+Version and collection tests should use temporary directories for install roots
+and exported packages. Rollback tests must verify both restored files and
+deleted app-owned files from newer versions. Collection import tests should use a
+fresh database so slug conflicts do not obscure package behavior.
 
 ## Dependency Changes
 

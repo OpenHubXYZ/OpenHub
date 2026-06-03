@@ -375,6 +375,59 @@ h1 {
   font-weight: 760;
 }
 
+.governance-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 14px;
+}
+
+.governance-panel {
+  display: grid;
+  align-content: start;
+  gap: 14px;
+  min-height: 160px;
+  padding: 16px;
+  border: 1px solid #d9deea;
+  border-radius: 8px;
+  background: #ffffff;
+}
+
+.governance-panel h2 {
+  color: #17202f;
+  font-size: 17px;
+  font-weight: 750;
+  line-height: 1.2;
+  letter-spacing: 0;
+}
+
+.governance-panel ul {
+  display: grid;
+  gap: 10px;
+  margin: 0;
+  padding: 0;
+}
+
+.governance-panel li {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  gap: 10px;
+  align-items: center;
+  list-style: none;
+}
+
+.governance-panel li span {
+  color: #667085;
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.governance-panel li strong {
+  color: #1f2937;
+  font-size: 13px;
+  font-weight: 740;
+  overflow-wrap: anywhere;
+}
+
 .empty-icon {
   display: grid;
   width: 72px;
@@ -511,7 +564,8 @@ h1 {
   }
 
   .security-summary,
-  .security-grid {
+  .security-grid,
+  .governance-grid {
     grid-template-columns: 1fr;
   }
 

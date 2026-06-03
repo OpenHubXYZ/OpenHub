@@ -1,17 +1,21 @@
 /**
  * @vitest-environment jsdom
  */
-import { render, screen } from '@testing-library/react';
-import { describe, expect, it } from 'vitest';
+import { cleanup, render, screen } from '@testing-library/react';
+import { afterEach, describe, expect, it } from 'vitest';
 
 import { App } from './App';
 
 describe('desktop app shell', () => {
-  it('shows the product name and Phase 5 empty state', () => {
+  afterEach(() => {
+    cleanup();
+  });
+
+  it('shows the product name and Phase 6 empty state', () => {
     render(<App />);
 
     expect(screen.getByRole('heading', { name: 'TheOpenHub Skills Studio' })).toBeInTheDocument();
-    expect(screen.getByText('Phase 5 security governance')).toBeInTheDocument();
+    expect(screen.getByText('Phase 6 history and collections')).toBeInTheDocument();
     expect(screen.getByText('No skills indexed yet')).toBeInTheDocument();
     expect(screen.getByText('SQLite source of truth')).toBeInTheDocument();
   });
@@ -84,5 +88,27 @@ describe('desktop app shell', () => {
     expect(screen.getByText('Dangerous shell command')).toBeInTheDocument();
     expect(screen.getByText('Medium Risk Helper')).toBeInTheDocument();
     expect(screen.getByText('Reviewed by maintainer')).toBeInTheDocument();
+  });
+
+  it('shows History, Diff, and Collections state', () => {
+    render(
+      <App
+        initialGovernance={{
+          history: [{ versionNo: 2, summary: 'Change manifest and add guide' }],
+          diff: [
+            { relativePath: 'SKILL.md', changeType: 'modified' },
+            { relativePath: 'references/new.txt', changeType: 'added' }
+          ],
+          collections: [{ name: 'Starter Pack', skillCount: 2 }]
+        }}
+      />
+    );
+
+    expect(screen.getByRole('heading', { name: 'History' })).toBeInTheDocument();
+    expect(screen.getByText('Change manifest and add guide')).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: 'Diff' })).toBeInTheDocument();
+    expect(screen.getByText('references/new.txt')).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: 'Collections' })).toBeInTheDocument();
+    expect(screen.getByText('Starter Pack')).toBeInTheDocument();
   });
 });

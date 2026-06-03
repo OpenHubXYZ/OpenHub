@@ -43,3 +43,8 @@ after the first release.
 - Security exemption migration with reason, timestamp, scope, and revocation.
 - Batch rescan upsert behavior that avoids duplicate scan records per ruleset.
 - Renderer Security Center queue, score, findings, history, and exemptions panel.
+- Skill version service for content-changing versions, version listing, file
+  diffs, and installation rollback.
+- Collection service for collection creation, batch export packages, and
+  collection import into a fresh database.
+- Renderer History, Diff, and Collections state panel.

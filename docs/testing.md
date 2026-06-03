@@ -84,6 +84,17 @@ CI must run the same gates.
 - Renderer tests cover Security Center queue, risk score, rule details,
   history, and exemptions.
 
+## Phase 6 History And Collections Coverage
+
+- Identical support file contents dedupe to a single `blob_objects` row.
+- Content-changing operations create new skill versions.
+- Version diffs classify added, modified, and deleted files.
+- Rollback rewrites installed app-owned files to match the target version and
+  removes files that only existed in newer versions.
+- Collections can be batch-exported to a portable package and imported into a
+  fresh database.
+- Renderer tests cover History, Diff, and Collections state.
+
 ## Unit Test Targets
 
 - `SKILL.md` parser.

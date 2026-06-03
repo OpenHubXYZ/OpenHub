@@ -16,6 +16,7 @@ export interface AppProps {
   initialLibrarySkills?: LibrarySkillSummary[];
   initialManagementFlow?: ManagementFlowState | null;
   initialSecurityCenter?: SecurityCenterState | null;
+  initialGovernance?: GovernanceState | null;
 }
 
 export interface ManagementFlowState {
@@ -57,10 +58,26 @@ export interface SecurityCenterState {
   }>;
 }
 
+export interface GovernanceState {
+  history: Array<{
+    versionNo: number;
+    summary: string;
+  }>;
+  diff: Array<{
+    relativePath: string;
+    changeType: string;
+  }>;
+  collections: Array<{
+    name: string;
+    skillCount: number;
+  }>;
+}
+
 export function App({
   initialLibrarySkills = [],
   initialManagementFlow = null,
-  initialSecurityCenter = null
+  initialSecurityCenter = null,
+  initialGovernance = null
 }: AppProps): ReactElement {
   const [librarySkills, setLibrarySkills] = useState(initialLibrarySkills);
 
@@ -90,7 +107,7 @@ export function App({
       <section className="workspace" aria-labelledby="app-title">
         <header className="workspace-header">
           <div>
-            <p className="phase-label">Phase 5 security governance</p>
+            <p className="phase-label">Phase 6 history and collections</p>
             <h1 id="app-title">TheOpenHub Skills Studio</h1>
           </div>
           <span className="status-chip">Local-first</span>
@@ -131,6 +148,7 @@ export function App({
 
         {initialManagementFlow ? <ManagementFlow flow={initialManagementFlow} /> : null}
         {initialSecurityCenter ? <SecurityCenter state={initialSecurityCenter} /> : null}
+        {initialGovernance ? <Governance state={initialGovernance} /> : null}
 
         <section className="principle-grid" aria-label="Product constraints">
           {principles.map((principle) => (
@@ -142,6 +160,48 @@ export function App({
         </section>
       </section>
     </main>
+  );
+}
+
+function Governance({ state }: { state: GovernanceState }): ReactElement {
+  return (
+    <section className="governance-grid" aria-label="History, Diff, and Collections">
+      <article className="governance-panel">
+        <h2>History</h2>
+        <ul>
+          {state.history.map((item) => (
+            <li key={`${item.versionNo}:${item.summary}`}>
+              <span>v{item.versionNo}</span>
+              <strong>{item.summary}</strong>
+            </li>
+          ))}
+        </ul>
+      </article>
+
+      <article className="governance-panel">
+        <h2>Diff</h2>
+        <ul>
+          {state.diff.map((item) => (
+            <li key={`${item.relativePath}:${item.changeType}`}>
+              <span>{item.relativePath}</span>
+              <strong>{item.changeType}</strong>
+            </li>
+          ))}
+        </ul>
+      </article>
+
+      <article className="governance-panel">
+        <h2>Collections</h2>
+        <ul>
+          {state.collections.map((item) => (
+            <li key={item.name}>
+              <span>{item.name}</span>
+              <strong>{item.skillCount}</strong>
+            </li>
+          ))}
+        </ul>
+      </article>
+    </section>
   );
 }
 
