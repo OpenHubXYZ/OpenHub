@@ -33,6 +33,7 @@ const logContent = [
   'package_payload=verified',
   'database_migration=verified',
   'phase4_import_install=verified',
+  'desktop_runtime=verified',
   'first_launch_options=verified',
   'privacy_defaults=verified'
 ].join('\n');
@@ -65,6 +66,7 @@ async function runSmokeTests() {
     'packages/db/src/migrations.test.ts',
     'packages/core/src/import-service.test.ts',
     'packages/core/src/install-service.test.ts',
+    'apps/desktop/src/main/desktop-runtime.test.ts',
     'apps/desktop/src/main/window-options.test.ts'
   ];
   const result = await spawnForResult('pnpm', args);

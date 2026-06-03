@@ -75,3 +75,4 @@ after the first release.
   scans, sync startup state, and plugin center state.
 - Renderer controls for agent-root scanning, local folder import, install plan
   creation, and install application through the preload bridge.
+- Release smoke coverage for desktop runtime IPC import/install/library flows.

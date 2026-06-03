@@ -44,6 +44,13 @@ describe('release readiness', () => {
     expect(packageScript).not.toContain('dependencies: desktopPackage.dependencies');
   });
 
+  it('includes desktop runtime IPC coverage in release smoke tests', async () => {
+    const smokeScript = await readFile(path.join(rootDirectory, 'scripts/release-smoke.mjs'), 'utf8');
+
+    expect(smokeScript).toContain('apps/desktop/src/main/desktop-runtime.test.ts');
+    expect(smokeScript).toContain('desktop_runtime=verified');
+  });
+
   it('keeps community health files and 15-minute quick start visible', async () => {
     for (const filePath of [
       'LICENSE',

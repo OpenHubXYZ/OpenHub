@@ -142,7 +142,7 @@ CI must run the same gates.
   package manifests.
 - `pnpm release:smoke` verifies package entrypoints, privacy defaults, database
   migrations, the Phase 4 import/install flow, first-launch window options, and
-  redacted release logs.
+  desktop runtime IPC coverage, and redacted release logs.
 
 ## Phase 10 Maintainer Operations Coverage
 
