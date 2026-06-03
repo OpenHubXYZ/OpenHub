@@ -1,14 +1,15 @@
 /**
  * @vitest-environment jsdom
  */
-import { cleanup, render, screen } from '@testing-library/react';
-import { afterEach, describe, expect, it } from 'vitest';
+import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import { App } from './App';
 
 describe('desktop app shell', () => {
   afterEach(() => {
     cleanup();
+    delete window.theOpenHub;
   });
 
   it('shows the product name and Phase 10 empty state', () => {
@@ -155,5 +156,143 @@ describe('desktop app shell', () => {
     expect(screen.getByText('network:fetch')).toBeInTheDocument();
     expect(screen.getByText('authorized')).toBeInTheDocument();
     expect(screen.getByText('Unsafe plugin entry blocked')).toBeInTheDocument();
+  });
+
+  it('lets the user run the local import and install management loop through IPC', async () => {
+    const importedSkill = {
+      id: 'skill-runtime',
+      versionId: 'version-runtime',
+      name: 'Runtime Helper',
+      description: 'Imported through the renderer',
+      versionNo: 1
+    };
+    const installPlan = {
+      skillId: importedSkill.id,
+      versionId: importedSkill.versionId,
+      skillName: importedSkill.name,
+      skillSlug: 'runtime-helper',
+      targetRoot: '/tmp/.codex/skills',
+      installPath: '/tmp/.codex/skills/runtime-helper',
+      agentCode: 'codex',
+      agentDisplayName: 'Codex',
+      adapterVersion: 'test',
+      scope: 'user',
+      conflictState: 'clean',
+      writes: [
+        {
+          relativePath: 'SKILL.md',
+          targetPath: '/tmp/.codex/skills/runtime-helper/SKILL.md',
+          hash: 'hash-1',
+          size: 120,
+          conflict: 'none'
+        }
+      ]
+    };
+    const api = {
+      getAppInfo: vi.fn(),
+      listLibrarySkills: vi.fn(),
+      getWorkspaceState: vi.fn().mockResolvedValue({
+        appInfo: {
+          productName: 'TheOpenHub Skills Studio',
+          phase: 'Phase 10',
+          localFirst: true
+        },
+        librarySkills: [],
+        skills: [],
+        managementFlow: {
+          importItems: [],
+          installPlan: null,
+          installResult: null
+        },
+        securityCenter: {
+          queue: [],
+          riskScore: 0,
+          level: 'safe',
+          findings: [],
+          history: [],
+          exemptions: []
+        },
+        governance: {
+          history: [],
+          diff: [],
+          collections: []
+        },
+        syncCenter: {
+          profiles: [],
+          outbox: [],
+          inbox: [],
+          conflicts: []
+        },
+        plugins: {
+          plugins: []
+        }
+      }),
+      importLocalFolder: vi.fn().mockResolvedValue({
+        skill: importedSkill,
+        files: [{ relativePath: 'SKILL.md', hash: 'hash-1', size: 120 }],
+        stagedFrom: '/tmp/staging/import-1'
+      }),
+      createInstallPlan: vi.fn().mockResolvedValue(installPlan),
+      applyInstallPlan: vi.fn().mockResolvedValue({
+        status: 'installed',
+        installationId: 'installation-runtime',
+        security: {
+          level: 'safe',
+          warnings: []
+        }
+      }),
+      scanSkill: vi.fn(),
+      scanAgentRoots: vi.fn().mockResolvedValue({
+        indexedSkills: [
+          {
+            id: 'skill-scanned',
+            name: 'Scanned Helper',
+            agentCode: 'codex',
+            path: '/tmp/.codex/skills/scanned-helper',
+            files: [{ relativePath: 'SKILL.md', size: 120 }]
+          }
+        ],
+        errors: []
+      }),
+      getSyncStartupPlan: vi.fn(),
+      getPluginCenterState: vi.fn()
+    };
+    window.theOpenHub = api as unknown as NonNullable<typeof window.theOpenHub>;
+
+    render(<App />);
+
+    await screen.findByRole('heading', { name: 'Import Queue' });
+    fireEvent.click(screen.getByRole('button', { name: 'Scan agent roots' }));
+    await waitFor(() => expect(api.scanAgentRoots).toHaveBeenCalled());
+    expect(screen.getByText('Scanned Helper')).toBeInTheDocument();
+
+    fireEvent.change(screen.getByLabelText('Import source path'), {
+      target: { value: '/tmp/runtime-helper' }
+    });
+    fireEvent.click(screen.getByRole('button', { name: 'Import local folder' }));
+
+    await waitFor(() => expect(api.importLocalFolder).toHaveBeenCalledWith('/tmp/runtime-helper'));
+    expect(screen.getByText('Runtime Helper')).toBeInTheDocument();
+
+    fireEvent.change(screen.getByLabelText('Install target root'), {
+      target: { value: '/tmp/.codex/skills' }
+    });
+    fireEvent.click(screen.getByRole('button', { name: 'Create install plan' }));
+
+    await waitFor(() =>
+      expect(api.createInstallPlan).toHaveBeenCalledWith({
+        skillId: importedSkill.id,
+        targetRoot: '/tmp/.codex/skills',
+        agentCode: 'codex',
+        agentDisplayName: 'Codex',
+        adapterVersion: 'builtin',
+        scope: 'user'
+      })
+    );
+    expect(screen.getByText('1 planned writes')).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Apply install plan' }));
+    await waitFor(() => expect(api.applyInstallPlan).toHaveBeenCalledWith(installPlan));
+    expect(screen.getByText('Installed 1 files by copy projection.')).toBeInTheDocument();
   });
 });

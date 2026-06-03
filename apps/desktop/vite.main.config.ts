@@ -1,4 +1,8 @@
+import { builtinModules } from 'node:module';
+
 import { defineConfig } from 'vite';
+
+const nodeBuiltins = new Set([...builtinModules, ...builtinModules.map((moduleName) => `node:${moduleName}`)]);
 
 export default defineConfig({
   build: {
@@ -10,7 +14,7 @@ export default defineConfig({
       fileName: () => 'main.js'
     },
     rollupOptions: {
-      external: ['electron', 'node:path', 'node:url']
+      external: (id) => id === 'electron' || id === 'better-sqlite3' || nodeBuiltins.has(id)
     }
   }
 });

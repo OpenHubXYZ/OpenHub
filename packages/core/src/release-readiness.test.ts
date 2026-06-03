@@ -36,6 +36,14 @@ describe('release readiness', () => {
     expect(config.targets.linux?.formats ?? []).toContain('AppImage');
   });
 
+  it('writes release package metadata without workspace protocol dependencies', async () => {
+    const packageScript = await readFile(path.join(rootDirectory, 'scripts/package-desktop.mjs'), 'utf8');
+
+    expect(packageScript).toContain('runtimeExternalDependencies');
+    expect(packageScript).toContain('better-sqlite3');
+    expect(packageScript).not.toContain('dependencies: desktopPackage.dependencies');
+  });
+
   it('keeps community health files and 15-minute quick start visible', async () => {
     for (const filePath of [
       'LICENSE',

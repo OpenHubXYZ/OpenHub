@@ -52,8 +52,10 @@ CI must run the same gates.
 - Missing `SKILL.md` and malformed metadata produce explainable scan errors.
 - Indexed library rows preserve skill name, source agent, path, and install
   status.
-- IPC contract tests cover `library.list`.
+- IPC contract tests cover `library.scan` and `library.list`.
 - Renderer tests cover both empty and indexed library states.
+- Desktop runtime tests scan a detected local Codex fixture root through typed
+  IPC and then list the indexed installed projection.
 
 ## Phase 4 Import And Install Coverage
 
@@ -67,8 +69,11 @@ CI must run the same gates.
 - Uninstall removes recorded files only and leaves unknown user files in place.
 - Export writes a portable package with `manifest.json`, file paths, and
   SHA-256 hashes.
-- Renderer tests cover the import queue, install plan, and install result flow
-  panels.
+- Desktop runtime tests import a local fixture through IPC, create an install
+  plan, apply the plan, verify copied files on disk, and then list the installed
+  library row.
+- Renderer tests cover interactive agent-root scan, local import, install plan,
+  and install result controls.
 
 ## Phase 5 Security Governance Coverage
 

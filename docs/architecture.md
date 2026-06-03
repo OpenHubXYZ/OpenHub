@@ -106,6 +106,30 @@ directories or agent roots.
 6. Later security and verification phases will compare recorded hashes with
    target files before broader release gates.
 
+## Runtime IPC Integration
+
+The desktop runtime uses the Electron main process as the only privileged
+process. `apps/desktop/src/main/desktop-runtime.ts` opens the app data SQLite
+database, runs migrations, creates the content store, and dispatches typed IPC
+channels through shared Zod contracts.
+
+Runtime channels currently cover:
+
+- `workspace.state`: aggregate app, library, management, security, governance,
+  sync, and plugin panel state.
+- `library.scan` and `library.list`: scan detected Codex, Claude, Gemini, and
+  OpenCode roots, then list indexed installed projections.
+- `import.localFolder`: stage and import a local skill directory.
+- `install.createPlan` and `install.applyPlan`: create conflict-aware copy
+  projection plans and apply clean plans.
+- `security.scan`: scan the latest skill version and persist findings.
+- `sync.startupPlan`: prove sync remains disabled without an enabled profile.
+- `plugins.centerState`: expose constrained plugin runtime state.
+
+The preload bridge validates every response before exposing it to the renderer.
+Renderer code still has no direct Node, filesystem, SQLite, or `ipcRenderer`
+access.
+
 ## Offline And Sync
 
 The app starts offline and performs no sync activity without a user-created

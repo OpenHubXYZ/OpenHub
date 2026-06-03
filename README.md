@@ -16,6 +16,10 @@ shell renders the product name, empty/indexed library states, the P0
 import/install flow state, and Security Center state for queue, risk, findings,
 history, exemptions, version history, diffs, collections, Sync Center state, and
 Plugins state.
+The Electron main process now wires typed runtime IPC to the local app data
+SQLite database and content store for agent-root scanning, local folder import,
+install plan creation, install application, security scans, sync startup state,
+and plugin center state.
 `packages/db` has idempotent SQLite migrations, required domain tables, FTS5
 skill search, app data directory resolution, installation file ownership
 records, security scan records, active exemption records, sync profiles,

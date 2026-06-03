@@ -5,7 +5,7 @@ export const dbPackage = {
 
 export { resolveAppDataDirectory } from './app-data';
 export { createLibraryRepository } from './library-repository';
-export { createMemoryDatabase, getCurrentSchemaVersion, runMigrations } from './migrations';
+export { createFileDatabase, createMemoryDatabase, getCurrentSchemaVersion, runMigrations } from './migrations';
 export { createSkillRepository } from './skill-repository';
 
 export type { AppDataDirectoryInput } from './app-data';

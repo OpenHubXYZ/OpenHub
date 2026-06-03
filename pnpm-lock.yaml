@@ -72,9 +72,21 @@ importers:
 
   apps/desktop:
     dependencies:
+      '@theopenhub/adapters':
+        specifier: workspace:*
+        version: link:../../packages/adapters
+      '@theopenhub/core':
+        specifier: workspace:*
+        version: link:../../packages/core
+      '@theopenhub/db':
+        specifier: workspace:*
+        version: link:../../packages/db
       '@theopenhub/shared':
         specifier: workspace:*
         version: link:../../packages/shared
+      better-sqlite3:
+        specifier: ^12.10.0
+        version: 12.10.0
       react:
         specifier: ^19.1.0
         version: 19.2.7

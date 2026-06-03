@@ -8,6 +8,7 @@ const rootDirectory = path.resolve(path.dirname(fileURLToPath(import.meta.url)),
 const config = await readJson(path.join(rootDirectory, 'config/desktop-packaging.json'));
 const rootPackage = await readJson(path.join(rootDirectory, 'package.json'));
 const desktopPackage = await readJson(path.join(rootDirectory, 'apps/desktop/package.json'));
+const runtimeExternalDependencies = ['better-sqlite3'];
 const target = config.targets[process.platform];
 
 if (!target) {
@@ -38,7 +39,7 @@ await writeFile(
       private: true,
       type: 'module',
       main: desktopPackage.main,
-      dependencies: desktopPackage.dependencies
+      dependencies: pickDependencies(desktopPackage.dependencies, runtimeExternalDependencies)
     },
     null,
     2
@@ -83,4 +84,17 @@ console.log(`Checksums written to ${path.relative(rootDirectory, checksumFile)}`
 
 async function readJson(filePath) {
   return JSON.parse(await readFile(filePath, 'utf8'));
+}
+
+function pickDependencies(dependencies, names) {
+  return Object.fromEntries(
+    names.map((name) => {
+      const version = dependencies[name];
+      if (!version) {
+        throw new Error(`Missing runtime dependency in desktop package: ${name}`);
+      }
+
+      return [name, version];
+    })
+  );
 }

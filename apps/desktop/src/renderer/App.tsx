@@ -1,6 +1,11 @@
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import type { ReactElement } from 'react';
-import type { LibrarySkillSummary } from '@theopenhub/shared';
+import type {
+  DesktopWorkspaceState,
+  InstallPlan,
+  LibrarySkillSummary,
+  SkillSummary
+} from '@theopenhub/shared';
 
 import './app.css';
 
@@ -22,6 +27,7 @@ const plannedSurfaces = [
 
 export interface AppProps {
   initialLibrarySkills?: LibrarySkillSummary[];
+  initialSkills?: SkillSummary[];
   initialManagementFlow?: ManagementFlowState | null;
   initialSecurityCenter?: SecurityCenterState | null;
   initialGovernance?: GovernanceState | null;
@@ -39,11 +45,11 @@ export interface ManagementFlowState {
     targetRoot: string;
     conflictState: string;
     writeCount: number;
-  };
+  } | null;
   installResult: {
     status: string;
     message: string;
-  };
+  } | null;
 }
 
 export interface SecurityCenterState {
@@ -119,6 +125,7 @@ export interface PluginsState {
 
 export function App({
   initialLibrarySkills = [],
+  initialSkills = [],
   initialManagementFlow = null,
   initialSecurityCenter = null,
   initialGovernance = null,
@@ -126,14 +133,116 @@ export function App({
   initialPlugins = null
 }: AppProps): ReactElement {
   const [librarySkills, setLibrarySkills] = useState(initialLibrarySkills);
+  const [skills, setSkills] = useState(initialSkills);
+  const [managementFlow, setManagementFlow] = useState<ManagementFlowState>(
+    initialManagementFlow ?? emptyManagementFlow()
+  );
+  const [securityCenter, setSecurityCenter] = useState(initialSecurityCenter);
+  const [governance, setGovernance] = useState(initialGovernance);
+  const [syncCenter, setSyncCenter] = useState(initialSyncCenter);
+  const [plugins, setPlugins] = useState(initialPlugins);
+  const [importPath, setImportPath] = useState('');
+  const [installTargetRoot, setInstallTargetRoot] = useState('');
+  const [activeInstallPlan, setActiveInstallPlan] = useState<InstallPlan | null>(null);
+  const hasInitialLibrarySkills = initialLibrarySkills.length > 0;
+  const applyWorkspaceState = useCallback((state: DesktopWorkspaceState) => {
+    setLibrarySkills(state.librarySkills);
+    setSkills(state.skills);
+    setManagementFlow(state.managementFlow);
+    setSecurityCenter(state.securityCenter);
+    setGovernance(state.governance);
+    setSyncCenter(state.syncCenter);
+    setPlugins(state.plugins);
+  }, []);
 
   useEffect(() => {
-    if (initialLibrarySkills.length > 0 || !window.theOpenHub?.listLibrarySkills) {
+    if (window.theOpenHub?.getWorkspaceState) {
+      void window.theOpenHub.getWorkspaceState().then(applyWorkspaceState);
       return;
     }
 
+    if (hasInitialLibrarySkills || !window.theOpenHub?.listLibrarySkills) {
+      return;
+    }
     void window.theOpenHub.listLibrarySkills().then(setLibrarySkills);
-  }, [initialLibrarySkills]);
+  }, [applyWorkspaceState, hasInitialLibrarySkills]);
+
+  async function handleImportLocalFolder(): Promise<void> {
+    if (!window.theOpenHub?.importLocalFolder || importPath.trim().length === 0) {
+      return;
+    }
+
+    const imported = await window.theOpenHub.importLocalFolder(importPath.trim());
+    setSkills((current) => [imported.skill, ...current.filter((skill) => skill.id !== imported.skill.id)]);
+    setManagementFlow((current) => ({
+      ...current,
+      importItems: [{ label: imported.skill.name, status: 'imported' }, ...current.importItems].slice(0, 5)
+    }));
+  }
+
+  async function handleScanAgentRoots(): Promise<void> {
+    if (!window.theOpenHub?.scanAgentRoots) {
+      return;
+    }
+
+    const scan = await window.theOpenHub.scanAgentRoots();
+    const scanItems = [
+      ...scan.indexedSkills.map((skill) => ({ label: skill.name, status: 'indexed' })),
+      ...scan.errors.map((error) => ({ label: error.skillPath, status: error.code }))
+    ];
+    setManagementFlow((current) => ({
+      ...current,
+      importItems: [...scanItems, ...current.importItems].slice(0, 8)
+    }));
+    if (window.theOpenHub.getWorkspaceState) {
+      applyWorkspaceState(await window.theOpenHub.getWorkspaceState());
+      setManagementFlow((current) => ({
+        ...current,
+        importItems: [...scanItems, ...current.importItems].slice(0, 8)
+      }));
+    }
+  }
+
+  async function handleCreateInstallPlan(): Promise<void> {
+    const skill = skills[0];
+    if (!skill || !window.theOpenHub?.createInstallPlan || installTargetRoot.trim().length === 0) {
+      return;
+    }
+
+    const plan = await window.theOpenHub.createInstallPlan({
+      skillId: skill.id,
+      targetRoot: installTargetRoot.trim(),
+      agentCode: 'codex',
+      agentDisplayName: 'Codex',
+      adapterVersion: 'builtin',
+      scope: 'user'
+    });
+    setActiveInstallPlan(plan);
+    setManagementFlow((current) => ({
+      ...current,
+      installPlan: {
+        skillName: plan.skillName,
+        targetRoot: plan.targetRoot,
+        conflictState: plan.conflictState,
+        writeCount: plan.writes.length
+      }
+    }));
+  }
+
+  async function handleApplyInstallPlan(): Promise<void> {
+    if (!activeInstallPlan || !window.theOpenHub?.applyInstallPlan) {
+      return;
+    }
+
+    const result = await window.theOpenHub.applyInstallPlan(activeInstallPlan);
+    setManagementFlow((current) => ({
+      ...current,
+      installResult: {
+        status: result.status,
+        message: `Installed ${activeInstallPlan.writes.length} files by copy projection.`
+      }
+    }));
+  }
 
   return (
     <main className="app-shell">
@@ -192,11 +301,34 @@ export function App({
           </section>
         )}
 
-        {initialManagementFlow ? <ManagementFlow flow={initialManagementFlow} /> : null}
-        {initialSecurityCenter ? <SecurityCenter state={initialSecurityCenter} /> : null}
-        {initialGovernance ? <Governance state={initialGovernance} /> : null}
-        {initialSyncCenter ? <SyncCenter state={initialSyncCenter} /> : null}
-        {initialPlugins ? <Plugins state={initialPlugins} /> : null}
+        <ManagementFlow
+          flow={managementFlow}
+          importPath={importPath}
+          installTargetRoot={installTargetRoot}
+          hasImportBridge={Boolean(window.theOpenHub?.importLocalFolder)}
+          hasInstallBridge={Boolean(window.theOpenHub?.createInstallPlan)}
+          hasScanBridge={Boolean(window.theOpenHub?.scanAgentRoots)}
+          hasActivePlan={Boolean(activeInstallPlan)}
+          hasSkills={skills.length > 0}
+          onApplyInstallPlan={() => {
+            void handleApplyInstallPlan();
+          }}
+          onCreateInstallPlan={() => {
+            void handleCreateInstallPlan();
+          }}
+          onImportLocalFolder={() => {
+            void handleImportLocalFolder();
+          }}
+          onImportPathChange={setImportPath}
+          onInstallTargetRootChange={setInstallTargetRoot}
+          onScanAgentRoots={() => {
+            void handleScanAgentRoots();
+          }}
+        />
+        {securityCenter ? <SecurityCenter state={securityCenter} /> : null}
+        {governance ? <Governance state={governance} /> : null}
+        {syncCenter ? <SyncCenter state={syncCenter} /> : null}
+        {plugins ? <Plugins state={plugins} /> : null}
 
         <section className="principle-grid" aria-label="Product constraints">
           {principles.map((principle) => (
@@ -209,6 +341,14 @@ export function App({
       </section>
     </main>
   );
+}
+
+function emptyManagementFlow(): ManagementFlowState {
+  return {
+    importItems: [],
+    installPlan: null,
+    installResult: null
+  };
 }
 
 function Plugins({ state }: { state: PluginsState }): ReactElement {
@@ -421,7 +561,37 @@ function SecurityCenter({ state }: { state: SecurityCenterState }): ReactElement
   );
 }
 
-function ManagementFlow({ flow }: { flow: ManagementFlowState }): ReactElement {
+function ManagementFlow({
+  flow,
+  importPath,
+  installTargetRoot,
+  hasImportBridge,
+  hasInstallBridge,
+  hasScanBridge,
+  hasActivePlan,
+  hasSkills,
+  onApplyInstallPlan,
+  onCreateInstallPlan,
+  onImportLocalFolder,
+  onImportPathChange,
+  onInstallTargetRootChange,
+  onScanAgentRoots
+}: {
+  flow: ManagementFlowState;
+  importPath: string;
+  installTargetRoot: string;
+  hasImportBridge: boolean;
+  hasInstallBridge: boolean;
+  hasScanBridge: boolean;
+  hasActivePlan: boolean;
+  hasSkills: boolean;
+  onApplyInstallPlan: () => void;
+  onCreateInstallPlan: () => void;
+  onImportLocalFolder: () => void;
+  onImportPathChange: (value: string) => void;
+  onInstallTargetRootChange: (value: string) => void;
+  onScanAgentRoots: () => void;
+}): ReactElement {
   return (
     <section className="management-flow" aria-label="P0 management flow">
       <article className="flow-panel">
@@ -429,6 +599,29 @@ function ManagementFlow({ flow }: { flow: ManagementFlowState }): ReactElement {
           <h2>Import Queue</h2>
           <span>{flow.importItems.length}</span>
         </header>
+        <div className="flow-actions">
+          <label htmlFor="import-source-path">
+            Import source path
+            <input
+              id="import-source-path"
+              name="importSourcePath"
+              aria-label="Import source path"
+              value={importPath}
+              onChange={(event) => onImportPathChange(event.target.value)}
+              placeholder="/path/to/skill"
+            />
+          </label>
+          <button
+            type="button"
+            disabled={!hasImportBridge || importPath.trim().length === 0}
+            onClick={onImportLocalFolder}
+          >
+            Import local folder
+          </button>
+          <button type="button" disabled={!hasScanBridge} onClick={onScanAgentRoots}>
+            Scan agent roots
+          </button>
+        </div>
         <ul>
           {flow.importItems.map((item) => (
             <li key={`${item.label}:${item.status}`}>
@@ -442,30 +635,57 @@ function ManagementFlow({ flow }: { flow: ManagementFlowState }): ReactElement {
       <article className="flow-panel">
         <header>
           <h2>Install Plan</h2>
-          <span>{flow.installPlan.conflictState}</span>
+          <span>{flow.installPlan?.conflictState ?? 'not planned'}</span>
         </header>
-        <dl className="flow-details">
-          <div>
-            <dt>Skill</dt>
-            <dd>{flow.installPlan.skillName}</dd>
-          </div>
-          <div>
-            <dt>Target</dt>
-            <dd>{flow.installPlan.targetRoot}</dd>
-          </div>
-          <div>
-            <dt>Writes</dt>
-            <dd>{flow.installPlan.writeCount}</dd>
-          </div>
-        </dl>
+        <div className="flow-actions">
+          <label htmlFor="install-target-root">
+            Install target root
+            <input
+              id="install-target-root"
+              name="installTargetRoot"
+              aria-label="Install target root"
+              value={installTargetRoot}
+              onChange={(event) => onInstallTargetRootChange(event.target.value)}
+              placeholder="/path/to/agent/skills"
+            />
+          </label>
+          <button
+            type="button"
+            disabled={!hasInstallBridge || !hasSkills || installTargetRoot.trim().length === 0}
+            onClick={onCreateInstallPlan}
+          >
+            Create install plan
+          </button>
+          <button type="button" disabled={!hasInstallBridge || !hasActivePlan} onClick={onApplyInstallPlan}>
+            Apply install plan
+          </button>
+        </div>
+        {flow.installPlan ? (
+          <dl className="flow-details">
+            <div>
+              <dt>Skill</dt>
+              <dd>{flow.installPlan.skillName}</dd>
+            </div>
+            <div>
+              <dt>Target</dt>
+              <dd>{flow.installPlan.targetRoot}</dd>
+            </div>
+            <div>
+              <dt>Writes</dt>
+              <dd>{flow.installPlan.writeCount} planned writes</dd>
+            </div>
+          </dl>
+        ) : (
+          <p>No install plan yet</p>
+        )}
       </article>
 
       <article className="flow-panel">
         <header>
           <h2>Install Result</h2>
-          <span>{flow.installResult.status}</span>
+          <span>{flow.installResult?.status ?? 'pending'}</span>
         </header>
-        <p>{flow.installResult.message}</p>
+        <p>{flow.installResult?.message ?? 'No install has been applied yet.'}</p>
       </article>
     </section>
   );

@@ -2,8 +2,9 @@ import { app, BrowserWindow, ipcMain } from 'electron';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
-import { appInfo, desktopShellContract, parseIpcRequest } from '@theopenhub/shared';
+import { desktopShellContract } from '@theopenhub/shared';
 
+import { createDesktopRuntime } from './desktop-runtime';
 import { createMainWindowOptions } from './window-options';
 
 const currentFile = fileURLToPath(import.meta.url);
@@ -14,15 +15,11 @@ function resolvePreloadPath(): string {
 }
 
 function registerIpcHandlers(): void {
-  ipcMain.handle(desktopShellContract.appInfo.channel, (_event, payload: unknown) => {
-    parseIpcRequest(desktopShellContract.appInfo.channel, payload);
-    return appInfo;
-  });
+  const runtime = createDesktopRuntime({ dataDirectory: app.getPath('userData') });
 
-  ipcMain.handle(desktopShellContract.libraryList.channel, (_event, payload: unknown) => {
-    parseIpcRequest(desktopShellContract.libraryList.channel, payload);
-    return [];
-  });
+  for (const contract of Object.values(desktopShellContract)) {
+    ipcMain.handle(contract.channel, (_event, payload: unknown) => runtime.dispatch(contract.channel, payload));
+  }
 }
 
 async function createMainWindow(): Promise<void> {
@@ -42,9 +39,8 @@ async function createMainWindow(): Promise<void> {
   await mainWindow.loadFile(path.join(currentDirectory, '../renderer/index.html'));
 }
 
-registerIpcHandlers();
-
 await app.whenReady();
+registerIpcHandlers();
 await createMainWindow();
 
 app.on('activate', () => {

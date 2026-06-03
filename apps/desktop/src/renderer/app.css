@@ -233,6 +233,49 @@ h1 {
   overflow-wrap: anywhere;
 }
 
+.flow-actions {
+  display: grid;
+  gap: 10px;
+}
+
+.flow-actions label {
+  display: grid;
+  gap: 7px;
+  color: #667085;
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.flow-actions input {
+  width: 100%;
+  min-width: 0;
+  height: 38px;
+  padding: 0 11px;
+  border: 1px solid #cfd6e3;
+  border-radius: 6px;
+  color: #17202f;
+  background: #f8fafc;
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.flow-actions button {
+  min-height: 38px;
+  border: 0;
+  border-radius: 6px;
+  color: #ffffff;
+  background: #2f8a7d;
+  font-size: 13px;
+  font-weight: 750;
+  cursor: pointer;
+}
+
+.flow-actions button:disabled {
+  color: #7a8799;
+  background: #e8ecf3;
+  cursor: not-allowed;
+}
+
 .flow-panel ul,
 .flow-details {
   display: grid;

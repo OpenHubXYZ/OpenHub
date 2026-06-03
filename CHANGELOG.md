@@ -70,3 +70,8 @@ after the first release.
   response playbook, fixture contribution rules, roadmap workflow, and
   contributor recipes.
 - CI package and release smoke gates for long-term quality.
+- Desktop runtime IPC wiring for app data SQLite, content storage, agent-root
+  scanning, local folder import, install plans, install application, security
+  scans, sync startup state, and plugin center state.
+- Renderer controls for agent-root scanning, local folder import, install plan
+  creation, and install application through the preload bridge.

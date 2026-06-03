@@ -1,4 +1,8 @@
+import { builtinModules } from 'node:module';
+
 import { defineConfig } from 'vite';
+
+const nodeBuiltins = new Set([...builtinModules, ...builtinModules.map((moduleName) => `node:${moduleName}`)]);
 
 export default defineConfig({
   build: {
@@ -10,7 +14,7 @@ export default defineConfig({
       fileName: () => 'preload.cjs'
     },
     rollupOptions: {
-      external: ['electron']
+      external: (id) => id === 'electron' || nodeBuiltins.has(id)
     }
   }
 });

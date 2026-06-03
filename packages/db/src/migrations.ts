@@ -337,6 +337,12 @@ export function createMemoryDatabase(): SqliteDatabase {
   return database;
 }
 
+export function createFileDatabase(databasePath: string): SqliteDatabase {
+  const database = new Database(databasePath);
+  database.pragma('foreign_keys = ON');
+  return database;
+}
+
 export function runMigrations(database: SqliteDatabase): MigrationResult {
   database.exec(`
     create table if not exists schema_migrations (
