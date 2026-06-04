@@ -301,14 +301,15 @@ function securityCenterState(database: SqliteDatabase): SecurityCenterState {
           s.name as skillName,
           ss.score as score,
           ss.level as level,
-          ss.blocked as blocked
+          ss.blocked as blocked,
+          ss.scanned_at as scannedAt
         from security_scans ss
         join skill_versions sv on sv.id = ss.skill_version_id
         join skills s on s.id = sv.skill_id
         order by ss.scanned_at desc
       `
     )
-    .all() as Array<{ skillName: string; score: number; level: string; blocked: number }>;
+    .all() as Array<{ skillName: string; score: number; level: string; blocked: number; scannedAt: string }>;
   const findings = database
     .prepare(
       `
@@ -331,13 +332,25 @@ function securityCenterState(database: SqliteDatabase): SecurityCenterState {
     )
     .all() as Array<{ skillName: string; scope: string; reason: string }>;
 
+  const posture = scans.reduce<(typeof scans)[number] | null>((highest, scan) => {
+    if (!highest || scan.score > highest.score) {
+      return scan;
+    }
+
+    if (scan.score === highest.score && scan.scannedAt > highest.scannedAt) {
+      return scan;
+    }
+
+    return highest;
+  }, null);
+
   return {
     queue: scans.map((scan) => ({
       skillName: scan.skillName,
       status: scan.blocked ? 'blocked' : 'passed'
     })),
-    riskScore: scans[0]?.score ?? 0,
-    level: scans[0]?.level ?? 'safe',
+    riskScore: posture?.score ?? 0,
+    level: posture?.level ?? 'safe',
     findings: findings.map((finding) => ({
       ruleName: titleizeRuleId(finding.ruleId),
       severity: finding.severity

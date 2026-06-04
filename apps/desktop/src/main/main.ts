@@ -31,8 +31,15 @@ function resolveTrayIconPath(): string {
   return path.join(currentDirectory, 'tray-icon.png');
 }
 
-function registerIpcHandlers(ipcMain: ElectronModule['ipcMain'], dataDirectory: string): void {
-  const runtime = createDesktopRuntime({ dataDirectory });
+function registerIpcHandlers(
+  ipcMain: ElectronModule['ipcMain'],
+  dataDirectory: string,
+  homeDirectory?: string
+): void {
+  const runtime = createDesktopRuntime({
+    dataDirectory,
+    ...(homeDirectory ? { homeDirectory } : {})
+  });
 
   for (const contract of Object.values(desktopShellContract)) {
     ipcMain.handle(contract.channel, (_event, payload: unknown) => runtime.dispatch(contract.channel, payload));
@@ -93,13 +100,17 @@ async function runElectronApp(): Promise<void> {
 
     if (isWindowSmokeMode()) {
       const dataDirectory = await resolveReleaseSmokeDataDirectory(process.argv);
-      registerIpcHandlers(ipcMain, dataDirectory);
+      registerIpcHandlers(ipcMain, dataDirectory, process.env.OPENHUB_HOME_DIR);
       app.dock?.setIcon(electron.nativeImage.createFromPath(resolveIconPath()));
       await runWindowSmokeAndExit(electron, app);
       return;
     }
 
-    registerIpcHandlers(ipcMain, app.getPath('userData'));
+    registerIpcHandlers(
+      ipcMain,
+      process.env.OPENHUB_DATA_DIR ? path.resolve(process.env.OPENHUB_DATA_DIR) : app.getPath('userData'),
+      process.env.OPENHUB_HOME_DIR ? path.resolve(process.env.OPENHUB_HOME_DIR) : undefined
+    );
     app.dock?.setIcon(electron.nativeImage.createFromPath(resolveIconPath()));
     await createApplicationWindow(electron, app);
   };

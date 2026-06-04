@@ -3,6 +3,7 @@
  */
 import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
+import type { DesktopWorkspaceState } from '@theopenhub/shared';
 
 import { App } from './App';
 import type { PageKey } from './workspace-view-model';
@@ -435,4 +436,145 @@ describe('desktop app shell', () => {
     expect(screen.getByText('Dangerous shell command')).toBeInTheDocument();
     expect(screen.getByText('Explain why shell access is required.')).toBeInTheDocument();
   });
+
+  it('refreshes runtime review queue after a security scan creates a review item', async () => {
+    const runtimeSkill = {
+      id: 'skill-high-risk',
+      versionId: 'version-high-risk',
+      name: 'High Risk Helper',
+      description: 'Imported through the renderer',
+      versionNo: 1
+    };
+    const initialState = workspaceState({
+      skills: [runtimeSkill]
+    });
+    const refreshedState = workspaceState({
+      skills: [runtimeSkill],
+      securityCenter: {
+        queue: [{ skillName: 'High Risk Helper', status: 'blocked' }],
+        riskScore: 100,
+        level: 'critical',
+        findings: [{ ruleName: 'Dangerous shell command', severity: 'critical' }],
+        history: [{ skillName: 'High Risk Helper', level: 'critical' }],
+        exemptions: []
+      },
+      reviewCenter: {
+        queue: [
+          {
+            id: 'review-high-risk',
+            title: 'High Risk Helper security review',
+            detail: 'v1 security scan',
+            reason: 'Dangerous shell command',
+            source: 'Security scan',
+            reviewer: 'Maintainer',
+            risk: 'Critical',
+            status: 'Open',
+            skillName: 'High Risk Helper'
+          }
+        ],
+        notes: []
+      }
+    });
+    const api = {
+      getAppInfo: vi.fn(),
+      listLibrarySkills: vi.fn(),
+      getWorkspaceState: vi.fn().mockResolvedValueOnce(initialState).mockResolvedValueOnce(refreshedState),
+      importLocalFolder: vi.fn(),
+      createInstallPlan: vi.fn(),
+      applyInstallPlan: vi.fn(),
+      scanSkill: vi.fn().mockResolvedValue({
+        id: 'scan-high-risk',
+        skillId: runtimeSkill.id,
+        versionId: runtimeSkill.versionId,
+        score: 100,
+        level: 'critical',
+        blocked: true,
+        rulesetVersion: 'test',
+        findings: [
+          {
+            ruleId: 'dangerous-shell-command',
+            ruleName: 'Dangerous shell command',
+            severity: 'critical',
+            category: 'execution',
+            relativePath: 'SKILL.md',
+            lineNo: 1,
+            excerpt: 'rm -rf'
+          }
+        ]
+      }),
+      scanAgentRoots: vi.fn(),
+      getSyncStartupPlan: vi.fn(),
+      getPluginCenterState: vi.fn()
+    };
+    window.theOpenHub = api as unknown as NonNullable<typeof window.theOpenHub>;
+
+    render(<App />);
+
+    await waitFor(() => expect(api.getWorkspaceState).toHaveBeenCalledTimes(1));
+    fireEvent.click(screen.getByRole('button', { name: 'Security' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Run rescan' }));
+
+    await waitFor(() => expect(api.scanSkill).toHaveBeenCalledWith(runtimeSkill.id));
+    await waitFor(() => expect(api.getWorkspaceState).toHaveBeenCalledTimes(2));
+    fireEvent.click(screen.getByRole('button', { name: 'Reviews' }));
+
+    expect(screen.getByText('High Risk Helper security review')).toBeInTheDocument();
+    expect(screen.getByText('Dangerous shell command')).toBeInTheDocument();
+  });
 });
+
+function workspaceState(overrides: Partial<DesktopWorkspaceState> = {}): DesktopWorkspaceState {
+  return {
+    appInfo: {
+      productName: 'OpenHub',
+      phase: 'Phase 10',
+      localFirst: true
+    },
+    librarySkills: [],
+    skills: [],
+    managementFlow: {
+      importItems: [],
+      installPlan: null,
+      installResult: null
+    },
+    securityCenter: {
+      queue: [],
+      riskScore: 0,
+      level: 'safe',
+      findings: [],
+      history: [],
+      exemptions: []
+    },
+    usageCenter: {
+      totals: {
+        launches: 0,
+        installs: 0,
+        scans: 0,
+        exports: 0
+      },
+      dailyActivity: [],
+      topSkills: [],
+      agentSplit: [],
+      recent: []
+    },
+    reviewCenter: {
+      queue: [],
+      notes: []
+    },
+    governance: {
+      history: [],
+      diff: [],
+      collections: []
+    },
+    syncCenter: {
+      profiles: [],
+      outbox: [],
+      inbox: [],
+      conflicts: []
+    },
+    plugins: {
+      plugins: []
+    },
+    ...overrides
+  };
+}

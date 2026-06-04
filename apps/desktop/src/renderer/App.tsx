@@ -250,18 +250,28 @@ export function App({
     }
 
     const scan = await window.theOpenHub.scanSkill(skill.id);
+    const refreshed = window.theOpenHub.getWorkspaceState ? await window.theOpenHub.getWorkspaceState() : null;
     setWorkspaceState((current) => ({
-      ...current,
+      ...(refreshed ?? current),
       securityCenter: {
-        ...current.securityCenter,
-        queue: [{ skillName: skill.name, status: scan.blocked ? 'blocked' : 'passed' }, ...current.securityCenter.queue],
-        riskScore: scan.score,
-        level: scan.level,
-        findings: scan.findings.map((finding) => ({
-          ruleName: finding.ruleName,
-          severity: finding.severity
-        })),
-        history: [{ skillName: skill.name, level: scan.level }, ...current.securityCenter.history]
+        ...(refreshed?.securityCenter ?? current.securityCenter),
+        queue:
+          refreshed?.securityCenter.queue ?? [
+            { skillName: skill.name, status: scan.blocked ? 'blocked' : 'passed' },
+            ...current.securityCenter.queue
+          ],
+        riskScore: refreshed?.securityCenter.riskScore ?? scan.score,
+        level: refreshed?.securityCenter.level ?? scan.level,
+        findings:
+          refreshed?.securityCenter.findings ??
+          scan.findings.map((finding) => ({
+            ruleName: finding.ruleName,
+            severity: finding.severity
+          })),
+        history: refreshed?.securityCenter.history ?? [
+          { skillName: skill.name, level: scan.level },
+          ...current.securityCenter.history
+        ]
       }
     }));
   }

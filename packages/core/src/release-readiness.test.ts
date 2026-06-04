@@ -40,16 +40,25 @@ describe('release readiness', () => {
 
   it('writes release package metadata without workspace protocol dependencies', async () => {
     const packageScript = await readFile(path.join(rootDirectory, 'scripts/package-desktop.mjs'), 'utf8');
+    const nativeRuntimeScript = await readFile(path.join(rootDirectory, 'scripts/electron-native-runtime.mjs'), 'utf8');
 
     expect(packageScript).toContain('runtimeExternalDependencies');
     expect(packageScript).toContain('better-sqlite3');
     expect(packageScript).toContain('copyRuntimeExternalDependencies');
     expect(packageScript).toContain('installElectronNativeRuntime');
-    expect(packageScript).toContain('prebuild-install');
+    expect(nativeRuntimeScript).toContain('prebuild-install');
     expect(packageScript).toContain('createDarwinAppBundle');
     expect(packageScript).toContain('CFBundleDisplayName');
     expect(packageScript).toContain('iconutil');
     expect(packageScript).not.toContain('dependencies: desktopPackage.dependencies');
+  });
+
+  it('prepares Electron native dependencies for the dev desktop runtime', async () => {
+    const devScript = await readFile(path.join(rootDirectory, 'apps/desktop/scripts/dev.mjs'), 'utf8');
+
+    expect(devScript).toContain('prepareDevElectronNativeRuntime');
+    expect(devScript).toContain('better-sqlite3');
+    expect(devScript).toContain('OPENHUB_REMOTE_DEBUGGING_PORT');
   });
 
   it('includes desktop runtime IPC coverage in release smoke tests', async () => {

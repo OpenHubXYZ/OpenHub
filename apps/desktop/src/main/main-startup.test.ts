@@ -26,4 +26,11 @@ describe('desktop main startup', () => {
     expect(source).toContain("mainWindow.once('ready-to-show', showMainWindow)");
     expect(source).toContain("mainWindow.webContents.once('did-finish-load', showMainWindow)");
   });
+
+  it('allows isolated runtime data and home directories for desktop QA', async () => {
+    const source = await readFile(mainSourcePath, 'utf8');
+
+    expect(source).toContain('OPENHUB_DATA_DIR');
+    expect(source).toContain('OPENHUB_HOME_DIR');
+  });
 });
