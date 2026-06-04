@@ -324,7 +324,7 @@ export function createGitSyncDriver(input: { repositoryDirectory: string }): Syn
       await execFileAsync('git', ['add', '.'], { cwd: input.repositoryDirectory });
       await execFileAsync(
         'git',
-        ['-c', 'user.name=TheOpenHub Sync', '-c', 'user.email=sync@example.com', 'commit', '-m', 'sync packages'],
+        ['-c', 'user.name=OpenHub Sync', '-c', 'user.email=sync@example.com', 'commit', '-m', 'sync packages'],
         { cwd: input.repositoryDirectory }
       );
     },

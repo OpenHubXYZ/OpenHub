@@ -82,28 +82,9 @@ p {
 }
 
 .brand {
-  display: grid;
-  grid-template-columns: 40px minmax(0, 1fr);
-  gap: 9px;
+  display: flex;
   align-items: center;
   padding: 0 4px;
-}
-
-.brand-cube {
-  position: relative;
-  width: 36px;
-  height: 36px;
-  border: 4px solid #2da8f3;
-  border-radius: 4px;
-  transform: rotate(30deg) skew(-8deg);
-}
-
-.brand-cube::after {
-  position: absolute;
-  inset: 7px;
-  border: 3px solid #2da8f3;
-  border-radius: 2px;
-  content: '';
 }
 
 .brand-title {
@@ -114,13 +95,6 @@ p {
   color: #111827;
   font-weight: 760;
   line-height: 1.1;
-}
-
-.brand-subtitle {
-  margin-top: 4px;
-  color: #1f2937;
-  font-size: 13px;
-  font-weight: 650;
 }
 
 .version-pill {
@@ -804,30 +778,10 @@ td {
 
 .rail-head {
   display: grid;
-  grid-template-columns: 42px minmax(0, 1fr) auto;
+  grid-template-columns: minmax(0, 1fr) auto;
   gap: 11px;
   align-items: center;
   margin-bottom: 14px;
-}
-
-.rail-icon {
-  display: grid;
-  place-items: center;
-  width: 42px;
-  height: 42px;
-  border-radius: 9px;
-  color: #ffffff;
-  background: linear-gradient(135deg, #1677f2, #287ee6);
-  font-size: 17px;
-  font-weight: 800;
-}
-
-.rail-green {
-  background: linear-gradient(135deg, #11a35a, #16894d);
-}
-
-.rail-red {
-  background: linear-gradient(135deg, #eb5757, #d14343);
 }
 
 .rail-title h2 {

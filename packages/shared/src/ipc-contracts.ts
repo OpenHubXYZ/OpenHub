@@ -1,6 +1,6 @@
 import { z } from 'zod';
 
-export const PRODUCT_NAME = 'TheOpenHub Skills Studio';
+export const PRODUCT_NAME = 'OpenHub';
 export const CURRENT_PHASE = 'Phase 10';
 
 export const appInfoResponseSchema = z

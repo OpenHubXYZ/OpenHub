@@ -10,7 +10,7 @@ describe('app data directory resolution', () => {
         homeDirectory: '/tmp/theopenhub-home',
         env: {}
       })
-    ).toBe('/tmp/theopenhub-home/Library/Application Support/TheOpenHub Skills Studio');
+    ).toBe('/tmp/theopenhub-home/Library/Application Support/OpenHub');
 
     expect(
       resolveAppDataDirectory({
@@ -18,6 +18,6 @@ describe('app data directory resolution', () => {
         homeDirectory: '/tmp/theopenhub-home',
         env: { XDG_DATA_HOME: '/tmp/theopenhub-xdg' }
       })
-    ).toBe('/tmp/theopenhub-xdg/theopenhub-skills-studio');
+    ).toBe('/tmp/theopenhub-xdg/openhub');
   });
 });

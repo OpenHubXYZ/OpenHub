@@ -13,4 +13,17 @@ describe('desktop main startup', () => {
     expect(source).toContain("app.on('ready'");
     expect(source).not.toContain('await app.whenReady()');
   });
+
+  it('sets the runtime app name before creating windows or tray', async () => {
+    const source = await readFile(mainSourcePath, 'utf8');
+
+    expect(source).toContain('app.setName(PRODUCT_NAME)');
+  });
+
+  it('shows the main window after either ready-to-show or did-finish-load', async () => {
+    const source = await readFile(mainSourcePath, 'utf8');
+
+    expect(source).toContain("mainWindow.once('ready-to-show', showMainWindow)");
+    expect(source).toContain("mainWindow.webContents.once('did-finish-load', showMainWindow)");
+  });
 });

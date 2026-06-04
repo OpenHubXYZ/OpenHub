@@ -1,7 +1,7 @@
 {
-  "appId": "io.theopenhub.skills-studio",
-  "productName": "TheOpenHub Skills Studio",
-  "artifactName": "theopenhub-skills-studio",
+  "appId": "io.openhub.desktop",
+  "productName": "OpenHub",
+  "artifactName": "openhub",
   "unpackedDirectory": "out/packages",
   "releaseDirectory": "out/release",
   "targets": {

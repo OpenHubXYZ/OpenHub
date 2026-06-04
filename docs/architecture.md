@@ -1,6 +1,6 @@
 # Architecture
 
-TheOpenHub Skills Studio is a local-first Electron desktop
+OpenHub is a local-first Electron desktop
 application for managing AI coding agent skills.
 
 ## Stack Choice

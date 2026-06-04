@@ -17,11 +17,16 @@ describe('desktop app shell', () => {
     render(<App />);
 
     expect(screen.getByRole('navigation', { name: 'Primary pages' })).toBeInTheDocument();
+    expect(screen.getByText('OpenHub')).toBeInTheDocument();
+    expect(screen.getByText('v0.9.0')).toBeInTheDocument();
+    expect(screen.queryByText('Local skills')).not.toBeInTheDocument();
+    expect(document.querySelector('.brand-cube')).not.toBeInTheDocument();
     expect(screen.getByRole('searchbox', { name: 'Search local skills, sources, reviews' })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: /Import/ })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: /Download/ })).toBeInTheDocument();
     expect(screen.getByRole('heading', { name: 'Dashboard' })).toBeInTheDocument();
     expect(screen.getByRole('complementary', { name: 'Dashboard details' })).toHaveTextContent('Workspace health');
+    expect(document.querySelector('.rail-icon')).not.toBeInTheDocument();
     expect(screen.getByRole('contentinfo')).toHaveTextContent('SQLite source of truth');
     expect(screen.getByRole('contentinfo')).toHaveTextContent('Offline by default');
   });
@@ -234,7 +239,7 @@ describe('desktop app shell', () => {
       listLibrarySkills: vi.fn(),
       getWorkspaceState: vi.fn().mockResolvedValue({
         appInfo: {
-          productName: 'TheOpenHub Skills Studio',
+          productName: 'OpenHub',
           phase: 'Phase 10',
           localFirst: true
         },

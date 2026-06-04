@@ -10,7 +10,7 @@ describe('desktop shell IPC contract', () => {
 
   it('validates app info responses', () => {
     const response = desktopShellContract.appInfo.response.parse({
-      productName: 'TheOpenHub Skills Studio',
+      productName: 'OpenHub',
       phase: 'Phase 10',
       localFirst: true
     });
@@ -50,7 +50,7 @@ describe('desktop shell IPC contract', () => {
 
     const workspaceState = desktopShellContract.workspaceState.response.parse({
       appInfo: {
-        productName: 'TheOpenHub Skills Studio',
+        productName: 'OpenHub',
         phase: 'Phase 10',
         localFirst: true
       },

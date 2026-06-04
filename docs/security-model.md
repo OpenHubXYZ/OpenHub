@@ -1,6 +1,6 @@
 # Security Model
 
-TheOpenHub Skills Studio is a local-first skills manager. Its security model is
+OpenHub is a local-first skills manager. Its security model is
 designed to reduce accidental unsafe installs and make risky choices auditable.
 It is not an execution sandbox.
 

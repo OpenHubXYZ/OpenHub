@@ -43,8 +43,7 @@ import {
   type SourceCard,
   type TableCell,
   type TableColumn,
-  type TableRow,
-  type Tone
+  type TableRow
 } from './workspace-view-model';
 import './app.css';
 
@@ -272,7 +271,7 @@ export function App({
   return (
     <main className="screen">
       <Sidebar activePage={activePage} navItems={viewModel.navItems} onNavigate={setActivePage} />
-      <section className="app-frame" aria-label="TheOpenHub workspace">
+      <section className="app-frame" aria-label="OpenHub workspace">
         <Topbar searchRef={searchRef} />
         <section className="content">
           <div className="workbench">
@@ -358,12 +357,8 @@ function Sidebar({
   return (
     <aside className="sidebar" aria-label="Product">
       <div className="brand">
-        <div className="brand-cube" aria-hidden="true" />
-        <div>
-          <div className="brand-title">
-            TheOpenHub <span className="version-pill">v0.9.0</span>
-          </div>
-          <div className="brand-subtitle">Skills Studio</div>
+        <div className="brand-title">
+          OpenHub <span className="version-pill">v0.9.0</span>
         </div>
       </div>
       <nav className="nav" aria-label="Primary pages">
@@ -961,7 +956,6 @@ function RightRail({
   return (
     <aside aria-label={`${label} details`} className="right-pane">
       <div className="rail-head">
-        <div className={`rail-icon ${config.tone ? `rail-${config.tone}` : ''}`}>{config.initials}</div>
         <div className="rail-title">
           <h2>{config.title}</h2>
           <p>{config.subtitle}</p>
@@ -986,15 +980,12 @@ function railConfig(
   activePage: PageKey,
   viewModel: ReturnType<typeof createWorkspaceViewModel>
 ): {
-  initials: string;
   title: string;
   subtitle: string;
-  tone?: Tone;
   panels: PanelModel[];
 } {
   if (activePage === 'library') {
     return {
-      initials: 'L',
       title: 'Library selection',
       subtitle: 'Indexed local state',
       panels: [
@@ -1016,7 +1007,6 @@ function railConfig(
 
   if (activePage === 'discover') {
     return {
-      initials: 'S',
       title: 'skills.sh official',
       subtitle: 'Verified remote source',
       panels: [
@@ -1048,7 +1038,6 @@ function railConfig(
 
   if (activePage === 'installs') {
     return {
-      initials: 'S',
       title: 'sui-move-contract',
       subtitle: 'Clean install plan',
       panels: [
@@ -1081,10 +1070,8 @@ function railConfig(
 
   if (activePage === 'usage') {
     return {
-      initials: 'U',
       title: 'Usage insight',
       subtitle: 'Local events only',
-      tone: 'green',
       panels: [
         {
           title: 'Privacy boundary',
@@ -1104,10 +1091,8 @@ function railConfig(
 
   if (activePage === 'reviews') {
     return {
-      initials: 'R',
       title: 'gh-fix-ci update',
       subtitle: 'Review decision',
-      tone: 'red',
       panels: [
         {
           title: 'Decision checklist',
@@ -1137,10 +1122,8 @@ function railConfig(
 
   if (activePage === 'security') {
     return {
-      initials: '!',
       title: 'Current posture',
       subtitle: 'High risk guarded',
-      tone: 'red',
       panels: [
         {
           title: 'Policy summary',
@@ -1165,7 +1148,6 @@ function railConfig(
 
   if (activePage === 'settings') {
     return {
-      initials: 'S',
       title: 'Workspace settings',
       subtitle: 'Local-first defaults',
       panels: [
@@ -1186,7 +1168,6 @@ function railConfig(
   }
 
   return {
-    initials: 'OH',
     title: 'Workspace health',
     subtitle: 'Phase 10 maintainer operations',
     panels: [

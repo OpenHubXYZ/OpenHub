@@ -1,8 +1,8 @@
 import path from 'node:path';
 import { homedir } from 'node:os';
 
-const productDirectoryName = 'TheOpenHub Skills Studio';
-const linuxDirectoryName = 'theopenhub-skills-studio';
+const productDirectoryName = 'OpenHub';
+const linuxDirectoryName = 'openhub';
 
 export interface AppDataDirectoryInput {
   platform?: NodeJS.Platform;

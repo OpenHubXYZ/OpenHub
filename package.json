@@ -17,7 +17,8 @@
     "typecheck": "pnpm -r --sort typecheck",
     "test": "vitest run",
     "build": "pnpm -r --sort build",
-    "package:desktop": "pnpm build && node scripts/package-desktop.mjs",
+    "assets:icons": "node scripts/generate-icons.mjs",
+    "package:desktop": "pnpm assets:icons && pnpm build && node scripts/package-desktop.mjs",
     "release:checksums": "node scripts/generate-checksums.mjs",
     "release:inventory": "node scripts/generate-dependency-inventory.mjs",
     "release:smoke": "node scripts/release-smoke.mjs"

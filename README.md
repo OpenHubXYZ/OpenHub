@@ -1,6 +1,6 @@
-# TheOpenHub Skills Studio
+# OpenHub
 
-TheOpenHub Skills Studio is an MIT-licensed, local-first desktop
+OpenHub is an MIT-licensed, local-first desktop
 application for managing AI coding agent skills across Codex, Claude, Gemini,
 OpenCode, and other local agent environments.
 
@@ -132,7 +132,7 @@ commands so local and hosted verification stay aligned.
 
 ## Privacy Defaults
 
-TheOpenHub Skills Studio is designed to keep skill contents on the user's
+OpenHub is designed to keep skill contents on the user's
 machine by default. Skill text, file contents, paths, tokens, and local
 configuration are not collected by the project. Network access is reserved for
 explicit user actions such as Git import, update checks, optional sync, or
@@ -166,4 +166,4 @@ Contributions are welcome. Please read
 
 ## License
 
-TheOpenHub Skills Studio is licensed under the MIT License. See `LICENSE`.
+OpenHub is licensed under the MIT License. See `LICENSE`.

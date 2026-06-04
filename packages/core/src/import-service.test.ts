@@ -112,7 +112,7 @@ async function createGitFixture(directory: string, name: string): Promise<string
   await execFileAsync('git', ['add', '.'], { cwd: directory });
   await execFileAsync(
     'git',
-    ['-c', 'user.name=TheOpenHub Test', '-c', 'user.email=test@example.com', 'commit', '-m', 'fixture'],
+    ['-c', 'user.name=OpenHub Test', '-c', 'user.email=test@example.com', 'commit', '-m', 'fixture'],
     { cwd: directory }
   );
   return directory;

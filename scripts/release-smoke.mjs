@@ -27,6 +27,7 @@ if (manifest.privacyDefaults.pluginEnabled !== false) {
 
 await runSmokeTests();
 await runPackagedStartupSmoke();
+await runPackagedWindowSmoke();
 await mkdir(releaseDirectory, { recursive: true });
 
 const logContent = [
@@ -35,6 +36,7 @@ const logContent = [
   `arch=${process.arch}`,
   'package_payload=verified',
   'package_startup=verified',
+  'package_window=verified',
   'database_migration=verified',
   'phase4_import_install=verified',
   'desktop_runtime=verified',
@@ -51,7 +53,7 @@ async function findCurrentPackage() {
   const packagesDirectory = path.join(rootDirectory, config.unpackedDirectory);
   const packageNames = await readdir(packagesDirectory);
   const packageName = packageNames
-    .filter((name) => name.includes(`${process.platform}-${process.arch}`))
+    .filter((name) => name.startsWith(`${config.artifactName}-`) && name.includes(`${process.platform}-${process.arch}`))
     .sort()
     .at(-1);
 
@@ -101,6 +103,39 @@ async function runPackagedStartupSmoke() {
   if (!result.output.includes('"status":"passed"')) {
     throw new Error(`Packaged startup smoke did not report success:\n${result.output}`);
   }
+}
+
+async function runPackagedWindowSmoke() {
+  const smokeDataDirectory = await mkdtemp(path.join(tmpdir(), 'theopenhub-window-smoke-'));
+  const executable = findPackagedExecutable();
+  const result = await spawnForResult(
+    executable.command,
+    [...executable.args, '--window-smoke', `--smoke-data-dir=${smokeDataDirectory}`],
+    { timeoutMs: 45000 }
+  );
+
+  await rm(smokeDataDirectory, { recursive: true, force: true });
+
+  if (result.code !== 0) {
+    throw new Error(`Packaged window smoke failed:\n${result.output}`);
+  }
+  if (!result.output.includes('"windowSmoke":{"status":"passed"')) {
+    throw new Error(`Packaged window smoke did not report success:\n${result.output}`);
+  }
+}
+
+function findPackagedExecutable() {
+  if (process.platform === 'darwin' && manifest.appBundle) {
+    return {
+      command: path.join(packageDirectory, manifest.appBundle, 'Contents/MacOS/Electron'),
+      args: []
+    };
+  }
+
+  return {
+    command: 'pnpm',
+    args: ['exec', 'electron', path.join(packageDirectory, manifest.entrypoints.main)]
+  };
 }
 
 function spawnForResult(command, args, options = {}) {

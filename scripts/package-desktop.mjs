@@ -57,6 +57,8 @@ for (const fileName of ['README.md', 'LICENSE', 'CHANGELOG.md', 'SECURITY.md']) 
   await cp(path.join(rootDirectory, fileName), path.join(packageDirectory, fileName));
 }
 
+const appBundle = process.platform === 'darwin' ? await createDarwinAppBundle(packageDirectory, appDirectory) : null;
+
 const manifest = {
   appId: config.appId,
   productName: config.productName,
@@ -70,6 +72,7 @@ const manifest = {
     preload: 'resources/app/dist/preload/preload.cjs',
     renderer: 'resources/app/dist/renderer/index.html'
   },
+  appBundle: appBundle ? path.relative(packageDirectory, appBundle) : null,
   privacyDefaults: {
     telemetry: false,
     syncProfileCreated: false,
@@ -173,6 +176,89 @@ async function installElectronNativeRuntime(appDirectory, electronVersion, names
     if (result.code !== 0) {
       throw new Error(`Failed to install Electron native runtime for ${name}:\n${result.output}`);
     }
+  }
+}
+
+async function createDarwinAppBundle(packageDirectory, appDirectory) {
+  const electronPackageDirectory = path.dirname(requireFromDesktop.resolve('electron/package.json'));
+  const sourceBundle = path.join(electronPackageDirectory, 'dist/Electron.app');
+  const bundleDirectory = path.join(packageDirectory, `${config.productName}.app`);
+  const bundleResourcesDirectory = path.join(bundleDirectory, 'Contents/Resources');
+  const bundledAppDirectory = path.join(bundleResourcesDirectory, 'app');
+  const iconPath = path.join(bundleResourcesDirectory, 'OpenHub.icns');
+
+  await rm(bundleDirectory, { recursive: true, force: true });
+  await cp(sourceBundle, bundleDirectory, { recursive: true, dereference: true });
+  await rm(bundledAppDirectory, { recursive: true, force: true });
+  await cp(appDirectory, bundledAppDirectory, { recursive: true });
+  await createIcns(path.join(rootDirectory, 'apps/desktop/public/icon.png'), iconPath);
+
+  const plistPath = path.join(bundleDirectory, 'Contents/Info.plist');
+  await setPlistString(plistPath, 'CFBundleName', config.productName);
+  await setPlistString(plistPath, 'CFBundleDisplayName', config.productName);
+  await setPlistString(plistPath, 'CFBundleIdentifier', config.appId);
+  await setPlistString(plistPath, 'CFBundleShortVersionString', rootPackage.version);
+  await setPlistString(plistPath, 'CFBundleVersion', rootPackage.version);
+  await setPlistString(plistPath, 'CFBundleIconFile', 'OpenHub');
+
+  return bundleDirectory;
+}
+
+async function createIcns(sourcePng, iconPath) {
+  const iconsetDirectory = path.join(packageDirectory, 'OpenHub.iconset');
+  const sizes = [
+    ['icon_16x16.png', 16],
+    ['icon_16x16@2x.png', 32],
+    ['icon_32x32.png', 32],
+    ['icon_32x32@2x.png', 64],
+    ['icon_128x128.png', 128],
+    ['icon_128x128@2x.png', 256],
+    ['icon_256x256.png', 256],
+    ['icon_256x256@2x.png', 512],
+    ['icon_512x512.png', 512],
+    ['icon_512x512@2x.png', 1024]
+  ];
+
+  await rm(iconsetDirectory, { recursive: true, force: true });
+  await mkdir(iconsetDirectory, { recursive: true });
+
+  for (const [fileName, size] of sizes) {
+    const result = await spawnForResult(
+      'sips',
+      ['-z', String(size), String(size), sourcePng, '--out', path.join(iconsetDirectory, fileName)],
+      { cwd: rootDirectory }
+    );
+
+    if (result.code !== 0) {
+      throw new Error(`Failed to create app icon size ${size}:\n${result.output}`);
+    }
+  }
+
+  const result = await spawnForResult('iconutil', ['-c', 'icns', iconsetDirectory, '-o', iconPath], {
+    cwd: rootDirectory
+  });
+  await rm(iconsetDirectory, { recursive: true, force: true });
+
+  if (result.code !== 0) {
+    throw new Error(`Failed to create app icon:\n${result.output}`);
+  }
+}
+
+async function setPlistString(plistPath, key, value) {
+  const setResult = await spawnForResult('/usr/libexec/PlistBuddy', ['-c', `Set :${key} ${value}`, plistPath], {
+    cwd: rootDirectory
+  });
+
+  if (setResult.code === 0) {
+    return;
+  }
+
+  const addResult = await spawnForResult('/usr/libexec/PlistBuddy', ['-c', `Add :${key} string ${value}`, plistPath], {
+    cwd: rootDirectory
+  });
+
+  if (addResult.code !== 0) {
+    throw new Error(`Failed to update ${key} in app bundle Info.plist:\n${setResult.output}\n${addResult.output}`);
   }
 }
 

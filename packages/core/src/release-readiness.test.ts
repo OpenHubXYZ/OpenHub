@@ -12,6 +12,8 @@ describe('release readiness', () => {
       await readFile(path.join(rootDirectory, 'package.json'), 'utf8')
     ) as { scripts: Record<string, string> };
 
+    expect(packageJson.scripts['assets:icons']).toContain('scripts/generate-icons.mjs');
+    expect(packageJson.scripts['package:desktop']).toContain('pnpm assets:icons');
     expect(packageJson.scripts['package:desktop']).toContain('scripts/package-desktop.mjs');
     expect(packageJson.scripts['release:checksums']).toContain('scripts/generate-checksums.mjs');
     expect(packageJson.scripts['release:inventory']).toContain(
@@ -29,8 +31,8 @@ describe('release readiness', () => {
       targets: Record<string, { formats: string[] }>;
     };
 
-    expect(config.productName).toBe('TheOpenHub Skills Studio');
-    expect(config.appId).toBe('io.theopenhub.skills-studio');
+    expect(config.productName).toBe('OpenHub');
+    expect(config.appId).toBe('io.openhub.desktop');
     expect(config.targets.darwin?.formats ?? []).toContain('dmg');
     expect(config.targets.win32?.formats ?? []).toContain('nsis');
     expect(config.targets.linux?.formats ?? []).toContain('AppImage');
@@ -44,6 +46,9 @@ describe('release readiness', () => {
     expect(packageScript).toContain('copyRuntimeExternalDependencies');
     expect(packageScript).toContain('installElectronNativeRuntime');
     expect(packageScript).toContain('prebuild-install');
+    expect(packageScript).toContain('createDarwinAppBundle');
+    expect(packageScript).toContain('CFBundleDisplayName');
+    expect(packageScript).toContain('iconutil');
     expect(packageScript).not.toContain('dependencies: desktopPackage.dependencies');
   });
 
@@ -53,9 +58,12 @@ describe('release readiness', () => {
     expect(smokeScript).toContain('apps/desktop/src/main/desktop-runtime.test.ts');
     expect(smokeScript).toContain('desktop_runtime=verified');
     expect(smokeScript).toContain('runPackagedStartupSmoke');
+    expect(smokeScript).toContain('runPackagedWindowSmoke');
     expect(smokeScript).toContain('--release-smoke');
+    expect(smokeScript).toContain('--window-smoke');
     expect(smokeScript).toContain('ELECTRON_RUN_AS_NODE');
     expect(smokeScript).toContain('package_startup=verified');
+    expect(smokeScript).toContain('package_window=verified');
   });
 
   it('uses relative renderer assets for packaged file URLs', async () => {
