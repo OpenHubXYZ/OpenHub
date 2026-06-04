@@ -1,10 +1,11 @@
 /**
  * @vitest-environment jsdom
  */
-import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import { App } from './App';
+import type { PageKey } from './workspace-view-model';
 
 describe('desktop app shell', () => {
   afterEach(() => {
@@ -12,13 +13,39 @@ describe('desktop app shell', () => {
     delete window.theOpenHub;
   });
 
-  it('shows the product name and Phase 10 empty state', () => {
+  it('shows the shared desktop shell with command bar, right rail, and bottom status', () => {
     render(<App />);
 
-    expect(screen.getByRole('heading', { name: 'TheOpenHub Skills Studio' })).toBeInTheDocument();
-    expect(screen.getByText('Phase 10 maintainer operations')).toBeInTheDocument();
-    expect(screen.getByText('No skills indexed yet')).toBeInTheDocument();
-    expect(screen.getByText('SQLite source of truth')).toBeInTheDocument();
+    expect(screen.getByRole('navigation', { name: 'Primary pages' })).toBeInTheDocument();
+    expect(screen.getByRole('searchbox', { name: 'Search local skills, sources, reviews' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /Import/ })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /Download/ })).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: 'Dashboard' })).toBeInTheDocument();
+    expect(screen.getByRole('complementary', { name: 'Dashboard details' })).toHaveTextContent('Workspace health');
+    expect(screen.getByRole('contentinfo')).toHaveTextContent('SQLite source of truth');
+    expect(screen.getByRole('contentinfo')).toHaveTextContent('Offline by default');
+  });
+
+  it('navigates all primary pages without reloading the renderer', () => {
+    render(<App />);
+    const pages: Array<[PageKey, string, string]> = [
+      ['dashboard', 'Dashboard', 'Workspace health'],
+      ['library', 'Library', 'Library selection'],
+      ['discover', 'Discover', 'skills.sh official'],
+      ['installs', 'Installs', 'sui-move-contract'],
+      ['usage', 'Usage', 'Usage insight'],
+      ['reviews', 'Reviews', 'gh-fix-ci update'],
+      ['security', 'Security', 'Current posture'],
+      ['settings', 'Settings', 'Workspace settings']
+    ];
+
+    for (const [, label, railHeading] of pages) {
+      fireEvent.click(screen.getByRole('button', { name: label }));
+
+      expect(screen.getByRole('heading', { name: label })).toBeInTheDocument();
+      expect(screen.getByRole('button', { name: label })).toHaveAttribute('aria-current', 'page');
+      expect(screen.getByRole('complementary', { name: `${label} details` })).toHaveTextContent(railHeading);
+    }
   });
 
   it('shows indexed library rows with source agent, path, and install status', () => {
@@ -35,6 +62,8 @@ describe('desktop app shell', () => {
         ]}
       />
     );
+
+    fireEvent.click(screen.getByRole('button', { name: 'Library' }));
 
     expect(screen.getByRole('heading', { name: 'Path Safety Scanner' })).toBeInTheDocument();
     expect(screen.getByText('Codex')).toBeInTheDocument();
@@ -61,6 +90,8 @@ describe('desktop app shell', () => {
       />
     );
 
+    fireEvent.click(screen.getByRole('button', { name: 'Library' }));
+
     expect(screen.getByRole('heading', { name: 'Import Queue' })).toBeInTheDocument();
     expect(screen.getByText('Local folder import')).toBeInTheDocument();
     expect(screen.getByRole('heading', { name: 'Install Plan' })).toBeInTheDocument();
@@ -83,11 +114,14 @@ describe('desktop app shell', () => {
       />
     );
 
+    fireEvent.click(screen.getByRole('button', { name: 'Security' }));
+
+    expect(screen.getByRole('heading', { name: 'Security' })).toBeInTheDocument();
     expect(screen.getByRole('heading', { name: 'Security Center' })).toBeInTheDocument();
-    expect(screen.getByText('Risk Score')).toBeInTheDocument();
+    expect(screen.getByText('Risk score')).toBeInTheDocument();
     expect(screen.getByText('95')).toBeInTheDocument();
-    expect(screen.getByText('Dangerous shell command')).toBeInTheDocument();
-    expect(screen.getByText('Medium Risk Helper')).toBeInTheDocument();
+    expect(screen.getAllByText('Dangerous shell command').length).toBeGreaterThan(0);
+    expect(screen.getByText('High Risk Helper')).toBeInTheDocument();
     expect(screen.getByText('Reviewed by maintainer')).toBeInTheDocument();
   });
 
@@ -104,6 +138,8 @@ describe('desktop app shell', () => {
         }}
       />
     );
+
+    fireEvent.click(screen.getByRole('button', { name: 'Library' }));
 
     expect(screen.getByRole('heading', { name: 'History' })).toBeInTheDocument();
     expect(screen.getByText('Change manifest and add guide')).toBeInTheDocument();
@@ -125,11 +161,14 @@ describe('desktop app shell', () => {
       />
     );
 
-    expect(screen.getByRole('heading', { name: 'Sync Center' })).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'Settings' }));
+
+    expect(screen.getByRole('heading', { name: 'Offline-first sync' })).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: 'Sync preview' })).toBeInTheDocument();
     expect(screen.getByText('shared-folder')).toBeInTheDocument();
-    expect(screen.getByText('queued')).toBeInTheDocument();
-    expect(screen.getByText('received')).toBeInTheDocument();
-    expect(screen.getByText('open')).toBeInTheDocument();
+    expect(screen.getByText('1 queued')).toBeInTheDocument();
+    expect(screen.getByText('1 pending')).toBeInTheDocument();
+    expect(screen.getByText('1 open')).toBeInTheDocument();
   });
 
   it('shows Plugins install, enable, permission, capability, and error state', () => {
@@ -149,7 +188,9 @@ describe('desktop app shell', () => {
       />
     );
 
-    expect(screen.getByRole('heading', { name: 'Plugins' })).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'Settings' }));
+
+    expect(screen.getByRole('heading', { name: 'Plugin runtime' })).toBeInTheDocument();
     expect(screen.getByText('Mock Agent Plugin')).toBeInTheDocument();
     expect(screen.getByText('enabled')).toBeInTheDocument();
     expect(screen.getByText('agent-adapter:mock-agent')).toBeInTheDocument();
@@ -212,6 +253,22 @@ describe('desktop app shell', () => {
           history: [],
           exemptions: []
         },
+        usageCenter: {
+          totals: {
+            launches: 0,
+            installs: 0,
+            scans: 0,
+            exports: 0
+          },
+          dailyActivity: [],
+          topSkills: [],
+          agentSplit: [],
+          recent: []
+        },
+        reviewCenter: {
+          queue: [],
+          notes: []
+        },
         governance: {
           history: [],
           diff: [],
@@ -261,10 +318,11 @@ describe('desktop app shell', () => {
 
     render(<App />);
 
-    await screen.findByRole('heading', { name: 'Import Queue' });
-    fireEvent.click(screen.getByRole('button', { name: 'Scan agent roots' }));
+    await screen.findByRole('heading', { name: 'Dashboard' });
+    fireEvent.click(screen.getByRole('button', { name: 'Run scan' }));
     await waitFor(() => expect(api.scanAgentRoots).toHaveBeenCalled());
-    expect(screen.getByText('Scanned Helper')).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'Library' }));
+    expect(screen.getAllByText('Scanned Helper').length).toBeGreaterThan(0);
 
     fireEvent.change(screen.getByLabelText('Import source path'), {
       target: { value: '/tmp/runtime-helper' }
@@ -294,5 +352,82 @@ describe('desktop app shell', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Apply install plan' }));
     await waitFor(() => expect(api.applyInstallPlan).toHaveBeenCalledWith(installPlan));
     expect(screen.getByText('Installed 1 files by copy projection.')).toBeInTheDocument();
+  });
+
+  it('renders Discover, Usage, Reviews, and Settings contract copy from local fixture boundaries', () => {
+    render(<App />);
+
+    fireEvent.click(screen.getByRole('button', { name: 'Discover' }));
+    expect(screen.getByText('Browse trusted local and remote skill sources before importing.')).toBeInTheDocument();
+    expect(screen.getByText('No files are written to agent roots until an install plan is reviewed.')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Source filter: All' })).toHaveAttribute('aria-pressed', 'true');
+
+    fireEvent.click(screen.getByRole('button', { name: 'Usage' }));
+    expect(screen.getByText('Local usage signals from installs, launches, scans, and exports.')).toBeInTheDocument();
+    expect(screen.getByText('Usage is derived from local SQLite records. No cloud analytics.')).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Reviews' }));
+    expect(screen.getByRole('heading', { name: 'Review queue' })).toBeInTheDocument();
+    expect(screen.getByText('High-risk installs stay blocked until a scoped exemption is recorded.')).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Settings' }));
+    const currentDefaults = screen.getByRole('region', { name: 'Current defaults' });
+    expect(within(currentDefaults).getByText('Node integration')).toBeInTheDocument();
+    expect(within(currentDefaults).getByText('Off')).toBeInTheDocument();
+    expect(within(currentDefaults).getByText('Context isolation')).toBeInTheDocument();
+    expect(within(currentDefaults).getByText('On')).toBeInTheDocument();
+    expect(within(currentDefaults).getByText('Telemetry')).toBeInTheDocument();
+    expect(within(currentDefaults).getAllByText('None')).toHaveLength(2);
+  });
+
+  it('renders persisted usage and review center state ahead of fixture-backed rows', () => {
+    render(
+      <App
+        initialUsageCenter={{
+          totals: {
+            launches: 0,
+            installs: 2,
+            scans: 1,
+            exports: 0
+          },
+          dailyActivity: [{ date: '2026-06-01', count: 3 }],
+          topSkills: [{ skillName: 'Runtime Helper', count: 3 }],
+          agentSplit: [{ agent: 'Codex', count: 2 }],
+          recent: [
+            {
+              eventType: 'security.scan',
+              label: 'Security scanned Runtime Helper',
+              value: '2026-06-01T11:00:00.000Z'
+            }
+          ]
+        }}
+        initialReviewCenter={{
+          queue: [
+            {
+              id: 'review-runtime',
+              title: 'Runtime Helper security review',
+              detail: 'v1 security scan',
+              reason: 'Dangerous shell command',
+              source: 'Security scan',
+              reviewer: 'Maintainer',
+              risk: 'High',
+              status: 'Open',
+              skillName: 'Runtime Helper'
+            }
+          ],
+          notes: [{ label: 'Explain why shell access is required.', value: 'open' }]
+        }}
+      />
+    );
+
+    fireEvent.click(screen.getByRole('button', { name: 'Usage' }));
+    expect(screen.getByText('Runtime Helper')).toBeInTheDocument();
+    expect(screen.getByText('Security scanned Runtime Helper')).toBeInTheDocument();
+    expect(screen.getByText('Codex')).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Reviews' }));
+    expect(screen.getByText('Runtime Helper security review')).toBeInTheDocument();
+    expect(screen.getByText('Dangerous shell command')).toBeInTheDocument();
+    expect(screen.getByText('Explain why shell access is required.')).toBeInTheDocument();
   });
 });

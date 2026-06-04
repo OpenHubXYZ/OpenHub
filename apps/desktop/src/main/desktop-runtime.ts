@@ -18,7 +18,9 @@ import {
 import {
   createFileDatabase,
   createLibraryRepository,
+  createReviewRepository,
   createSkillRepository,
+  createUsageRepository,
   runMigrations,
   type SkillRecord,
   type SqliteDatabase
@@ -121,6 +123,14 @@ export function createDesktopRuntime(input: CreateDesktopRuntimeInput): DesktopR
 
       if (channel === desktopShellContract.libraryScan.channel) {
         const result = await scanAgentLibraries({ database, adapters });
+        createUsageRepository(database).recordEvent({
+          eventType: 'agent.scan',
+          subject: `Scanned ${result.indexedSkills.length} local agent skills`,
+          metadata: {
+            indexedSkills: result.indexedSkills.length,
+            errors: result.errors.length
+          }
+        });
         return parseIpcResponse(channel, result) as RuntimeDispatchResult<C>;
       }
 
@@ -136,6 +146,16 @@ export function createDesktopRuntime(input: CreateDesktopRuntimeInput): DesktopR
         const imported = await importer.importLocalFolder(request as { folderPath: string });
         const result = toImportedSkillResult(imported);
         memory.importItems = [{ label: result.skill.name, status: 'imported' }, ...memory.importItems].slice(0, 5);
+        createUsageRepository(database).recordEvent({
+          eventType: 'skill.import',
+          skillId: result.skill.id,
+          skillName: result.skill.name,
+          subject: `Imported ${result.skill.name}`,
+          metadata: {
+            fileCount: result.files.length,
+            stagedFrom: result.stagedFrom
+          }
+        });
         return parseIpcResponse(channel, result) as RuntimeDispatchResult<C>;
       }
 
@@ -157,6 +177,38 @@ export function createDesktopRuntime(input: CreateDesktopRuntimeInput): DesktopR
           conflictState: result.conflictState,
           writeCount: result.writes.length
         };
+        createUsageRepository(database).recordEvent({
+          eventType: 'install.plan',
+          skillId: result.skillId,
+          skillName: result.skillName,
+          agentCode: result.agentCode,
+          agentDisplayName: result.agentDisplayName,
+          subject: `Planned ${result.skillName} for ${result.agentDisplayName}`,
+          metadata: {
+            conflictState: result.conflictState,
+            writeCount: result.writes.length,
+            targetRoot: result.targetRoot
+          }
+        });
+        if (result.conflictState === 'conflict') {
+          createReviewRepository(database).upsertReviewItem({
+            itemType: 'install.conflict',
+            subjectId: `${result.skillId}:${result.targetRoot}`,
+            skillId: result.skillId,
+            skillName: result.skillName,
+            title: `${result.skillName} install conflict`,
+            detail: `${result.writes.length} planned writes`,
+            reason: 'Existing files conflict',
+            source: 'Install plan',
+            reviewer: 'Maintainer',
+            risk: 'Medium',
+            status: 'Open',
+            metadata: {
+              agentCode: result.agentCode,
+              targetRoot: result.targetRoot
+            }
+          });
+        }
         return parseIpcResponse(channel, result) as RuntimeDispatchResult<C>;
       }
 
@@ -167,13 +219,37 @@ export function createDesktopRuntime(input: CreateDesktopRuntimeInput): DesktopR
           status: result.status,
           message: `Installed ${plan.writes.length} files by copy projection.`
         };
+        createUsageRepository(database).recordEvent({
+          eventType: 'install.apply',
+          skillId: plan.skillId,
+          skillName: plan.skillName,
+          agentCode: plan.agentCode,
+          agentDisplayName: plan.agentDisplayName,
+          subject: `Installed ${plan.skillName} to ${plan.agentDisplayName}`,
+          metadata: {
+            installationId: result.installationId,
+            writeCount: plan.writes.length
+          }
+        });
         return parseIpcResponse(channel, result) as RuntimeDispatchResult<C>;
       }
 
       if (channel === desktopShellContract.securityScan.channel) {
-        const result = toSecurityScanResult(
-          await security.scanSkill(request as { skillId: string })
-        );
+        const result = toSecurityScanResult(await security.scanSkill(request as { skillId: string }));
+        const skill = createSkillRepository(database).getSkill(result.skillId);
+        const skillName = skill?.name ?? result.skillId;
+        createUsageRepository(database).recordEvent({
+          eventType: 'security.scan',
+          skillId: result.skillId,
+          skillName,
+          subject: `Security scanned ${skillName}`,
+          metadata: {
+            level: result.level,
+            blocked: result.blocked,
+            findingCount: result.findings.length
+          }
+        });
+        recordReviewForSecurityScan(database, result, skill);
         return parseIpcResponse(channel, result) as RuntimeDispatchResult<C>;
       }
 
@@ -209,6 +285,8 @@ function workspaceState(
       installResult: memory.installResult
     },
     securityCenter: securityCenterState(database),
+    usageCenter: createUsageRepository(database).getUsageCenterState(),
+    reviewCenter: createReviewRepository(database).getReviewCenterState(),
     governance: governanceState(database),
     syncCenter: syncCenterState(database),
     plugins
@@ -382,6 +460,41 @@ function toSecurityScanResult(result: CoreSecurityScanResult): SecurityScanResul
     rulesetVersion: result.rulesetVersion,
     findings: result.findings
   };
+}
+
+function recordReviewForSecurityScan(
+  database: SqliteDatabase,
+  result: SecurityScanResult,
+  skill: SkillRecord | null
+): void {
+  const finding = result.findings.find((candidate) =>
+    ['medium', 'high', 'critical'].includes(candidate.severity.toLowerCase())
+  );
+  if (!finding) {
+    return;
+  }
+
+  const skillName = skill?.name ?? result.skillId;
+  createReviewRepository(database).upsertReviewItem({
+    itemType: 'security.finding',
+    subjectId: result.id,
+    skillId: result.skillId,
+    skillName,
+    title: `${skillName} security review`,
+    detail: `v${skill?.versionNo ?? 1} security scan`,
+    reason: finding.ruleName,
+    source: 'Security scan',
+    reviewer: 'Maintainer',
+    risk: titleizeRuleId(result.level),
+    status: 'Open',
+    metadata: {
+      scanId: result.id,
+      ruleId: finding.ruleId,
+      category: finding.category,
+      relativePath: finding.relativePath,
+      lineNo: finding.lineNo
+    }
+  });
 }
 
 function titleizeRuleId(ruleId: string): string {

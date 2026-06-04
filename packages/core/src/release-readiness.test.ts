@@ -58,6 +58,15 @@ describe('release readiness', () => {
     expect(smokeScript).toContain('package_startup=verified');
   });
 
+  it('uses relative renderer assets for packaged file URLs', async () => {
+    const rendererConfig = await readFile(
+      path.join(rootDirectory, 'apps/desktop/vite.renderer.config.ts'),
+      'utf8'
+    );
+
+    expect(rendererConfig).toContain("base: './'");
+  });
+
   it('keeps community health files and 15-minute quick start visible', async () => {
     for (const filePath of [
       'LICENSE',

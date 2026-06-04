@@ -29,9 +29,11 @@ export type {
   LibrarySkillSummary,
   ManagementFlowState,
   PluginsState,
+  ReviewCenterState,
   SecurityCenterState,
   SecurityScanResult,
   SkillSummary,
   SyncCenterState,
-  SyncStartupPlan
+  SyncStartupPlan,
+  UsageCenterState
 } from './ipc-contracts';

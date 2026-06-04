@@ -54,15 +54,6 @@ async function runElectronApp(): Promise<void> {
   const electron = (electronModule.default ?? electronModule) as ElectronModule;
   const { app, BrowserWindow, ipcMain } = electron;
 
-  await app.whenReady();
-
-  if (isReleaseSmokeMode()) {
-    await runReleaseSmokeAndExit('electron', app);
-  } else {
-    registerIpcHandlers(ipcMain, app.getPath('userData'));
-    await createMainWindow(BrowserWindow);
-  }
-
   app.on('activate', () => {
     if (BrowserWindow.getAllWindows().length === 0) {
       void createMainWindow(BrowserWindow);
@@ -74,6 +65,24 @@ async function runElectronApp(): Promise<void> {
       app.quit();
     }
   });
+
+  const start = async (): Promise<void> => {
+    if (isReleaseSmokeMode()) {
+      await runReleaseSmokeAndExit('electron', app);
+      return;
+    }
+
+    registerIpcHandlers(ipcMain, app.getPath('userData'));
+    await createMainWindow(BrowserWindow);
+  };
+
+  if (app.isReady()) {
+    void start();
+  } else {
+    app.on('ready', () => {
+      void start();
+    });
+  }
 }
 
 function isReleaseSmokeMode(): boolean {

@@ -15,6 +15,7 @@
     "@theopenhub/db": "workspace:*",
     "@theopenhub/shared": "workspace:*",
     "better-sqlite3": "^12.10.0",
+    "lucide-react": "^1.17.0",
     "react": "^19.1.0",
     "react-dom": "^19.1.0",
     "zod": "^3.25.76"

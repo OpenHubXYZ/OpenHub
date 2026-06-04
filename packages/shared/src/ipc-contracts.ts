@@ -219,6 +219,84 @@ const securityCenterStateSchema = z
 
 export type SecurityCenterState = z.infer<typeof securityCenterStateSchema>;
 
+const usageCenterStateSchema = z
+  .object({
+    totals: z
+      .object({
+        launches: z.number().int().nonnegative(),
+        installs: z.number().int().nonnegative(),
+        scans: z.number().int().nonnegative(),
+        exports: z.number().int().nonnegative()
+      })
+      .strict(),
+    dailyActivity: z.array(
+      z
+        .object({
+          date: z.string().min(1),
+          count: z.number().int().nonnegative()
+        })
+        .strict()
+    ),
+    topSkills: z.array(
+      z
+        .object({
+          skillName: z.string().min(1),
+          count: z.number().int().nonnegative()
+        })
+        .strict()
+    ),
+    agentSplit: z.array(
+      z
+        .object({
+          agent: z.string().min(1),
+          count: z.number().int().nonnegative()
+        })
+        .strict()
+    ),
+    recent: z.array(
+      z
+        .object({
+          eventType: z.string().min(1),
+          label: z.string().min(1),
+          value: z.string().min(1)
+        })
+        .strict()
+    )
+  })
+  .strict();
+
+export type UsageCenterState = z.infer<typeof usageCenterStateSchema>;
+
+const reviewCenterStateSchema = z
+  .object({
+    queue: z.array(
+      z
+        .object({
+          id: z.string().min(1),
+          title: z.string().min(1),
+          detail: z.string(),
+          reason: z.string().min(1),
+          source: z.string().min(1),
+          reviewer: z.string().min(1),
+          risk: z.string().min(1),
+          status: z.string().min(1),
+          skillName: z.string().min(1).nullable()
+        })
+        .strict()
+    ),
+    notes: z.array(
+      z
+        .object({
+          label: z.string().min(1),
+          value: z.string().min(1)
+        })
+        .strict()
+    )
+  })
+  .strict();
+
+export type ReviewCenterState = z.infer<typeof reviewCenterStateSchema>;
+
 const governanceStateSchema = z
   .object({
     history: z.array(
@@ -327,6 +405,8 @@ export const desktopWorkspaceStateSchema = z
     skills: z.array(skillSummarySchema),
     managementFlow: managementFlowStateSchema,
     securityCenter: securityCenterStateSchema,
+    usageCenter: usageCenterStateSchema,
+    reviewCenter: reviewCenterStateSchema,
     governance: governanceStateSchema,
     syncCenter: syncCenterStateSchema,
     plugins: pluginsStateSchema

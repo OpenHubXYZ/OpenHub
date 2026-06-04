@@ -77,6 +77,34 @@ describe('desktop shell IPC contract', () => {
         history: [],
         exemptions: []
       },
+      usageCenter: {
+        totals: {
+          launches: 0,
+          installs: 1,
+          scans: 1,
+          exports: 0
+        },
+        dailyActivity: [{ date: '2026-06-01', count: 2 }],
+        topSkills: [{ skillName: 'Runtime Helper', count: 2 }],
+        agentSplit: [{ agent: 'Codex', count: 1 }],
+        recent: [{ eventType: 'install.apply', label: 'Installed Runtime Helper', value: '2026-06-01T10:00:00.000Z' }]
+      },
+      reviewCenter: {
+        queue: [
+          {
+            id: 'review-1',
+            title: 'Runtime Helper security review',
+            detail: 'v1 security scan',
+            reason: 'Dangerous shell command',
+            source: 'Security scan',
+            reviewer: 'Maintainer',
+            risk: 'High',
+            status: 'Open',
+            skillName: 'Runtime Helper'
+          }
+        ],
+        notes: [{ label: 'Explain why shell access is required.', value: 'open' }]
+      },
       governance: {
         history: [],
         diff: [],

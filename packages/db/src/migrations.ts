@@ -328,6 +328,60 @@ const migrations: Migration[] = [
         create index idx_plugin_errors_plugin on plugin_errors(plugin_id, created_at desc);
       `);
     }
+  },
+  {
+    version: 7,
+    name: '007_review_usage_events',
+    up(database) {
+      database.exec(`
+        create table usage_events (
+          id text primary key,
+          event_type text not null,
+          skill_id text,
+          skill_name text,
+          agent_code text,
+          agent_display_name text,
+          subject text not null,
+          metadata_json text not null default '{}',
+          occurred_at text not null default current_timestamp
+        );
+
+        create index idx_usage_events_type_time on usage_events(event_type, occurred_at desc);
+        create index idx_usage_events_skill on usage_events(skill_id, occurred_at desc);
+        create index idx_usage_events_agent on usage_events(agent_code, occurred_at desc);
+
+        create table review_items (
+          id text primary key,
+          item_type text not null,
+          subject_id text not null,
+          skill_id text,
+          skill_name text,
+          title text not null,
+          detail text not null default '',
+          reason text not null,
+          source text not null,
+          reviewer text not null,
+          risk text not null,
+          status text not null,
+          metadata_json text not null default '{}',
+          created_at text not null default current_timestamp,
+          updated_at text not null default current_timestamp,
+          unique(item_type, subject_id)
+        );
+
+        create table review_notes (
+          id text primary key,
+          review_item_id text references review_items(id) on delete cascade,
+          note text not null,
+          status text not null,
+          created_at text not null default current_timestamp
+        );
+
+        create index idx_review_items_status_risk on review_items(status, risk, updated_at desc);
+        create index idx_review_items_skill on review_items(skill_id);
+        create index idx_review_notes_item on review_notes(review_item_id, created_at desc);
+      `);
+    }
   }
 ];
 

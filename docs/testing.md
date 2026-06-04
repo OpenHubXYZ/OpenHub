@@ -158,6 +158,27 @@ CI must run the same gates.
 - CI runs package and release smoke gates after lint, typecheck, test, and
   build.
 
+## Mockup Renderer Coverage
+
+- Renderer tests cover the shared desktop shell, primary page navigation,
+  Dashboard, Library, Discover, Installs, Usage, Reviews, Security, and
+  Settings headings plus right rails.
+- Browser verification uses the local renderer target at 1487 x 1058 and checks
+  Dashboard, Discover, Usage, Reviews, and Security screenshots for visible
+  shell structure, first-screen content, status bar overflow, and console/network
+  health.
+- `usage_events`, `review_items`, and `review_notes` are SQLite-backed local
+  state. Runtime tests prove import, agent scan, install plan creation, install
+  application, and security scan append usage events under temp app-data
+  directories only.
+- High and medium security scan findings generate review queue items without
+  applying or approving install plans. Review status transitions are explicit
+  repository calls.
+- In the web-only renderer target, source catalog, community signal, visual
+  usage samples, and mockup source rows remain fixture-backed so the static
+  mockup pages can be visually verified without live network, user home scans,
+  or Electron preload APIs.
+
 ## Unit Test Targets
 
 - `SKILL.md` parser.
@@ -172,6 +193,8 @@ CI must run the same gates.
 - Plugin host permission and registry behavior.
 - Release readiness script and packaging config coverage.
 - Maintainer operations documentation coverage.
+- Runtime-backed usage and review center state before fixture-backed renderer
+  rows.
 
 ## Integration Test Targets
 
