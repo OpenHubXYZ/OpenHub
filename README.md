@@ -16,10 +16,12 @@ shell renders the product name, empty/indexed library states, the P0
 import/install flow state, and Security Center state for queue, risk, findings,
 history, exemptions, version history, diffs, collections, Sync Center state, and
 Plugins state.
-The Electron main process now wires typed runtime IPC to the local app data
-SQLite database and content store for agent-root scanning, local folder import,
-install plan creation, install application, security scans, sync startup state,
-and plugin center state.
+The Electron main process wires typed runtime IPC to the local app data SQLite
+database and content store for agent-root scanning, local/Git/ZIP import,
+FTS-backed library search, skill detail, skill and collection export/import,
+install target discovery, install, uninstall, rollback, security rescans and
+exemptions, opt-in sync operations, plugin installation and registry state, and
+Discover source previews.
 `packages/db` has idempotent SQLite migrations, required domain tables, FTS5
 skill search, app data directory resolution, installation file ownership
 records, security scan records, active exemption records, sync profiles,
@@ -41,11 +43,14 @@ shared-folder, Git, and mock REST package drivers, and records conflicts for
 explicit resolution. Plugins are disabled by default, validate manifest fields
 and entry integrity, require declared permissions to be explicitly authorized,
 register capabilities through a restricted host API, and remove capabilities
-from the registry when disabled. The repository now includes current-platform
-desktop packaging, release checksums, dependency inventory generation, release
-smoke checks, launch-ready contributor onboarding, maintainer triage policy,
-ADRs, dependency policy, fixture rules, security response playbook, and public
-roadmap workflow.
+from the registry when disabled. Discover sources can be configured from local
+paths or Git URLs and previewed before import; migration previews cover
+OpenSkills, Skills-Manager, SkillHub, and skills-manager-client layouts without
+writing to agent roots. The repository now includes current-platform desktop
+packaging, release checksums, dependency inventory generation, release smoke
+checks, launch-ready contributor onboarding, maintainer triage policy, ADRs,
+dependency policy, fixture rules, security response playbook, and public roadmap
+workflow.
 
 The tracked planning inputs are:
 
@@ -149,6 +154,7 @@ The implementation roadmap is phased:
 - Phase 2: SQLite domain foundation.
 - Phase 3: agent detection and library indexing.
 - Phase 4: import, export, install, and uninstall loop.
+- Phase 4.5: discover sources and migration previews.
 - Phase 5: security center and governance.
 - Phase 6: version history, blob store, collections.
 - Phase 7: optional offline-first sync.

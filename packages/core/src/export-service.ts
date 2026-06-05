@@ -1,3 +1,4 @@
+import { createHash } from 'node:crypto';
 import { mkdir, rm, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 
@@ -16,12 +17,17 @@ export interface ExportSkillInput {
   outputDirectory: string;
 }
 
+export interface ExportSignedSkillInput extends ExportSkillInput {
+  signer: string;
+}
+
 export interface ExportSkillResult {
   outputDirectory: string;
 }
 
 export interface ExportService {
   exportSkill(input: ExportSkillInput): Promise<ExportSkillResult>;
+  exportSignedSkill(input: ExportSignedSkillInput): Promise<ExportSkillResult>;
 }
 
 interface ExportFileRow {
@@ -37,48 +43,88 @@ interface ExportFileRow {
 export function createExportService(input: CreateExportServiceInput): ExportService {
   return {
     async exportSkill({ skillId, outputDirectory }) {
-      const files = getExportFiles(input.database, skillId);
-      if (files.length === 0) {
-        throw new Error(`Skill has no files: ${skillId}`);
-      }
+      return writeSkillExport(input, { skillId, outputDirectory });
+    },
 
-      const filesDirectory = path.join(outputDirectory, 'files');
-      await rm(outputDirectory, { recursive: true, force: true });
-      await mkdir(filesDirectory, { recursive: true });
-
-      for (const file of files) {
-        const relativePath = assertZipEntryPathSafe(file.relativePath);
-        const targetPath = path.join(filesDirectory, ...relativePath.split('/'));
-        const safeTargetPath = await ensurePathInsideRoot(filesDirectory, targetPath);
-        const content = await input.contentStore.readBlob(file.blobHash);
-
-        await mkdir(path.dirname(safeTargetPath), { recursive: true });
-        await writeFile(safeTargetPath, content);
-      }
-
-      const firstFile = first(files);
-      await writeFile(
-        path.join(outputDirectory, 'manifest.json'),
-        JSON.stringify(
-          {
-            skillId: firstFile.skillId,
-            name: firstFile.skillName,
-            slug: firstFile.skillSlug,
-            versionNo: firstFile.versionNo,
-            files: files.map((file) => ({
-              relativePath: file.relativePath,
-              hash: file.blobHash,
-              size: file.fileSize
-            }))
-          },
-          null,
-          2
-        )
-      );
-
-      return { outputDirectory };
+    async exportSignedSkill({ skillId, outputDirectory, signer }) {
+      return writeSkillExport(input, { skillId, outputDirectory, signer });
     }
   };
+}
+
+async function writeSkillExport(
+  input: CreateExportServiceInput,
+  exportInput: ExportSkillInput & { signer?: string }
+): Promise<ExportSkillResult> {
+  const files = getExportFiles(input.database, exportInput.skillId);
+  if (files.length === 0) {
+    throw new Error(`Skill has no files: ${exportInput.skillId}`);
+  }
+
+  const filesDirectory = path.join(exportInput.outputDirectory, 'files');
+  await rm(exportInput.outputDirectory, { recursive: true, force: true });
+  await mkdir(filesDirectory, { recursive: true });
+
+  for (const file of files) {
+    const relativePath = assertZipEntryPathSafe(file.relativePath);
+    const targetPath = path.join(filesDirectory, ...relativePath.split('/'));
+    const safeTargetPath = await ensurePathInsideRoot(filesDirectory, targetPath);
+    const content = await input.contentStore.readBlob(file.blobHash);
+
+    await mkdir(path.dirname(safeTargetPath), { recursive: true });
+    await writeFile(safeTargetPath, content);
+  }
+
+  const firstFile = first(files);
+  const manifestFiles = files.map((file) => ({
+    relativePath: file.relativePath,
+    hash: file.blobHash,
+    size: file.fileSize
+  }));
+  const manifest = {
+    skillId: firstFile.skillId,
+    name: firstFile.skillName,
+    slug: firstFile.skillSlug,
+    versionNo: firstFile.versionNo,
+    files: manifestFiles,
+    signature: exportInput.signer
+      ? {
+          status: 'signed',
+          algorithm: 'sha256',
+          signer: exportInput.signer,
+          value: signedManifestValue(
+            {
+              name: firstFile.skillName,
+              slug: firstFile.skillSlug,
+              versionNo: firstFile.versionNo,
+              files: manifestFiles
+            },
+            exportInput.signer
+          )
+        }
+      : { status: 'unsigned' }
+  };
+  await writeFile(path.join(exportInput.outputDirectory, 'manifest.json'), JSON.stringify(manifest, null, 2));
+
+  return { outputDirectory: exportInput.outputDirectory };
+}
+
+function signedManifestValue(
+  manifest: {
+    name?: string;
+    slug?: string;
+    versionNo?: number;
+    files: Array<{ relativePath: string; hash: string; size: number }>;
+  },
+  signer: string
+): string {
+  const payload = {
+    name: manifest.name,
+    slug: manifest.slug,
+    versionNo: manifest.versionNo,
+    files: manifest.files
+  };
+  return createHash('sha256').update(`${JSON.stringify(payload)}:${signer}`).digest('hex');
 }
 
 function getExportFiles(database: SqliteDatabase, skillId: string): ExportFileRow[] {

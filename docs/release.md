@@ -50,6 +50,19 @@ dependencies and installs the Electron ABI native SQLite runtime before writing
 checksums. Public native installers still require signing/notarization
 credentials and platform-specific CI before a published release.
 
+## Signing Status
+
+Unsigned local package: `pnpm package:desktop` produces a current-platform
+unpacked package for local validation and smoke testing. It is not a public
+installer and must not be represented as signed.
+
+Signed public installer: DMG, NSIS, AppImage, deb, or other public installer
+artifacts require platform signing and, on macOS, notarization records before
+publication.
+
+Public release is blocked until signing and notarization status is recorded for
+the target platform.
+
 ## Privacy Checks
 
 Release validation must confirm:

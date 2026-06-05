@@ -3,14 +3,37 @@ import { contextBridge, ipcRenderer } from 'electron';
 import { desktopShellContract, parseIpcResponse } from '@theopenhub/shared';
 import type {
   AppInfo,
+  CollectionExportResult,
+  CollectionImportResult,
+  CollectionRecord,
   DesktopWorkspaceState,
+  DiscoverPreviewResult,
+  DiscoverSource,
+  ExportSkillResult,
+  FileDiff,
   ImportedSkillResult,
   InstallPlan,
   InstallResult,
+  InstallTarget,
+  InstallUninstallResult,
   LibraryScanResult,
   LibrarySkillSummary,
+  MigrationPreviewResult,
+  PluginInstallResult,
+  PluginRegistry,
   PluginsState,
+  SecurityExemption,
+  SecurityFindingDetail,
+  SecurityRevokeExemptionResult,
   SecurityScanResult,
+  SkillDetail,
+  SkillSummary,
+  SkillVersionSummary,
+  StatusOnlyResult,
+  SyncConflictRecord,
+  SyncInboxRecord,
+  SyncOutboxRecord,
+  SyncProfile,
   SyncStartupPlan
 } from '@theopenhub/shared';
 
@@ -40,6 +63,79 @@ const api = {
     return parseIpcResponse(desktopShellContract.importLocalFolder.channel, payload);
   },
 
+  async importGit(gitUrl: string): Promise<ImportedSkillResult> {
+    const payload = await ipcRenderer.invoke(desktopShellContract.importGit.channel, { gitUrl });
+    return parseIpcResponse(desktopShellContract.importGit.channel, payload);
+  },
+
+  async importZip(zipPath: string): Promise<ImportedSkillResult> {
+    const payload = await ipcRenderer.invoke(desktopShellContract.importZip.channel, { zipPath });
+    return parseIpcResponse(desktopShellContract.importZip.channel, payload);
+  },
+
+  async importTar(tarPath: string): Promise<ImportedSkillResult> {
+    const payload = await ipcRenderer.invoke(desktopShellContract.importTar.channel, { tarPath });
+    return parseIpcResponse(desktopShellContract.importTar.channel, payload);
+  },
+
+  async importGitSparse(input: { gitUrl: string; subpath: string }): Promise<ImportedSkillResult> {
+    const payload = await ipcRenderer.invoke(desktopShellContract.importGitSparse.channel, input);
+    return parseIpcResponse(desktopShellContract.importGitSparse.channel, payload);
+  },
+
+  async importMirror(mirrorDirectory: string): Promise<ImportedSkillResult> {
+    const payload = await ipcRenderer.invoke(desktopShellContract.importMirror.channel, { mirrorDirectory });
+    return parseIpcResponse(desktopShellContract.importMirror.channel, payload);
+  },
+
+  async exportSkill(skillId: string, outputDirectory: string): Promise<ExportSkillResult> {
+    const payload = await ipcRenderer.invoke(desktopShellContract.exportSkill.channel, { skillId, outputDirectory });
+    return parseIpcResponse(desktopShellContract.exportSkill.channel, payload);
+  },
+
+  async exportSignedSkill(input: {
+    skillId: string;
+    outputDirectory: string;
+    signer: string;
+  }): Promise<ExportSkillResult> {
+    const payload = await ipcRenderer.invoke(desktopShellContract.exportSignedSkill.channel, input);
+    return parseIpcResponse(desktopShellContract.exportSignedSkill.channel, payload);
+  },
+  async createCollection(input: {
+    name: string;
+    description: string;
+    skillIds: string[];
+  }): Promise<CollectionRecord> {
+    const payload = await ipcRenderer.invoke(desktopShellContract.collectionCreate.channel, input);
+    return parseIpcResponse(desktopShellContract.collectionCreate.channel, payload);
+  },
+
+  async exportCollection(collectionId: string, outputDirectory: string): Promise<CollectionExportResult> {
+    const payload = await ipcRenderer.invoke(desktopShellContract.collectionExport.channel, {
+      collectionId,
+      outputDirectory
+    });
+    return parseIpcResponse(desktopShellContract.collectionExport.channel, payload);
+  },
+
+  async importCollection(packageDirectory: string): Promise<CollectionImportResult> {
+    const payload = await ipcRenderer.invoke(desktopShellContract.collectionImport.channel, { packageDirectory });
+    return parseIpcResponse(desktopShellContract.collectionImport.channel, payload);
+  },
+
+  async searchLibrary(query: string, options?: { favoritesOnly?: boolean }): Promise<SkillSummary[]> {
+    const payload = await ipcRenderer.invoke(desktopShellContract.librarySearch.channel, {
+      query,
+      favoritesOnly: options?.favoritesOnly
+    });
+    return parseIpcResponse(desktopShellContract.librarySearch.channel, payload);
+  },
+
+  async getSkillDetail(skillId: string): Promise<SkillDetail> {
+    const payload = await ipcRenderer.invoke(desktopShellContract.libraryDetail.channel, { skillId });
+    return parseIpcResponse(desktopShellContract.libraryDetail.channel, payload);
+  },
+
   async createInstallPlan(input: {
     skillId: string;
     targetRoot: string;
@@ -47,9 +143,32 @@ const api = {
     agentDisplayName: string;
     adapterVersion: string;
     scope: string;
+    rootKind?: 'user' | 'project';
+    projectionMode?: 'copy' | 'symlink' | 'hardlink' | 'mirror-export';
   }): Promise<InstallPlan> {
     const payload = await ipcRenderer.invoke(desktopShellContract.installCreatePlan.channel, input);
     return parseIpcResponse(desktopShellContract.installCreatePlan.channel, payload);
+  },
+
+  async createMultiTargetInstallPlan(input: {
+    skillId: string;
+    projectionMode?: 'copy' | 'symlink' | 'hardlink' | 'mirror-export';
+    targets: Array<{
+      targetRoot: string;
+      agentCode: string;
+      agentDisplayName: string;
+      adapterVersion: string;
+      scope: string;
+      rootKind?: 'user' | 'project';
+    }>;
+  }): Promise<InstallPlan[]> {
+    const payload = await ipcRenderer.invoke(desktopShellContract.installCreateMultiTargetPlan.channel, input);
+    return parseIpcResponse(desktopShellContract.installCreateMultiTargetPlan.channel, payload);
+  },
+
+  async listInstallTargets(): Promise<InstallTarget[]> {
+    const payload = await ipcRenderer.invoke(desktopShellContract.installListTargets.channel, {});
+    return parseIpcResponse(desktopShellContract.installListTargets.channel, payload);
   },
 
   async applyInstallPlan(plan: InstallPlan): Promise<InstallResult> {
@@ -57,9 +176,67 @@ const api = {
     return parseIpcResponse(desktopShellContract.installApplyPlan.channel, payload);
   },
 
+  async uninstall(installationId: string): Promise<InstallUninstallResult> {
+    const payload = await ipcRenderer.invoke(desktopShellContract.installUninstall.channel, { installationId });
+    return parseIpcResponse(desktopShellContract.installUninstall.channel, payload);
+  },
+
+  async listVersions(skillId: string): Promise<SkillVersionSummary[]> {
+    const payload = await ipcRenderer.invoke(desktopShellContract.versionList.channel, { skillId });
+    return parseIpcResponse(desktopShellContract.versionList.channel, payload);
+  },
+
+  async diffVersions(fromVersionId: string, toVersionId: string): Promise<FileDiff[]> {
+    const payload = await ipcRenderer.invoke(desktopShellContract.versionDiff.channel, {
+      fromVersionId,
+      toVersionId
+    });
+    return parseIpcResponse(desktopShellContract.versionDiff.channel, payload);
+  },
+
+  async rollbackVersion(installationId: string, targetVersionId: string): Promise<{
+    status: 'rolled_back';
+    installationId: string;
+    versionId: string;
+  }> {
+    const payload = await ipcRenderer.invoke(desktopShellContract.versionRollback.channel, {
+      installationId,
+      targetVersionId
+    });
+    return parseIpcResponse(desktopShellContract.versionRollback.channel, payload);
+  },
+
   async scanSkill(skillId: string): Promise<SecurityScanResult> {
     const payload = await ipcRenderer.invoke(desktopShellContract.securityScan.channel, { skillId });
     return parseIpcResponse(desktopShellContract.securityScan.channel, payload);
+  },
+
+  async rescanSecurity(skillIds?: string[]): Promise<SecurityScanResult[]> {
+    const payload = await ipcRenderer.invoke(desktopShellContract.securityRescan.channel, { skillIds });
+    return parseIpcResponse(desktopShellContract.securityRescan.channel, payload);
+  },
+
+  async getSecurityFindingDetail(input: {
+    scanId?: string;
+    skillId?: string;
+    ruleId?: string;
+  }): Promise<SecurityFindingDetail> {
+    const payload = await ipcRenderer.invoke(desktopShellContract.securityFindingDetail.channel, input);
+    return parseIpcResponse(desktopShellContract.securityFindingDetail.channel, payload);
+  },
+
+  async createSecurityExemption(input: {
+    skillId: string;
+    scope: string;
+    reason: string;
+  }): Promise<SecurityExemption> {
+    const payload = await ipcRenderer.invoke(desktopShellContract.securityCreateExemption.channel, input);
+    return parseIpcResponse(desktopShellContract.securityCreateExemption.channel, payload);
+  },
+
+  async revokeSecurityExemption(exemptionId: string): Promise<SecurityRevokeExemptionResult> {
+    const payload = await ipcRenderer.invoke(desktopShellContract.securityRevokeExemption.channel, { exemptionId });
+    return parseIpcResponse(desktopShellContract.securityRevokeExemption.channel, payload);
   },
 
   async getSyncStartupPlan(): Promise<SyncStartupPlan> {
@@ -67,9 +244,124 @@ const api = {
     return parseIpcResponse(desktopShellContract.syncStartupPlan.channel, payload);
   },
 
+  async createSyncProfile(input: {
+    mode: 'shared-folder' | 'git' | 'rest' | 'mock-rest';
+    remoteUrl: string;
+    enabled: boolean;
+    authRef?: string | null;
+    auth?: { label: string; token: string };
+  }): Promise<SyncProfile> {
+    const payload = await ipcRenderer.invoke(desktopShellContract.syncCreateProfile.channel, input);
+    return parseIpcResponse(desktopShellContract.syncCreateProfile.channel, payload);
+  },
+
+  async inspectSyncCredential(authRef: string): Promise<{ authRef: string; label: string; masked: string } | null> {
+    const payload = await ipcRenderer.invoke(desktopShellContract.syncInspectCredential.channel, { authRef });
+    return parseIpcResponse(desktopShellContract.syncInspectCredential.channel, payload);
+  },
+
+  async deleteSyncCredential(authRef: string): Promise<StatusOnlyResult> {
+    const payload = await ipcRenderer.invoke(desktopShellContract.syncDeleteCredential.channel, { authRef });
+    return parseIpcResponse(desktopShellContract.syncDeleteCredential.channel, payload);
+  },
+
+  async enqueueSyncLocalChange(input: {
+    profileId: string;
+    entityType: string;
+    entityId: string;
+    payload: unknown;
+  }): Promise<SyncOutboxRecord> {
+    const payload = await ipcRenderer.invoke(desktopShellContract.syncEnqueueLocalChange.channel, input);
+    return parseIpcResponse(desktopShellContract.syncEnqueueLocalChange.channel, payload);
+  },
+
+  async pushSync(profileId: string): Promise<StatusOnlyResult> {
+    const payload = await ipcRenderer.invoke(desktopShellContract.syncPush.channel, { profileId });
+    return parseIpcResponse(desktopShellContract.syncPush.channel, payload);
+  },
+
+  async pullSync(profileId: string): Promise<SyncInboxRecord[]> {
+    const payload = await ipcRenderer.invoke(desktopShellContract.syncPull.channel, { profileId });
+    return parseIpcResponse(desktopShellContract.syncPull.channel, payload);
+  },
+
+  async listSyncConflicts(profileId?: string): Promise<SyncConflictRecord[]> {
+    const payload = await ipcRenderer.invoke(desktopShellContract.syncListConflicts.channel, { profileId });
+    return parseIpcResponse(desktopShellContract.syncListConflicts.channel, payload);
+  },
+
+  async resolveSyncConflict(conflictId: string, resolution: string): Promise<SyncConflictRecord> {
+    const payload = await ipcRenderer.invoke(desktopShellContract.syncResolveConflict.channel, {
+      conflictId,
+      resolution
+    });
+    return parseIpcResponse(desktopShellContract.syncResolveConflict.channel, payload);
+  },
+
+  async applySyncConflict(input: {
+    conflictId: string;
+    confirm: boolean;
+    resolution: unknown;
+  }): Promise<SyncConflictRecord & { draftVersionIds?: string[] }> {
+    const payload = await ipcRenderer.invoke(desktopShellContract.syncApplyConflict.channel, input);
+    return parseIpcResponse(desktopShellContract.syncApplyConflict.channel, payload);
+  },
+
   async getPluginCenterState(): Promise<PluginsState> {
     const payload = await ipcRenderer.invoke(desktopShellContract.pluginsCenterState.channel, {});
     return parseIpcResponse(desktopShellContract.pluginsCenterState.channel, payload);
+  },
+
+  async installPlugin(rootPath: string): Promise<PluginInstallResult> {
+    const payload = await ipcRenderer.invoke(desktopShellContract.pluginsInstall.channel, { rootPath });
+    return parseIpcResponse(desktopShellContract.pluginsInstall.channel, payload);
+  },
+
+  async authorizePluginPermission(input: {
+    pluginId: string;
+    permission: 'agent-root:read' | 'agent-root:write' | 'network:fetch' | 'import:local' | 'sync-driver';
+    reason: string;
+  }): Promise<StatusOnlyResult> {
+    const payload = await ipcRenderer.invoke(desktopShellContract.pluginsAuthorizePermission.channel, input);
+    return parseIpcResponse(desktopShellContract.pluginsAuthorizePermission.channel, payload);
+  },
+
+  async enablePlugin(pluginId: string): Promise<PluginRegistry> {
+    const payload = await ipcRenderer.invoke(desktopShellContract.pluginsEnable.channel, { pluginId });
+    return parseIpcResponse(desktopShellContract.pluginsEnable.channel, payload);
+  },
+
+  async disablePlugin(pluginId: string): Promise<StatusOnlyResult> {
+    const payload = await ipcRenderer.invoke(desktopShellContract.pluginsDisable.channel, { pluginId });
+    return parseIpcResponse(desktopShellContract.pluginsDisable.channel, payload);
+  },
+
+  async getPluginRegistry(): Promise<PluginRegistry> {
+    const payload = await ipcRenderer.invoke(desktopShellContract.pluginsRegistry.channel, {});
+    return parseIpcResponse(desktopShellContract.pluginsRegistry.channel, payload);
+  },
+
+  async addDiscoverSource(input: {
+    name: string;
+    sourceType: 'local' | 'git';
+    url: string;
+    trustLevel: string;
+  }): Promise<DiscoverSource> {
+    const payload = await ipcRenderer.invoke(desktopShellContract.discoverAddSource.channel, input);
+    return parseIpcResponse(desktopShellContract.discoverAddSource.channel, payload);
+  },
+
+  async previewDiscoverSource(sourceId: string): Promise<DiscoverPreviewResult> {
+    const payload = await ipcRenderer.invoke(desktopShellContract.discoverPreviewSource.channel, { sourceId });
+    return parseIpcResponse(desktopShellContract.discoverPreviewSource.channel, payload);
+  },
+
+  async previewMigration(input: {
+    adapter: 'openskills' | 'skills-manager' | 'skillhub' | 'skills-manager-client';
+    sourcePath: string;
+  }): Promise<MigrationPreviewResult> {
+    const payload = await ipcRenderer.invoke(desktopShellContract.discoverMigrationPreview.channel, input);
+    return parseIpcResponse(desktopShellContract.discoverMigrationPreview.channel, payload);
   }
 };
 

@@ -28,10 +28,18 @@
   box-sizing: border-box;
 }
 
+html,
+body,
+#root {
+  width: 100%;
+  height: 100%;
+  overflow: hidden;
+}
+
 body {
   margin: 0;
-  min-width: 980px;
-  min-height: 100vh;
+  min-width: 0;
+  min-height: 0;
   color: var(--text);
   background: #eef1f6;
   font-size: 14px;
@@ -63,10 +71,10 @@ p {
 .screen {
   display: grid;
   grid-template-columns: 225px minmax(0, 1fr);
-  width: 100vw;
-  min-width: 980px;
-  height: 100vh;
-  min-height: 760px;
+  width: 100%;
+  min-width: 0;
+  height: 100%;
+  min-height: 0;
   overflow: hidden;
   background: var(--page);
 }
@@ -179,6 +187,8 @@ p {
   display: grid;
   grid-template-rows: 77px minmax(0, 1fr) 58px;
   min-width: 0;
+  min-height: 0;
+  overflow: hidden;
 }
 
 .topbar {
@@ -312,7 +322,8 @@ p {
 }
 
 .right-pane {
-  overflow: hidden;
+  min-width: 0;
+  overflow: auto;
   padding: 18px 14px;
   background: #ffffff;
 }
@@ -321,8 +332,11 @@ p {
   display: flex;
   align-items: center;
   gap: 28px;
+  min-width: 0;
   min-height: 49px;
   padding: 0 16px;
+  overflow-x: auto;
+  overflow-y: hidden;
   border-bottom: 1px solid var(--line);
   background: #ffffff;
 }
@@ -370,6 +384,7 @@ p {
 .filters {
   display: flex;
   align-items: center;
+  flex-wrap: wrap;
   gap: 8px;
   padding: 15px 16px;
   border-bottom: 1px solid var(--line);
@@ -382,14 +397,17 @@ p {
   align-items: center;
   gap: 12px;
   min-width: 0;
+  max-width: 100%;
   height: 34px;
   padding: 0 12px;
+  overflow: hidden;
   border: 1px solid #d4dae4;
   border-radius: 6px;
   color: #1f2937;
   background: #ffffff;
   font-size: 13px;
   font-weight: 560;
+  text-overflow: ellipsis;
   white-space: nowrap;
 }
 
@@ -416,9 +434,16 @@ p {
 .page-title {
   display: flex;
   align-items: center;
+  flex-wrap: wrap;
   justify-content: space-between;
   gap: 16px;
+  min-width: 0;
   margin-bottom: 14px;
+}
+
+.page-title > div {
+  flex: 1 1 240px;
+  min-width: 0;
 }
 
 .page-title h1 {
@@ -431,15 +456,20 @@ p {
 
 .page-title p {
   margin-top: 4px;
+  overflow: hidden;
   color: #6b7280;
   font-size: 13px;
   font-weight: 560;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .sub-actions {
   display: flex;
   align-items: center;
+  flex: 0 0 auto;
   gap: 10px;
+  min-width: 0;
 }
 
 .metric-grid {
@@ -521,17 +551,22 @@ p {
   align-items: center;
   justify-content: space-between;
   gap: 12px;
+  min-width: 0;
 }
 
 .panel h2,
 .rail-card h2,
 .card h2,
 .flow-panel h2 {
+  min-width: 0;
+  overflow: hidden;
   color: #151b26;
   font-size: 15px;
   font-weight: 760;
   line-height: 1.2;
   letter-spacing: 0;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .panel p,
@@ -548,11 +583,14 @@ p {
 .status {
   display: inline-grid;
   place-items: center;
+  max-width: 100%;
   min-height: 22px;
   padding: 0 7px;
+  overflow: hidden;
   border-radius: 5px;
   font-size: 11px;
   font-weight: 650;
+  text-overflow: ellipsis;
   white-space: nowrap;
 }
 
@@ -626,14 +664,9 @@ tr.selected td {
 .tag-row {
   display: flex;
   align-items: center;
+  flex-wrap: wrap;
   gap: 10px;
   min-width: 0;
-}
-
-.stars {
-  color: #f5ad00;
-  font-size: 13px;
-  font-weight: 700;
 }
 
 .list,
@@ -670,9 +703,13 @@ tr.selected td {
 
 .list strong,
 .rail-row strong {
+  min-width: 0;
+  overflow: hidden;
   color: #151b26;
   font-size: 12px;
   font-weight: 760;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 table {
@@ -705,6 +742,18 @@ td {
   color: #17202f;
   font-size: 12px;
   font-weight: 560;
+}
+
+.empty-cell {
+  color: #6b7280;
+  font-weight: 650;
+  text-align: center;
+}
+
+.empty-inline {
+  color: #6b7280;
+  font-size: 12px;
+  font-weight: 650;
 }
 
 .row-title {
@@ -824,6 +873,10 @@ td {
   background: #fbfcfe;
 }
 
+.path-row > .status {
+  min-width: 0;
+}
+
 .agent-dot {
   display: inline-grid;
   place-items: center;
@@ -919,9 +972,10 @@ td {
 
 .skill-row dl {
   display: grid;
-  grid-template-columns: repeat(2, minmax(96px, max-content));
+  grid-template-columns: repeat(2, minmax(0, max-content));
   gap: 14px;
   margin: 0;
+  min-width: 0;
 }
 
 .skill-row dt {
@@ -953,13 +1007,16 @@ td {
 }
 
 .flow-panel header span {
+  min-width: 0;
   max-width: 132px;
   padding: 5px 8px;
+  overflow: hidden;
   border-radius: 999px;
   color: #27423e;
   background: #e7f3ef;
   font-size: 12px;
   font-weight: 750;
+  text-overflow: ellipsis;
   overflow-wrap: anywhere;
 }
 
@@ -976,7 +1033,8 @@ td {
   font-weight: 700;
 }
 
-.flow-actions input {
+.flow-actions input,
+.flow-actions select {
   width: 100%;
   min-width: 0;
   height: 34px;
@@ -987,6 +1045,20 @@ td {
   background: #f8fafc;
   font-size: 13px;
   font-weight: 600;
+}
+
+.skill-preview {
+  max-height: 170px;
+  margin: 0;
+  padding: 10px;
+  overflow: auto;
+  border: 1px solid #dfe5ee;
+  border-radius: 6px;
+  color: #1f2937;
+  background: #f8fafc;
+  font-size: 12px;
+  line-height: 1.45;
+  white-space: pre-wrap;
 }
 
 .flow-actions button {
@@ -1093,5 +1165,13 @@ td {
   .metric-grid,
   .card-grid {
     grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 1100px) {
+  .split-two,
+  .section-grid,
+  .management-flow {
+    grid-template-columns: 1fr;
   }
 }

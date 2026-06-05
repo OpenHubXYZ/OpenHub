@@ -61,6 +61,21 @@ describe('skill repository', () => {
     expect(repository.searchSkills('path-checklist')).toEqual([
       expect.objectContaining({ id: skill.id, name: 'Path Safety Scanner' })
     ]);
+    expect(repository.searchSkills('symlink')).toEqual([
+      expect.objectContaining({ id: skill.id, name: 'Path Safety Scanner' })
+    ]);
+
+    repository.setFavorite(skill.id, true);
+    expect(repository.listFavorites()).toEqual([
+      expect.objectContaining({ id: skill.id, name: 'Path Safety Scanner' })
+    ]);
+    expect(repository.searchSkills('imports', { favoritesOnly: true })).toEqual([
+      expect.objectContaining({ id: skill.id, name: 'Path Safety Scanner' })
+    ]);
+
+    repository.setFavorite(skill.id, false);
+    expect(repository.listFavorites()).toEqual([]);
+    expect(repository.searchSkills('imports', { favoritesOnly: true })).toEqual([]);
 
     repository.deleteSkill(skill.id);
 

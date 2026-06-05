@@ -162,7 +162,8 @@ const migrations: Migration[] = [
           name,
           description,
           tags,
-          file_paths
+          file_paths,
+          file_content
         );
       `);
     }
@@ -380,6 +381,86 @@ const migrations: Migration[] = [
         create index idx_review_items_status_risk on review_items(status, risk, updated_at desc);
         create index idx_review_items_skill on review_items(skill_id);
         create index idx_review_notes_item on review_notes(review_item_id, created_at desc);
+      `);
+    }
+  },
+  {
+    version: 8,
+    name: '008_discover_sources',
+    up(database) {
+      database.exec(`
+        create table discover_sources (
+          id text primary key,
+          name text not null,
+          source_type text not null,
+          url text not null,
+          trust_level text not null,
+          verified integer not null default 0,
+          status text not null default 'configured',
+          cached_at text,
+          created_at text not null default current_timestamp,
+          updated_at text not null default current_timestamp
+        );
+
+        create table discover_source_cache (
+          id text primary key,
+          source_id text not null references discover_sources(id) on delete cascade,
+          skill_name text not null,
+          description text not null default '',
+          tags_json text not null default '[]',
+          skill_path text not null,
+          risk_status text not null default 'unscanned',
+          cached_at text not null default current_timestamp
+        );
+
+        create index idx_discover_sources_status on discover_sources(status, updated_at desc);
+        create index idx_discover_source_cache_source on discover_source_cache(source_id, skill_name);
+      `);
+    }
+  },
+  {
+    version: 9,
+    name: '009_research_gap_closure',
+    up(database) {
+      database.exec(`
+        alter table agent_roots add column root_kind text not null default 'user';
+        alter table installations add column projection_mode text not null default 'copy';
+        alter table skill_versions add column lifecycle text not null default 'released';
+        alter table skill_versions add column release_channel text not null default 'stable';
+        alter table skill_versions add column signature_json text;
+
+        create table skill_favorites (
+          skill_id text primary key references skills(id) on delete cascade,
+          created_at text not null default current_timestamp
+        );
+
+        create table policy_packs (
+          id text primary key,
+          name text not null,
+          allowed_sources_json text not null default '[]',
+          blocked_rules_json text not null default '[]',
+          required_scan_level text not null,
+          approved_plugins_json text not null default '[]',
+          created_at text not null default current_timestamp,
+          updated_at text not null default current_timestamp
+        );
+
+        create table team_baselines (
+          id text primary key,
+          name text not null,
+          package_json text not null,
+          applied_at text not null default current_timestamp
+        );
+
+        drop table skill_search;
+        create virtual table skill_search using fts5(
+          skill_id unindexed,
+          name,
+          description,
+          tags,
+          file_paths,
+          file_content
+        );
       `);
     }
   }

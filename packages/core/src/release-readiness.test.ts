@@ -75,6 +75,24 @@ describe('release readiness', () => {
     expect(smokeScript).toContain('package_window=verified');
   });
 
+  it('runs checksum and inventory generation in CI after package smoke', async () => {
+    const ci = await readFile(path.join(rootDirectory, '.github/workflows/ci.yml'), 'utf8');
+
+    expect(ci).toContain('pnpm package:desktop');
+    expect(ci).toContain('pnpm release:smoke');
+    expect(ci).toContain('pnpm release:checksums');
+    expect(ci).toContain('pnpm release:inventory');
+    expect(ci.indexOf('pnpm release:checksums')).toBeGreaterThan(ci.indexOf('pnpm release:smoke'));
+  });
+
+  it('documents unsigned local packages separately from signed public installers', async () => {
+    const release = await readFile(path.join(rootDirectory, 'docs/release.md'), 'utf8');
+
+    expect(release).toContain('Unsigned local package');
+    expect(release).toContain('Signed public installer');
+    expect(release).toContain('Public release is blocked until signing and notarization status is recorded');
+  });
+
   it('uses relative renderer assets for packaged file URLs', async () => {
     const rendererConfig = await readFile(
       path.join(rootDirectory, 'apps/desktop/vite.renderer.config.ts'),

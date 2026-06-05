@@ -83,12 +83,13 @@ describe('version service', () => {
       scope: 'user'
     });
     const install = await installer.applyInstallPlan(plan);
+    expect(install.installationId).not.toBeNull();
     await expect(readFile(path.join(targetRoot, 'history-helper/SKILL.md'), 'utf8')).resolves.toContain(
       'Version Two'
     );
 
     await versions.rollbackInstallation({
-      installationId: install.installationId,
+      installationId: install.installationId!,
       targetVersionId: imported.skill.versionId
     });
 
@@ -97,6 +98,41 @@ describe('version service', () => {
     );
     await expect(stat(path.join(targetRoot, 'history-helper/references/new.txt'))).rejects.toMatchObject({
       code: 'ENOENT'
+    });
+  });
+
+  it('creates draft versions and promotes them to explicit release channels', async () => {
+    const workspace = await tempDir();
+    const source = path.join(workspace, 'source-draft');
+    await mkdir(source, { recursive: true });
+    await writeFile(
+      path.join(source, 'SKILL.md'),
+      ['---', 'name: channel-helper', 'description: Channel helper', '---', '# Stable'].join('\n')
+    );
+    const database = createMemoryDatabase();
+    runMigrations(database);
+    const contentStore = createContentStore(path.join(workspace, 'blobs'));
+    const imported = await createImportService({
+      database,
+      contentStore,
+      stagingDirectory: path.join(workspace, 'staging')
+    }).importLocalFolder({ folderPath: source });
+    const versions = createVersionService({ database, contentStore });
+
+    const draft = await versions.createVersion({
+      skillId: imported.skill.id,
+      changeSummary: 'Draft beta update',
+      lifecycle: 'draft',
+      releaseChannel: 'local',
+      files: [{ relativePath: 'SKILL.md', content: '# Draft beta' }]
+    });
+    const released = versions.promoteVersion({ versionId: draft.versionId, releaseChannel: 'beta' });
+
+    expect(draft).toMatchObject({ lifecycle: 'draft', releaseChannel: 'local' });
+    expect(released).toMatchObject({ lifecycle: 'released', releaseChannel: 'beta' });
+    expect(versions.listVersions({ skillId: imported.skill.id })[0]).toMatchObject({
+      lifecycle: 'released',
+      releaseChannel: 'beta'
     });
   });
 });

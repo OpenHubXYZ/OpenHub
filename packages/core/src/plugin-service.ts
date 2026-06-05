@@ -69,9 +69,15 @@ export interface PluginRegistry {
   syncDrivers: Array<{ pluginId: string; id: string; name: string }>;
 }
 
+type PluginProvider = (input: unknown) => unknown;
+type PluginProviderMap = Map<string, PluginProvider>;
+
 export interface PluginCenterState {
   plugins: Array<{
+    id: string;
     name: string;
+    version: string;
+    rootPath: string;
     status: PluginStatus;
     capabilities: string[];
     permissions: Array<{ name: PluginPermission; status: 'declared' | 'authorized' }>;
@@ -89,6 +95,12 @@ export interface PluginService {
   authorizePermission(input: { pluginId: string; permission: PluginPermission; reason: string }): void;
   enablePlugin(input: { pluginId: string }): Promise<PluginRegistry>;
   disablePlugin(input: { pluginId: string }): void;
+  invokeProvider(input: {
+    pluginId: string;
+    capabilityType: PluginCapabilityType;
+    capabilityId: string;
+    input: unknown;
+  }): Promise<unknown>;
   getRegistry(): PluginRegistry;
   getPluginCenterState(): PluginCenterState;
 }
@@ -143,6 +155,7 @@ const UNSAFE_ENTRY_PATTERNS = [
 
 export function createPluginService(input: CreatePluginServiceInput): PluginService {
   const registry: PluginRegistry = emptyRegistry();
+  const providers: PluginProviderMap = new Map();
 
   return {
     validateManifest: validatePluginManifest,
@@ -206,8 +219,8 @@ export function createPluginService(input: CreatePluginServiceInput): PluginServ
         const entryPath = await resolveEntryPath(plugin.rootPath, plugin.entry);
         const source = await readFile(entryPath, 'utf8');
         ensureEntrySourceSafe(source);
-        unregisterPlugin(registry, plugin.id);
-        runPluginModule(source, entryPath, createRestrictedHost(plugin, registry));
+        unregisterPlugin(registry, providers, plugin.id);
+        runPluginModule(source, entryPath, createRestrictedHost(plugin, registry, providers));
         input.database
           .prepare(
             `
@@ -218,7 +231,7 @@ export function createPluginService(input: CreatePluginServiceInput): PluginServ
           )
           .run(plugin.id);
       } catch (error) {
-        unregisterPlugin(registry, plugin.id);
+        unregisterPlugin(registry, providers, plugin.id);
         const message = error instanceof Error ? error.message : String(error);
         recordPluginError(input.database, plugin.id, message);
         input.database
@@ -238,7 +251,7 @@ export function createPluginService(input: CreatePluginServiceInput): PluginServ
 
     disablePlugin({ pluginId }) {
       getInstalledPlugin(input.database, pluginId);
-      unregisterPlugin(registry, pluginId);
+      unregisterPlugin(registry, providers, pluginId);
       input.database
         .prepare(
           `
@@ -247,7 +260,24 @@ export function createPluginService(input: CreatePluginServiceInput): PluginServ
             where id = ?
           `
         )
-        .run(pluginId);
+          .run(pluginId);
+    },
+
+    async invokeProvider({ pluginId, capabilityType, capabilityId, input: providerInput }) {
+      const plugin = getInstalledPlugin(input.database, pluginId);
+      if (!plugin.enabled || plugin.status !== 'enabled') {
+        throw new PluginHostError('plugin-not-found', `Plugin provider is not enabled: ${pluginId}`);
+      }
+      assertDeclaredCapability(plugin, capabilityType, capabilityId);
+      const provider = providers.get(providerKey(pluginId, capabilityType, capabilityId));
+      if (!provider) {
+        throw new PluginHostError(
+          'capability-not-declared',
+          `Plugin provider was not registered: ${capabilityType}:${capabilityId}`
+        );
+      }
+
+      return Promise.resolve(provider(providerInput));
     },
 
     getRegistry() {
@@ -279,7 +309,10 @@ export function createPluginService(input: CreatePluginServiceInput): PluginServ
 
       return {
         plugins: plugins.map((plugin) => ({
+          id: plugin.id,
           name: plugin.name,
+          version: plugin.version,
+          rootPath: plugin.rootPath,
           status: plugin.status,
           capabilities: plugin.capabilities.map((capability) => capabilityKey(capability)),
           permissions: plugin.permissions.map((permission) => ({
@@ -468,7 +501,7 @@ function runPluginModule(
   }
 }
 
-function createRestrictedHost(plugin: InstalledPlugin, registry: PluginRegistry) {
+function createRestrictedHost(plugin: InstalledPlugin, registry: PluginRegistry, providers: PluginProviderMap) {
   return {
     registerAgentAdapter(adapter: { code: string; displayName: string }) {
       if (typeof adapter.code !== 'string' || typeof adapter.displayName !== 'string') {
@@ -482,16 +515,25 @@ function createRestrictedHost(plugin: InstalledPlugin, registry: PluginRegistry)
       });
     },
 
-    registerImporter(importer: { id: string; name: string }) {
+    registerImporter(importer: { id: string; name: string; invoke?: PluginProvider }) {
       assertNamedRegistration(plugin, registry.importers, 'importer', importer);
+      if (typeof importer.invoke === 'function') {
+        providers.set(providerKey(plugin.id, 'importer', importer.id), importer.invoke);
+      }
     },
 
-    registerSecurityRule(rule: { id: string; name: string }) {
+    registerSecurityRule(rule: { id: string; name: string; invoke?: PluginProvider }) {
       assertNamedRegistration(plugin, registry.securityRules, 'security-rule', rule);
+      if (typeof rule.invoke === 'function') {
+        providers.set(providerKey(plugin.id, 'security-rule', rule.id), rule.invoke);
+      }
     },
 
-    registerSyncDriver(driver: { id: string; name: string }) {
+    registerSyncDriver(driver: { id: string; name: string; invoke?: PluginProvider }) {
       assertNamedRegistration(plugin, registry.syncDrivers, 'sync-driver', driver);
+      if (typeof driver.invoke === 'function') {
+        providers.set(providerKey(plugin.id, 'sync-driver', driver.id), driver.invoke);
+      }
     }
   };
 }
@@ -519,11 +561,16 @@ function assertDeclaredCapability(
   }
 }
 
-function unregisterPlugin(registry: PluginRegistry, pluginId: string): void {
+function unregisterPlugin(registry: PluginRegistry, providers: PluginProviderMap, pluginId: string): void {
   registry.agentAdapters = registry.agentAdapters.filter((adapter) => adapter.pluginId !== pluginId);
   registry.importers = registry.importers.filter((importer) => importer.pluginId !== pluginId);
   registry.securityRules = registry.securityRules.filter((rule) => rule.pluginId !== pluginId);
   registry.syncDrivers = registry.syncDrivers.filter((driver) => driver.pluginId !== pluginId);
+  for (const key of providers.keys()) {
+    if (key.startsWith(`${pluginId}:`)) {
+      providers.delete(key);
+    }
+  }
 }
 
 function emptyRegistry(): PluginRegistry {
@@ -649,4 +696,8 @@ function getPluginErrors(database: SqliteDatabase, pluginId: string): Array<{ me
 
 function capabilityKey(capability: PluginCapability): string {
   return `${capability.type}:${capability.id}`;
+}
+
+function providerKey(pluginId: string, capabilityType: PluginCapabilityType, capabilityId: string): string {
+  return `${pluginId}:${capabilityType}:${capabilityId}`;
 }

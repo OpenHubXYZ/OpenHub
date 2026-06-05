@@ -24,7 +24,12 @@ describe('desktop release smoke', () => {
     expect(result).toEqual({
       status: 'passed',
       importedSkillName: 'packaged-smoke-helper',
+      gitImportedSkillName: 'git-smoke-helper',
+      zipImportedSkillName: 'zip-smoke-helper',
       installedFiles: 2,
+      searchCount: 3,
+      exportedManifestVerified: true,
+      uninstalledFiles: 2,
       libraryCount: 1,
       syncStarted: false,
       pluginCount: 0
@@ -34,7 +39,7 @@ describe('desktop release smoke', () => {
         path.join(workspace, 'workspace/target/codex-skills/packaged-smoke-helper/SKILL.md'),
         'utf8'
       )
-    ).resolves.toContain('packaged-smoke-helper');
+    ).rejects.toMatchObject({ code: 'ENOENT' });
   });
 });
 

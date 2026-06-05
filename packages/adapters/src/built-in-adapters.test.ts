@@ -37,9 +37,12 @@ describe('built-in agent adapters', () => {
     tempDirectories.push(homeDirectory);
     const rootPath = path.join(homeDirectory, '.codex/skills');
     const skillPath = path.join(rootPath, 'path-safety');
+    const nestedSkillPath = path.join(rootPath, '.system/openai-docs');
 
     await mkdir(skillPath, { recursive: true });
     await writeFile(path.join(skillPath, 'SKILL.md'), '---\nname: path-safety\n---\n');
+    await mkdir(nestedSkillPath, { recursive: true });
+    await writeFile(path.join(nestedSkillPath, 'SKILL.md'), '---\nname: openai-docs\n---\n');
     await mkdir(path.join(rootPath, 'not-a-skill'));
 
     const codexAdapter = createBuiltInAgentAdapters({ homeDirectory, adapterVersion: 'test' })[0];
@@ -57,6 +60,12 @@ describe('built-in agent adapters', () => {
     });
 
     expect(installed).toEqual([
+      {
+        agentCode: 'codex',
+        rootPath,
+        skillPath: nestedSkillPath,
+        manifestPath: path.join(nestedSkillPath, 'SKILL.md')
+      },
       {
         agentCode: 'codex',
         rootPath,

@@ -52,8 +52,10 @@ CI must run the same gates.
 - Missing `SKILL.md` and malformed metadata produce explainable scan errors.
 - Indexed library rows preserve skill name, source agent, path, and install
   status.
-- IPC contract tests cover `library.scan` and `library.list`.
-- Renderer tests cover both empty and indexed library states.
+- IPC contract tests cover `library.scan`, `library.list`, `library.search`,
+  and `library.detail`.
+- Renderer tests cover empty, indexed, search result, selected detail, file tree,
+  and `SKILL.md` preview states.
 - Desktop runtime tests scan a detected local Codex fixture root through typed
   IPC and then list the indexed installed projection.
 
@@ -69,11 +71,11 @@ CI must run the same gates.
 - Uninstall removes recorded files only and leaves unknown user files in place.
 - Export writes a portable package with `manifest.json`, file paths, and
   SHA-256 hashes.
-- Desktop runtime tests import a local fixture through IPC, create an install
-  plan, apply the plan, verify copied files on disk, and then list the installed
-  library row.
-- Renderer tests cover interactive agent-root scan, local import, install plan,
-  and install result controls.
+- Desktop runtime tests import local, Git, and ZIP fixtures through IPC, create
+  an install plan, apply the plan, verify copied files on disk, export skill and
+  collection packages, uninstall app-owned files, and then list runtime state.
+- Renderer tests cover interactive agent-root scan, local/Git/ZIP import,
+  install plan, install result, skill export, and collection controls.
 
 ## Phase 5 Security Governance Coverage
 
@@ -87,7 +89,7 @@ CI must run the same gates.
 - Batch rescans upsert the version/ruleset scan row instead of creating noisy
   duplicates.
 - Renderer tests cover Security Center queue, risk score, rule details,
-  history, and exemptions.
+  history, rescans, and exemption create/revoke actions.
 
 ## Phase 6 History And Collections Coverage
 
@@ -99,6 +101,19 @@ CI must run the same gates.
 - Collections can be batch-exported to a portable package and imported into a
   fresh database.
 - Renderer tests cover History, Diff, and Collections state.
+
+## Discover Source And Migration Coverage
+
+- Adding a local or Git source records source metadata without importing skills
+  or fetching a remote catalog by default.
+- Source preview scans the configured source and caches candidate rows before
+  import.
+- Migration preview fixtures cover OpenSkills, Skills-Manager, SkillHub, and
+  skills-manager-client layouts.
+- Preview operations report candidate names, paths, tags, and risk status and
+  do not write agent-root files.
+- Renderer tests cover source add, source preview, and migration preview
+  actions through preload IPC.
 
 ## Phase 7 Offline-First Sync Coverage
 
@@ -113,6 +128,8 @@ CI must run the same gates.
 - Conflict lifecycle tests open a base/local/remote conflict and record an
   explicit resolution.
 - Renderer tests cover Sync Center profiles, outbox, inbox, and conflicts.
+- Renderer tests cover creating an opt-in sync profile and explicit push/pull
+  actions through preload IPC.
 
 ## Phase 8 Plugin Runtime Coverage
 
@@ -127,7 +144,8 @@ CI must run the same gates.
   shell escape patterns are blocked before registration.
 - Disabling a plugin removes its capabilities from the runtime registry.
 - Renderer tests cover Plugins status, capabilities, permissions, and error
-  logs.
+  logs, plus install, permission authorization, enable, disable, and registry
+  counters.
 
 ## Phase 9 Release Readiness Coverage
 
@@ -141,9 +159,9 @@ CI must run the same gates.
 - `pnpm release:inventory` writes a dependency inventory for root and workspace
   package manifests.
 - `pnpm release:smoke` verifies package entrypoints, packaged main startup under
-  the Electron runtime, privacy defaults, database migrations, the Phase 4
-  import/install flow, first-launch window options, desktop runtime IPC
-  coverage, and redacted release logs.
+  the Electron runtime, privacy defaults, database migrations, local/Git/ZIP
+  import, FTS search, skill export, install, app-owned uninstall, first-launch
+  window options, desktop runtime IPC coverage, and redacted release logs.
 
 ## Phase 10 Maintainer Operations Coverage
 
@@ -202,8 +220,10 @@ CI must run the same gates.
 - Local folder import.
 - Git import.
 - ZIP import.
+- FTS library search and skill detail aggregation.
 - Install and uninstall safety.
 - Export and re-import.
+- Discover source preview and migration preview.
 - Rollback.
 - Optional sync push/pull.
 - Plugin enable/disable with fixture roots.
@@ -219,8 +239,8 @@ CI must run the same gates.
 - Security scan blocks a high-risk skill.
 - Install to personal and project scopes.
 - Resolve a sync conflict after sync exists.
-- Packaged main startup smoke completes the Phase 4 core flow under the Electron
-  runtime.
+- Packaged main startup smoke completes local/Git/ZIP import, search, export,
+  install, and app-owned uninstall under the Electron runtime.
 - Optional sync remains disabled until a profile is enabled.
 - Plugins remain disabled until permissions are authorized and the plugin is
   enabled.

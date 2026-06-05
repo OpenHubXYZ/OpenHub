@@ -1,4 +1,4 @@
-import { mkdir, readFile, rm, writeFile } from 'node:fs/promises';
+import { lstat, mkdir, readFile, rm, writeFile } from 'node:fs/promises';
 import { mkdtemp } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
@@ -68,11 +68,12 @@ describe('install service', () => {
     expect(cleanPlan.conflictState).toBe('clean');
     const result = await installer.applyInstallPlan(cleanPlan);
     expect(result.status).toBe('installed');
+    expect(result.installationId).not.toBeNull();
     await expect(readFile(path.join(conflictTarget, 'SKILL.md'), 'utf8')).resolves.toContain(
       'Install Helper'
     );
 
-    await installer.uninstall({ installationId: result.installationId });
+    await installer.uninstall({ installationId: result.installationId! });
     await expect(readFile(path.join(conflictTarget, 'user-note.md'), 'utf8')).resolves.toBe(
       'do not remove'
     );
@@ -80,10 +81,124 @@ describe('install service', () => {
       code: 'ENOENT'
     });
   });
+
+  it('plans project roots, multi-target installs, and explicit projection modes', async () => {
+    const workspace = await tempDir();
+    const source = path.join(workspace, 'source');
+    const cleanRoot = path.join(workspace, 'codex-user');
+    const conflictRoot = path.join(workspace, 'codex-project');
+    const symlinkRoot = path.join(workspace, 'symlink-root');
+    const mirrorRoot = path.join(workspace, 'mirror-root');
+    await mkdir(source, { recursive: true });
+    await mkdir(path.join(conflictRoot, 'project-helper'), { recursive: true });
+    await writeFile(
+      path.join(source, 'SKILL.md'),
+      ['---', 'name: project-helper', 'description: Project helper', '---', '# Project Helper'].join('\n')
+    );
+    await writeFile(path.join(conflictRoot, 'project-helper/SKILL.md'), 'user-owned conflict');
+
+    const database = createMemoryDatabase();
+    runMigrations(database);
+    const contentStore = createContentStore(path.join(workspace, 'blobs'));
+    const imported = await createImportService({
+      database,
+      contentStore,
+      stagingDirectory: path.join(workspace, 'staging')
+    }).importLocalFolder({ folderPath: source });
+    const installer = createInstallService({ database, contentStore });
+
+    const plans = await installer.createMultiTargetInstallPlan({
+      skillId: imported.skill.id,
+      projectionMode: 'copy',
+      targets: [
+        {
+          targetRoot: cleanRoot,
+          agentCode: 'codex',
+          agentDisplayName: 'Codex',
+          adapterVersion: 'test',
+          scope: 'user',
+          rootKind: 'user'
+        },
+        {
+          targetRoot: conflictRoot,
+          agentCode: 'codex',
+          agentDisplayName: 'Codex',
+          adapterVersion: 'test',
+          scope: 'project',
+          rootKind: 'project'
+        }
+      ]
+    });
+
+    expect(plans.map((plan) => [plan.targetRoot, plan.rootKind, plan.conflictState])).toEqual([
+      [cleanRoot, 'user', 'clean'],
+      [conflictRoot, 'project', 'conflict']
+    ]);
+
+    const multiResult = await installer.applyMultiTargetInstallPlan({ plans });
+    expect(multiResult.installed).toEqual([expect.objectContaining({ targetRoot: cleanRoot })]);
+    expect(multiResult.blocked).toEqual([expect.objectContaining({ targetRoot: conflictRoot })]);
+    await expect(readFile(path.join(cleanRoot, 'project-helper/SKILL.md'), 'utf8')).resolves.toContain(
+      'Project Helper'
+    );
+    await expect(readFile(path.join(conflictRoot, 'project-helper/SKILL.md'), 'utf8')).resolves.toBe(
+      'user-owned conflict'
+    );
+
+    await expect(
+      installer.createInstallPlan({
+        skillId: imported.skill.id,
+        targetRoot: path.join(workspace, 'invalid-mode'),
+        agentCode: 'codex',
+        agentDisplayName: 'Codex',
+        adapterVersion: 'test',
+        scope: 'user',
+        projectionMode: 'bad-mode' as never
+      })
+    ).rejects.toThrow(/projection mode/);
+
+    const symlinkPlan = await installer.createInstallPlan({
+      skillId: imported.skill.id,
+      targetRoot: symlinkRoot,
+      agentCode: 'codex',
+      agentDisplayName: 'Codex',
+      adapterVersion: 'test',
+      scope: 'user',
+      projectionMode: 'symlink'
+    });
+    const symlinkInstall = await installer.applyInstallPlan(symlinkPlan);
+    expect(symlinkInstall.status).toBe('installed');
+    await expect(lstat(path.join(symlinkRoot, 'project-helper/SKILL.md'))).resolves.toMatchObject({
+      isSymbolicLink: expect.any(Function)
+    });
+    expect((await lstat(path.join(symlinkRoot, 'project-helper/SKILL.md'))).isSymbolicLink()).toBe(true);
+
+    const mirrorPlan = await installer.createInstallPlan({
+      skillId: imported.skill.id,
+      targetRoot: mirrorRoot,
+      agentCode: 'codex',
+      agentDisplayName: 'Codex',
+      adapterVersion: 'test',
+      scope: 'user',
+      projectionMode: 'mirror-export'
+    });
+    const beforeMirrorRows = countRows(database, 'installations');
+    const mirrorResult = await installer.applyInstallPlan(mirrorPlan);
+
+    expect(mirrorResult).toMatchObject({ status: 'exported', installationId: null });
+    expect(countRows(database, 'installations')).toBe(beforeMirrorRows);
+    await expect(readFile(path.join(mirrorRoot, 'project-helper/SKILL.md'), 'utf8')).resolves.toContain(
+      'Project Helper'
+    );
+  });
 });
 
 async function tempDir(): Promise<string> {
   const directory = await mkdtemp(path.join(tmpdir(), 'theopenhub-install-'));
   tempDirectories.push(directory);
   return directory;
+}
+
+function countRows(database: ReturnType<typeof createMemoryDatabase>, tableName: string): number {
+  return (database.prepare(`select count(*) as count from ${tableName}`).get() as { count: number }).count;
 }

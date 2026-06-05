@@ -151,4 +151,84 @@ describe('desktop shell IPC contract', () => {
       })
     ).toMatchObject({ skillId: 'skill-1', agentCode: 'codex' });
   });
+
+  it('defines the deep research workflow IPC channels with strict request validation', () => {
+    expect(Object.values(desktopShellContract).map((contract) => contract.channel)).toEqual(
+      expect.arrayContaining([
+        'import.git',
+        'import.zip',
+        'export.skill',
+        'collection.create',
+        'collection.export',
+        'collection.import',
+        'library.search',
+        'library.detail',
+        'install.listTargets',
+        'install.uninstall',
+        'version.list',
+        'version.diff',
+        'version.rollback',
+        'security.rescan',
+        'security.findingDetail',
+        'security.createExemption',
+        'security.revokeExemption',
+        'sync.createProfile',
+        'sync.enqueueLocalChange',
+        'sync.push',
+        'sync.pull',
+        'sync.listConflicts',
+        'sync.resolveConflict',
+        'plugins.install',
+        'plugins.authorizePermission',
+        'plugins.enable',
+        'plugins.disable',
+        'plugins.registry',
+        'discover.addSource',
+        'discover.previewSource',
+        'discover.migrationPreview'
+      ])
+    );
+
+    expect(parseIpcRequest('import.git', { gitUrl: 'file:///tmp/skill-repo' })).toEqual({
+      gitUrl: 'file:///tmp/skill-repo'
+    });
+    expect(parseIpcRequest('import.zip', { zipPath: '/tmp/skill.zip' })).toEqual({
+      zipPath: '/tmp/skill.zip'
+    });
+    expect(parseIpcRequest('export.skill', { skillId: 'skill-1', outputDirectory: '/tmp/out' })).toEqual({
+      skillId: 'skill-1',
+      outputDirectory: '/tmp/out'
+    });
+    expect(parseIpcRequest('collection.create', { name: 'Starter', description: '', skillIds: ['skill-1'] })).toEqual({
+      name: 'Starter',
+      description: '',
+      skillIds: ['skill-1']
+    });
+    expect(parseIpcRequest('library.search', { query: 'path docs' })).toEqual({ query: 'path docs' });
+    expect(parseIpcRequest('install.uninstall', { installationId: 'installation-1' })).toEqual({
+      installationId: 'installation-1'
+    });
+    expect(parseIpcRequest('security.createExemption', {
+      skillId: 'skill-1',
+      scope: 'user',
+      reason: 'Maintainer reviewed'
+    })).toMatchObject({ scope: 'user' });
+    expect(parseIpcRequest('sync.createProfile', {
+      mode: 'shared-folder',
+      remoteUrl: '/tmp/shared',
+      enabled: false,
+      authRef: 'keychain://sync/shared'
+    })).toMatchObject({ authRef: 'keychain://sync/shared' });
+    expect(parseIpcRequest('plugins.authorizePermission', {
+      pluginId: 'plugin-1',
+      permission: 'network:fetch',
+      reason: 'Needed for catalog fetches'
+    })).toMatchObject({ permission: 'network:fetch' });
+    expect(parseIpcRequest('discover.addSource', {
+      name: 'Local curated',
+      sourceType: 'local',
+      url: '/tmp/source',
+      trustLevel: 'verified'
+    })).toMatchObject({ sourceType: 'local' });
+  });
 });

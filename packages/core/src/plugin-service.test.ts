@@ -138,6 +138,65 @@ describe('plugin service', () => {
     expect(plugins.getRegistry().agentAdapters).toEqual([]);
     expect(plugins.getPluginCenterState().plugins[0]?.errors[0]?.message).toMatch(/Unsafe plugin entry/);
   });
+
+  it('invokes executable providers only through authorized host-mediated APIs', async () => {
+    const database = createMemoryDatabase();
+    runMigrations(database);
+    const plugins = createPluginService({ database });
+    const rootPath = await createPluginFixture({
+      id: 'provider-plugin',
+      name: 'Provider Plugin',
+      capabilities: [{ type: 'importer', id: 'frontmatter-importer' }],
+      permissions: ['import:local'],
+      source: `
+        exports.register = (host) => {
+          host.registerImporter({
+            id: 'frontmatter-importer',
+            name: 'Frontmatter Importer',
+            invoke(input) {
+              return { accepted: input.path.endsWith('SKILL.md'), normalizedPath: input.path };
+            }
+          });
+        };
+      `
+    });
+    const installed = await plugins.installPlugin({ rootPath });
+
+    await expect(
+      plugins.invokeProvider({
+        pluginId: installed.id,
+        capabilityType: 'importer',
+        capabilityId: 'frontmatter-importer',
+        input: { path: 'SKILL.md' }
+      })
+    ).rejects.toMatchObject({ code: 'plugin-not-found' });
+
+    plugins.authorizePermission({
+      pluginId: installed.id,
+      permission: 'import:local',
+      reason: 'Import provider test'
+    });
+    await plugins.enablePlugin({ pluginId: installed.id });
+
+    await expect(
+      plugins.invokeProvider({
+        pluginId: installed.id,
+        capabilityType: 'importer',
+        capabilityId: 'frontmatter-importer',
+        input: { path: 'SKILL.md' }
+      })
+    ).resolves.toEqual({ accepted: true, normalizedPath: 'SKILL.md' });
+
+    plugins.disablePlugin({ pluginId: installed.id });
+    await expect(
+      plugins.invokeProvider({
+        pluginId: installed.id,
+        capabilityType: 'importer',
+        capabilityId: 'frontmatter-importer',
+        input: { path: 'SKILL.md' }
+      })
+    ).rejects.toMatchObject({ code: 'plugin-not-found' });
+  });
 });
 
 function validManifest(

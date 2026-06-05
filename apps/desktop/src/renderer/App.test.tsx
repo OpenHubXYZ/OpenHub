@@ -37,10 +37,10 @@ describe('desktop app shell', () => {
     const pages: Array<[PageKey, string, string]> = [
       ['dashboard', 'Dashboard', 'Workspace health'],
       ['library', 'Library', 'Library selection'],
-      ['discover', 'Discover', 'skills.sh official'],
-      ['installs', 'Installs', 'sui-move-contract'],
+      ['discover', 'Discover', 'Discover sources'],
+      ['installs', 'Installs', 'Install planning'],
       ['usage', 'Usage', 'Usage insight'],
-      ['reviews', 'Reviews', 'gh-fix-ci update'],
+      ['reviews', 'Reviews', 'Review decisions'],
       ['security', 'Security', 'Current posture'],
       ['settings', 'Settings', 'Workspace settings']
     ];
@@ -51,6 +51,108 @@ describe('desktop app shell', () => {
       expect(screen.getByRole('heading', { name: label })).toBeInTheDocument();
       expect(screen.getByRole('button', { name: label })).toHaveAttribute('aria-current', 'page');
       expect(screen.getByRole('complementary', { name: `${label} details` })).toHaveTextContent(railHeading);
+    }
+  });
+
+  it('switches dashboard section tabs to runtime-backed content', () => {
+    render(
+      <App
+        initialLibrarySkills={[
+          {
+            id: 'skill-1',
+            name: 'Path Safety Scanner',
+            sourceAgent: 'Codex',
+            path: '/tmp/.codex/skills/path-safety',
+            installStatus: 'installed'
+          }
+        ]}
+        initialManagementFlow={{
+          importItems: [{ label: 'Local folder import', status: 'indexed' }],
+          installPlan: null,
+          installResult: null
+        }}
+        initialSecurityCenter={{
+          queue: [{ skillName: 'High Risk Helper', status: 'blocked' }],
+          riskScore: 80,
+          level: 'high',
+          findings: [{ ruleName: 'Dangerous shell command', severity: 'high' }],
+          history: [],
+          exemptions: []
+        }}
+      />
+    );
+
+    fireEvent.click(screen.getByRole('tab', { name: 'Agent roots' }));
+    expect(screen.getByRole('tab', { name: 'Agent roots' })).toHaveAttribute('aria-selected', 'true');
+    expect(screen.getByRole('heading', { name: 'Agent root inventory' })).toBeInTheDocument();
+    expect(screen.getByText('/tmp/.codex/skills')).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('tab', { name: 'Activity' }));
+    expect(screen.getByRole('tab', { name: 'Activity' })).toHaveAttribute('aria-selected', 'true');
+    expect(screen.getByRole('heading', { name: 'Activity log' })).toBeInTheDocument();
+    expect(screen.getByText('Local folder import')).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('tab', { name: 'Readiness' }));
+    expect(screen.getByRole('tab', { name: 'Readiness' })).toHaveAttribute('aria-selected', 'true');
+    expect(screen.getByRole('heading', { name: 'Readiness actions' })).toBeInTheDocument();
+    expect(screen.getByText('Security scan queue')).toBeInTheDocument();
+  });
+
+  it('does not reveal mock or fixture data when section tabs are clicked', () => {
+    render(<App />);
+
+    for (const label of ['Dashboard', 'Library', 'Discover', 'Installs', 'Usage', 'Reviews', 'Security', 'Settings']) {
+      fireEvent.click(screen.getByRole('button', { name: label }));
+      for (const tab of screen.getAllByRole('tab')) {
+        fireEvent.click(tab);
+        expect(tab).toHaveAttribute('aria-selected', 'true');
+      }
+    }
+
+    const userVisibleText = document.body.textContent?.toLowerCase() ?? '';
+    const blockedFragments = [
+      'mock',
+      'fixture',
+      'openai-docs',
+      'gh-fix-ci',
+      'sui-move-contract',
+      'browser-control',
+      'terraform-helper',
+      'alice.dev',
+      'move-enthusiast',
+      '312',
+      '1482'
+    ];
+
+    for (const fragment of blockedFragments) {
+      expect(userVisibleText).not.toContain(fragment);
+    }
+  });
+
+  it('does not render mock or fixture-backed data across empty runtime pages', () => {
+    render(<App />);
+
+    for (const label of ['Dashboard', 'Library', 'Discover', 'Installs', 'Usage', 'Reviews', 'Security', 'Settings']) {
+      fireEvent.click(screen.getByRole('button', { name: label }));
+    }
+
+    const userVisibleText = document.body.textContent?.toLowerCase() ?? '';
+    const blockedFragments = [
+      'mock',
+      'fixture',
+      'openai-docs',
+      'gh-fix-ci',
+      'sui-move-contract',
+      'browser-control',
+      'terraform-helper',
+      'alice.dev',
+      'move-enthusiast',
+      '312',
+      '1482'
+    ];
+
+    for (const fragment of blockedFragments) {
+      expect(userVisibleText).not.toContain(fragment);
     }
   });
 
@@ -97,6 +199,7 @@ describe('desktop app shell', () => {
     );
 
     fireEvent.click(screen.getByRole('button', { name: 'Library' }));
+    fireEvent.click(screen.getByRole('tab', { name: 'Imports' }));
 
     expect(screen.getByRole('heading', { name: 'Import Queue' })).toBeInTheDocument();
     expect(screen.getByText('Local folder import')).toBeInTheDocument();
@@ -127,7 +230,7 @@ describe('desktop app shell', () => {
     expect(screen.getByText('Risk score')).toBeInTheDocument();
     expect(screen.getByText('95')).toBeInTheDocument();
     expect(screen.getAllByText('Dangerous shell command').length).toBeGreaterThan(0);
-    expect(screen.getByText('High Risk Helper')).toBeInTheDocument();
+    expect(screen.getAllByText('High Risk Helper').length).toBeGreaterThan(0);
     expect(screen.getByText('Reviewed by maintainer')).toBeInTheDocument();
   });
 
@@ -146,11 +249,14 @@ describe('desktop app shell', () => {
     );
 
     fireEvent.click(screen.getByRole('button', { name: 'Library' }));
+    fireEvent.click(screen.getByRole('tab', { name: 'Governance' }));
 
     expect(screen.getByRole('heading', { name: 'History' })).toBeInTheDocument();
     expect(screen.getByText('Change manifest and add guide')).toBeInTheDocument();
     expect(screen.getByRole('heading', { name: 'Diff' })).toBeInTheDocument();
     expect(screen.getByText('references/new.txt')).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('tab', { name: 'Collections' }));
     expect(screen.getByRole('heading', { name: 'Collections' })).toBeInTheDocument();
     expect(screen.getByText('Starter Pack')).toBeInTheDocument();
   });
@@ -168,13 +274,15 @@ describe('desktop app shell', () => {
     );
 
     fireEvent.click(screen.getByRole('button', { name: 'Settings' }));
+    fireEvent.click(screen.getByRole('tab', { name: 'Sync' }));
+    const settingsWorkspace = screen.getByRole('region', { name: 'Settings workspace' });
 
-    expect(screen.getByRole('heading', { name: 'Offline-first sync' })).toBeInTheDocument();
-    expect(screen.getByRole('heading', { name: 'Sync preview' })).toBeInTheDocument();
-    expect(screen.getByText('shared-folder')).toBeInTheDocument();
-    expect(screen.getByText('1 queued')).toBeInTheDocument();
-    expect(screen.getByText('1 pending')).toBeInTheDocument();
-    expect(screen.getByText('1 open')).toBeInTheDocument();
+    expect(within(settingsWorkspace).getByRole('heading', { name: 'Offline-first sync' })).toBeInTheDocument();
+    expect(within(settingsWorkspace).getByRole('heading', { name: 'Sync preview' })).toBeInTheDocument();
+    expect(within(settingsWorkspace).getByText('shared-folder')).toBeInTheDocument();
+    expect(within(settingsWorkspace).getByText('1 queued')).toBeInTheDocument();
+    expect(within(settingsWorkspace).getByText('1 pending')).toBeInTheDocument();
+    expect(within(settingsWorkspace).getByText('1 open')).toBeInTheDocument();
   });
 
   it('shows Plugins install, enable, permission, capability, and error state', () => {
@@ -183,9 +291,9 @@ describe('desktop app shell', () => {
         initialPlugins={{
           plugins: [
             {
-              name: 'Mock Agent Plugin',
+              name: 'Local Agent Plugin',
               status: 'enabled',
-              capabilities: ['agent-adapter:mock-agent'],
+              capabilities: ['agent-adapter:local-agent'],
               permissions: [{ name: 'network:fetch', status: 'authorized' }],
               errors: [{ message: 'Unsafe plugin entry blocked' }]
             }
@@ -195,14 +303,15 @@ describe('desktop app shell', () => {
     );
 
     fireEvent.click(screen.getByRole('button', { name: 'Settings' }));
+    fireEvent.click(screen.getByRole('tab', { name: 'Plugins' }));
 
-    expect(screen.getByRole('heading', { name: 'Plugin runtime' })).toBeInTheDocument();
-    expect(screen.getByText('Mock Agent Plugin')).toBeInTheDocument();
-    expect(screen.getByText('enabled')).toBeInTheDocument();
-    expect(screen.getByText('agent-adapter:mock-agent')).toBeInTheDocument();
-    expect(screen.getByText('network:fetch')).toBeInTheDocument();
-    expect(screen.getByText('authorized')).toBeInTheDocument();
-    expect(screen.getByText('Unsafe plugin entry blocked')).toBeInTheDocument();
+    expect(screen.getAllByRole('heading', { name: 'Plugin runtime' }).length).toBeGreaterThan(0);
+    expect(screen.getAllByText('Local Agent Plugin').length).toBeGreaterThan(0);
+    expect(screen.getAllByText('enabled').length).toBeGreaterThan(0);
+    expect(screen.getAllByText('agent-adapter:local-agent').length).toBeGreaterThan(0);
+    expect(screen.getAllByText('network:fetch').length).toBeGreaterThan(0);
+    expect(screen.getAllByText('authorized').length).toBeGreaterThan(0);
+    expect(screen.getAllByText('Unsafe plugin entry blocked').length).toBeGreaterThan(0);
   });
 
   it('lets the user run the local import and install management loop through IPC', async () => {
@@ -224,6 +333,8 @@ describe('desktop app shell', () => {
       agentDisplayName: 'Codex',
       adapterVersion: 'test',
       scope: 'user',
+      rootKind: 'user',
+      projectionMode: 'symlink',
       conflictState: 'clean',
       writes: [
         {
@@ -329,6 +440,7 @@ describe('desktop app shell', () => {
     await waitFor(() => expect(api.scanAgentRoots).toHaveBeenCalled());
     fireEvent.click(screen.getByRole('button', { name: 'Library' }));
     expect(screen.getAllByText('Scanned Helper').length).toBeGreaterThan(0);
+    fireEvent.click(screen.getByRole('tab', { name: 'Imports' }));
 
     fireEvent.change(screen.getByLabelText('Import source path'), {
       target: { value: '/tmp/runtime-helper' }
@@ -341,6 +453,9 @@ describe('desktop app shell', () => {
     fireEvent.change(screen.getByLabelText('Install target root'), {
       target: { value: '/tmp/.codex/skills' }
     });
+    fireEvent.change(screen.getByLabelText('Projection mode'), {
+      target: { value: 'symlink' }
+    });
     fireEvent.click(screen.getByRole('button', { name: 'Create install plan' }));
 
     await waitFor(() =>
@@ -350,17 +465,520 @@ describe('desktop app shell', () => {
         agentCode: 'codex',
         agentDisplayName: 'Codex',
         adapterVersion: 'builtin',
-        scope: 'user'
+        scope: 'user',
+        rootKind: 'user',
+        projectionMode: 'symlink'
       })
     );
     expect(screen.getByText('1 planned writes')).toBeInTheDocument();
 
     fireEvent.click(screen.getByRole('button', { name: 'Apply install plan' }));
     await waitFor(() => expect(api.applyInstallPlan).toHaveBeenCalledWith(installPlan));
-    expect(screen.getByText('Installed 1 files by copy projection.')).toBeInTheDocument();
+    expect(screen.getByText('Installed 1 files by symlink projection.')).toBeInTheDocument();
   });
 
-  it('renders Discover, Usage, Reviews, and Settings contract copy from local fixture boundaries', () => {
+  it('lets the user import Git and ZIP skills, inspect details, export skills, and manage collections through IPC', async () => {
+    const runtimeSkill = {
+      id: 'skill-runtime',
+      versionId: 'version-runtime',
+      name: 'Runtime Helper',
+      description: 'Searchable runtime helper',
+      versionNo: 1
+    };
+    const gitSkill = {
+      id: 'skill-git',
+      versionId: 'version-git',
+      name: 'Git Helper',
+      description: 'Imported from Git',
+      versionNo: 1
+    };
+    const zipSkill = {
+      id: 'skill-zip',
+      versionId: 'version-zip',
+      name: 'ZIP Helper',
+      description: 'Imported from ZIP',
+      versionNo: 1
+    };
+    const api = {
+      getAppInfo: vi.fn(),
+      listLibrarySkills: vi.fn(),
+      getWorkspaceState: vi.fn().mockResolvedValue(
+        workspaceState({
+          librarySkills: [
+            {
+              id: runtimeSkill.id,
+              name: runtimeSkill.name,
+              sourceAgent: 'Codex',
+              path: '/tmp/runtime-helper',
+              installStatus: 'available'
+            }
+          ],
+          skills: [runtimeSkill]
+        })
+      ),
+      listInstallTargets: vi.fn().mockResolvedValue([]),
+      importLocalFolder: vi.fn(),
+      importGit: vi.fn().mockResolvedValue({
+        skill: gitSkill,
+        files: [{ relativePath: 'SKILL.md', hash: 'hash-git', size: 120 }],
+        stagedFrom: '/tmp/staging/git'
+      }),
+      importZip: vi.fn().mockResolvedValue({
+        skill: zipSkill,
+        files: [{ relativePath: 'SKILL.md', hash: 'hash-zip', size: 120 }],
+        stagedFrom: '/tmp/staging/zip'
+      }),
+      searchLibrary: vi.fn().mockResolvedValue([runtimeSkill]),
+      getSkillDetail: vi.fn().mockResolvedValue(skillDetail(runtimeSkill)),
+      exportSkill: vi.fn().mockResolvedValue({
+        outputDirectory: '/tmp/export/runtime-helper',
+        manifestPath: '/tmp/export/runtime-helper/manifest.json',
+        files: [{ relativePath: 'SKILL.md', hash: 'hash-runtime', size: 140 }]
+      }),
+      createCollection: vi.fn().mockResolvedValue({
+        id: 'collection-runtime',
+        name: 'Runtime Pack',
+        description: '',
+        skillIds: [runtimeSkill.id, gitSkill.id, zipSkill.id],
+        createdAt: '2026-06-05T00:00:00.000Z'
+      }),
+      exportCollection: vi.fn().mockResolvedValue({
+        outputDirectory: '/tmp/export/runtime-pack'
+      }),
+      importCollection: vi.fn().mockResolvedValue({
+        collection: {
+          id: 'collection-imported',
+          name: 'Imported Pack',
+          description: '',
+          skillIds: [runtimeSkill.id],
+          createdAt: '2026-06-05T00:00:00.000Z'
+        },
+        skills: [runtimeSkill]
+      }),
+      createInstallPlan: vi.fn(),
+      applyInstallPlan: vi.fn(),
+      scanSkill: vi.fn(),
+      scanAgentRoots: vi.fn(),
+      getSyncStartupPlan: vi.fn(),
+      getPluginCenterState: vi.fn()
+    };
+    window.theOpenHub = api as unknown as NonNullable<typeof window.theOpenHub>;
+
+    render(<App />);
+
+    await waitFor(() => expect(api.getWorkspaceState).toHaveBeenCalled());
+    fireEvent.click(screen.getByRole('button', { name: 'Library' }));
+    fireEvent.click(screen.getByRole('tab', { name: 'Imports' }));
+
+    fireEvent.change(screen.getByLabelText('Git import URL'), {
+      target: { value: 'file:///tmp/git-helper' }
+    });
+    fireEvent.click(screen.getByRole('button', { name: 'Import Git' }));
+    await waitFor(() => expect(api.importGit).toHaveBeenCalledWith('file:///tmp/git-helper'));
+    expect(screen.getByText('Git Helper')).toBeInTheDocument();
+
+    fireEvent.change(screen.getByLabelText('ZIP import path'), {
+      target: { value: '/tmp/zip-helper.zip' }
+    });
+    fireEvent.click(screen.getByRole('button', { name: 'Import ZIP' }));
+    await waitFor(() => expect(api.importZip).toHaveBeenCalledWith('/tmp/zip-helper.zip'));
+    expect(screen.getByText('ZIP Helper')).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('tab', { name: 'Indexed skills' }));
+    fireEvent.change(screen.getByLabelText('Library search query'), {
+      target: { value: 'runtime' }
+    });
+    fireEvent.click(screen.getByRole('button', { name: 'Search library' }));
+    await waitFor(() => expect(api.searchLibrary).toHaveBeenCalledWith('runtime'));
+    fireEvent.click(screen.getByRole('button', { name: 'View Runtime Helper' }));
+    await waitFor(() => expect(api.getSkillDetail).toHaveBeenCalledWith(runtimeSkill.id));
+    expect(screen.getByText('references/guide.md')).toBeInTheDocument();
+    expect(screen.getByText(/Runtime helper instructions/)).toBeInTheDocument();
+
+    fireEvent.change(screen.getByLabelText('Skill export directory'), {
+      target: { value: '/tmp/export' }
+    });
+    fireEvent.click(screen.getByRole('button', { name: 'Export skill' }));
+    await waitFor(() => expect(api.exportSkill).toHaveBeenCalledWith(runtimeSkill.id, '/tmp/export'));
+
+    fireEvent.click(screen.getByRole('tab', { name: 'Collections' }));
+    fireEvent.change(screen.getByLabelText('Collection name'), {
+      target: { value: 'Runtime Pack' }
+    });
+    fireEvent.click(screen.getByRole('button', { name: 'Create collection' }));
+    await waitFor(() =>
+      expect(api.createCollection).toHaveBeenCalledWith({
+        name: 'Runtime Pack',
+        description: '',
+        skillIds: expect.arrayContaining([runtimeSkill.id, gitSkill.id, zipSkill.id])
+      })
+    );
+
+    fireEvent.change(screen.getByLabelText('Collection export directory'), {
+      target: { value: '/tmp/export' }
+    });
+    fireEvent.click(screen.getByRole('button', { name: 'Export collection' }));
+    await waitFor(() => expect(api.exportCollection).toHaveBeenCalledWith('collection-runtime', '/tmp/export'));
+
+    fireEvent.change(screen.getByLabelText('Collection package directory'), {
+      target: { value: '/tmp/imported-pack' }
+    });
+    fireEvent.click(screen.getByRole('button', { name: 'Import collection' }));
+    await waitFor(() => expect(api.importCollection).toHaveBeenCalledWith('/tmp/imported-pack'));
+    expect(screen.getByText('Imported Pack')).toBeInTheDocument();
+  });
+
+  it('lets the user roll back, uninstall, create exemptions, and revoke exemptions through IPC', async () => {
+    const runtimeSkill = {
+      id: 'skill-runtime',
+      versionId: 'version-runtime',
+      name: 'Runtime Helper',
+      description: 'Lifecycle helper',
+      versionNo: 2
+    };
+    const api = {
+      getAppInfo: vi.fn(),
+      listLibrarySkills: vi.fn(),
+      getWorkspaceState: vi.fn().mockResolvedValue(
+        workspaceState({
+          librarySkills: [
+            {
+              id: runtimeSkill.id,
+              name: runtimeSkill.name,
+              sourceAgent: 'Codex',
+              path: '/tmp/runtime-helper',
+              installStatus: 'installed'
+            }
+          ],
+          skills: [runtimeSkill]
+        })
+      ),
+      listInstallTargets: vi.fn().mockResolvedValue([]),
+      getSkillDetail: vi.fn().mockResolvedValue(skillDetail(runtimeSkill)),
+      rollbackVersion: vi.fn().mockResolvedValue({
+        status: 'rolled_back',
+        installationId: 'installation-runtime',
+        versionId: 'version-1'
+      }),
+      uninstall: vi.fn().mockResolvedValue({
+        status: 'uninstalled',
+        installationId: 'installation-runtime',
+        removedFiles: ['SKILL.md'],
+        preservedFiles: []
+      }),
+      createSecurityExemption: vi.fn().mockResolvedValue({
+        id: 'exemption-runtime',
+        skillId: runtimeSkill.id,
+        scope: 'user',
+        reason: 'Reviewed by maintainer',
+        createdAt: '2026-06-05T00:00:00.000Z',
+        revokedAt: null
+      }),
+      revokeSecurityExemption: vi.fn().mockResolvedValue({
+        status: 'revoked',
+        exemptionId: 'exemption-runtime'
+      }),
+      importLocalFolder: vi.fn(),
+      createInstallPlan: vi.fn(),
+      applyInstallPlan: vi.fn(),
+      scanSkill: vi.fn(),
+      scanAgentRoots: vi.fn(),
+      getSyncStartupPlan: vi.fn(),
+      getPluginCenterState: vi.fn()
+    };
+    window.theOpenHub = api as unknown as NonNullable<typeof window.theOpenHub>;
+
+    render(<App />);
+
+    await waitFor(() => expect(api.getWorkspaceState).toHaveBeenCalled());
+    fireEvent.click(screen.getByRole('button', { name: 'Library' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Details' }));
+    await waitFor(() => expect(api.getSkillDetail).toHaveBeenCalledWith(runtimeSkill.id));
+
+    fireEvent.click(screen.getByRole('button', { name: 'Installs' }));
+    fireEvent.click(screen.getByRole('tab', { name: 'Uninstalls' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Roll back install' }));
+    await waitFor(() => expect(api.rollbackVersion).toHaveBeenCalledWith('installation-runtime', 'version-1'));
+    fireEvent.click(screen.getByRole('button', { name: 'Uninstall app-owned files' }));
+    await waitFor(() => expect(api.uninstall).toHaveBeenCalledWith('installation-runtime'));
+    expect(screen.getByText('Uninstalled app-owned files for installation-runtime.')).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Security' }));
+    fireEvent.click(screen.getByRole('tab', { name: 'Exemptions' }));
+    fireEvent.change(screen.getByLabelText('Exemption reason'), {
+      target: { value: 'Reviewed by maintainer' }
+    });
+    fireEvent.click(screen.getByRole('button', { name: 'Create exemption' }));
+    await waitFor(() =>
+      expect(api.createSecurityExemption).toHaveBeenCalledWith({
+        skillId: runtimeSkill.id,
+        scope: 'user',
+        reason: 'Reviewed by maintainer'
+      })
+    );
+    expect(screen.getByText('Reviewed by maintainer')).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Revoke exemption' }));
+    await waitFor(() => expect(api.revokeSecurityExemption).toHaveBeenCalledWith('exemption-runtime'));
+  });
+
+  it('lets the user operate discover sources, opt-in sync, and plugins through IPC', async () => {
+    const runtimeSkill = {
+      id: 'skill-runtime',
+      versionId: 'version-runtime',
+      name: 'Runtime Helper',
+      description: 'Sync helper',
+      versionNo: 1
+    };
+    const api = {
+      getAppInfo: vi.fn(),
+      listLibrarySkills: vi.fn(),
+      getWorkspaceState: vi.fn().mockResolvedValue(workspaceState({ skills: [runtimeSkill] })),
+      listInstallTargets: vi.fn().mockResolvedValue([]),
+      addDiscoverSource: vi.fn().mockResolvedValue({
+        id: 'source-local',
+        name: 'Local Curated',
+        sourceType: 'local',
+        url: '/tmp/curated',
+        trustLevel: 'verified',
+        status: 'configured',
+        lastCheckedAt: null
+      }),
+      previewDiscoverSource: vi.fn().mockResolvedValue({
+        source: {
+          id: 'source-local',
+          name: 'Local Curated',
+          sourceType: 'local',
+          url: '/tmp/curated',
+          trustLevel: 'verified',
+          status: 'cached',
+          lastCheckedAt: '2026-06-05T00:00:00.000Z'
+        },
+        skills: [
+          {
+            name: 'Curated Helper',
+            description: 'Preview only',
+            relativePath: 'curated-helper',
+            tags: ['curated'],
+            riskStatus: 'safe'
+          }
+        ]
+      }),
+      previewMigration: vi.fn().mockResolvedValue({
+        adapter: 'openskills',
+        sourcePath: '/tmp/openskills',
+        skills: [
+          {
+            name: 'Migrated Helper',
+            description: 'Preview only',
+            relativePath: 'migrated-helper',
+            tags: ['migration'],
+            riskStatus: 'safe'
+          }
+        ],
+        warnings: []
+      }),
+      createSyncProfile: vi.fn().mockResolvedValue({
+        id: 'sync-profile',
+        mode: 'shared-folder',
+        remoteUrl: '/tmp/shared',
+        enabled: true,
+        authRef: null,
+        lastSyncAt: null
+      }),
+      enqueueSyncLocalChange: vi.fn().mockResolvedValue({
+        id: 'outbox-runtime',
+        profileId: 'sync-profile',
+        entityType: 'skill_version',
+        entityId: runtimeSkill.versionId,
+        status: 'queued',
+        payload: { skillId: runtimeSkill.id }
+      }),
+      pushSync: vi.fn().mockResolvedValue({ status: 'pushed' }),
+      pullSync: vi.fn().mockResolvedValue([
+        {
+          id: 'inbox-runtime',
+          profileId: 'sync-profile',
+          entityType: 'skill_version',
+          entityId: runtimeSkill.versionId,
+          status: 'received',
+          payload: { skillId: runtimeSkill.id }
+        }
+      ]),
+      installPlugin: vi.fn().mockResolvedValue({
+        id: 'plugin-runtime',
+        name: 'Runtime Plugin',
+        version: '1.0.0',
+        rootPath: '/tmp/plugin',
+        status: 'installed'
+      }),
+      authorizePluginPermission: vi.fn().mockResolvedValue({ status: 'authorized' }),
+      enablePlugin: vi.fn().mockResolvedValue({
+        agentAdapters: [{ pluginId: 'plugin-runtime', capabilityId: 'agent-adapter:runtime' }],
+        importers: [],
+        securityRules: [],
+        syncDrivers: []
+      }),
+      disablePlugin: vi.fn().mockResolvedValue({ status: 'disabled' }),
+      getPluginRegistry: vi.fn().mockResolvedValue({
+        agentAdapters: [],
+        importers: [],
+        securityRules: [],
+        syncDrivers: []
+      }),
+      importLocalFolder: vi.fn(),
+      createInstallPlan: vi.fn(),
+      applyInstallPlan: vi.fn(),
+      scanSkill: vi.fn(),
+      scanAgentRoots: vi.fn(),
+      getSyncStartupPlan: vi.fn(),
+      getPluginCenterState: vi.fn()
+    };
+    window.theOpenHub = api as unknown as NonNullable<typeof window.theOpenHub>;
+
+    render(<App />);
+
+    await waitFor(() => expect(api.getWorkspaceState).toHaveBeenCalled());
+    fireEvent.click(screen.getByRole('button', { name: 'Discover' }));
+    fireEvent.change(screen.getByLabelText('Discover source name'), {
+      target: { value: 'Local Curated' }
+    });
+    fireEvent.change(screen.getByLabelText('Discover source URL'), {
+      target: { value: '/tmp/curated' }
+    });
+    fireEvent.click(screen.getByRole('button', { name: 'Add source' }));
+    await waitFor(() =>
+      expect(api.addDiscoverSource).toHaveBeenCalledWith({
+        name: 'Local Curated',
+        sourceType: 'local',
+        url: '/tmp/curated',
+        trustLevel: 'verified'
+      })
+    );
+    fireEvent.click(screen.getByRole('button', { name: 'Preview source' }));
+    await waitFor(() => expect(api.previewDiscoverSource).toHaveBeenCalledWith('source-local'));
+    expect(screen.getByText('Curated Helper')).toBeInTheDocument();
+
+    fireEvent.change(screen.getByLabelText('Migration source path'), {
+      target: { value: '/tmp/openskills' }
+    });
+    fireEvent.click(screen.getByRole('button', { name: 'Preview migration' }));
+    await waitFor(() =>
+      expect(api.previewMigration).toHaveBeenCalledWith({
+        adapter: 'openskills',
+        sourcePath: '/tmp/openskills'
+      })
+    );
+    expect(screen.getByText('Migrated Helper')).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Settings' }));
+    fireEvent.click(screen.getByRole('tab', { name: 'Sync' }));
+    fireEvent.change(screen.getByLabelText('Sync remote path'), {
+      target: { value: '/tmp/shared' }
+    });
+    fireEvent.click(screen.getByRole('button', { name: 'Create sync profile' }));
+    await waitFor(() =>
+      expect(api.createSyncProfile).toHaveBeenCalledWith({
+        mode: 'shared-folder',
+        remoteUrl: '/tmp/shared',
+        enabled: true
+      })
+    );
+    fireEvent.click(screen.getByRole('button', { name: 'Push and pull' }));
+    await waitFor(() =>
+      expect(api.enqueueSyncLocalChange).toHaveBeenCalledWith({
+        profileId: 'sync-profile',
+        entityType: 'skill_version',
+        entityId: runtimeSkill.versionId,
+        payload: { skillId: runtimeSkill.id, versionNo: runtimeSkill.versionNo }
+      })
+    );
+    expect(api.pushSync).toHaveBeenCalledWith('sync-profile');
+    expect(api.pullSync).toHaveBeenCalledWith('sync-profile');
+
+    fireEvent.click(screen.getByRole('tab', { name: 'Plugins' }));
+    fireEvent.change(screen.getByLabelText('Plugin folder'), {
+      target: { value: '/tmp/plugin' }
+    });
+    fireEvent.click(screen.getByRole('button', { name: 'Install plugin' }));
+    await waitFor(() => expect(api.installPlugin).toHaveBeenCalledWith('/tmp/plugin'));
+    fireEvent.click(screen.getByRole('button', { name: 'Authorize permission' }));
+    await waitFor(() =>
+      expect(api.authorizePluginPermission).toHaveBeenCalledWith({
+        pluginId: 'plugin-runtime',
+        permission: 'network:fetch',
+        reason: 'User authorized from Settings'
+      })
+    );
+    fireEvent.click(screen.getByRole('button', { name: 'Enable plugin' }));
+    await waitFor(() => expect(api.enablePlugin).toHaveBeenCalledWith('plugin-runtime'));
+    expect(screen.getByText('1')).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'Disable plugin' }));
+    await waitFor(() => expect(api.disablePlugin).toHaveBeenCalledWith('plugin-runtime'));
+    expect(api.getPluginRegistry).toHaveBeenCalled();
+  });
+
+  it('runs an initial agent scan when the runtime workspace has no indexed local skills', async () => {
+    const scannedSkill = {
+      id: 'skill-openai-docs',
+      versionId: 'version-openai-docs',
+      name: 'openai-docs',
+      description: 'Searches local OpenAI docs.',
+      versionNo: 1
+    };
+    const api = {
+      getAppInfo: vi.fn(),
+      listLibrarySkills: vi.fn(),
+      getWorkspaceState: vi
+        .fn()
+        .mockResolvedValueOnce(workspaceState())
+        .mockResolvedValueOnce(
+          workspaceState({
+            librarySkills: [
+              {
+                id: scannedSkill.id,
+                name: scannedSkill.name,
+                sourceAgent: 'Codex',
+                path: '/Users/a1/.codex/skills/.system/openai-docs',
+                installStatus: 'installed'
+              }
+            ],
+            skills: [scannedSkill]
+          })
+        ),
+      importLocalFolder: vi.fn(),
+      createInstallPlan: vi.fn(),
+      applyInstallPlan: vi.fn(),
+      scanSkill: vi.fn(),
+      scanAgentRoots: vi.fn().mockResolvedValue({
+        indexedSkills: [
+          {
+            id: scannedSkill.id,
+            name: scannedSkill.name,
+            agentCode: 'codex',
+            path: '/Users/a1/.codex/skills/.system/openai-docs',
+            files: [{ relativePath: 'SKILL.md', size: 120 }]
+          }
+        ],
+        errors: []
+      }),
+      getSyncStartupPlan: vi.fn(),
+      getPluginCenterState: vi.fn()
+    };
+    window.theOpenHub = api as unknown as NonNullable<typeof window.theOpenHub>;
+
+    render(<App />);
+
+    await waitFor(() => expect(api.scanAgentRoots).toHaveBeenCalledTimes(1));
+    await waitFor(() => expect(api.getWorkspaceState).toHaveBeenCalledTimes(2));
+    fireEvent.click(screen.getByRole('button', { name: 'Library' }));
+
+    expect(screen.getAllByText('openai-docs').length).toBeGreaterThan(0);
+    expect(screen.getByText('/Users/a1/.codex/skills/.system/openai-docs')).toBeInTheDocument();
+    expect(screen.getByText('installed')).toBeInTheDocument();
+  });
+
+  it('renders Discover, Usage, Reviews, and Settings contract copy from empty local state', () => {
     render(<App />);
 
     fireEvent.click(screen.getByRole('button', { name: 'Discover' }));
@@ -377,7 +995,9 @@ describe('desktop app shell', () => {
     expect(screen.getByText('High-risk installs stay blocked until a scoped exemption is recorded.')).toBeInTheDocument();
 
     fireEvent.click(screen.getByRole('button', { name: 'Settings' }));
-    const currentDefaults = screen.getByRole('region', { name: 'Current defaults' });
+    fireEvent.click(screen.getByRole('tab', { name: 'Privacy' }));
+    const settingsWorkspace = screen.getByRole('region', { name: 'Settings workspace' });
+    const currentDefaults = within(settingsWorkspace).getByRole('region', { name: 'Current defaults' });
     expect(within(currentDefaults).getByText('Node integration')).toBeInTheDocument();
     expect(within(currentDefaults).getByText('Off')).toBeInTheDocument();
     expect(within(currentDefaults).getByText('Context isolation')).toBeInTheDocument();
@@ -432,9 +1052,9 @@ describe('desktop app shell', () => {
     expect(screen.getByText('Codex')).toBeInTheDocument();
 
     fireEvent.click(screen.getByRole('button', { name: 'Reviews' }));
-    expect(screen.getByText('Runtime Helper security review')).toBeInTheDocument();
-    expect(screen.getByText('Dangerous shell command')).toBeInTheDocument();
-    expect(screen.getByText('Explain why shell access is required.')).toBeInTheDocument();
+    expect(screen.getAllByText('Runtime Helper security review').length).toBeGreaterThan(0);
+    expect(screen.getAllByText('Dangerous shell command').length).toBeGreaterThan(0);
+    expect(screen.getAllByText('Explain why shell access is required.').length).toBeGreaterThan(0);
   });
 
   it('refreshes runtime review queue after a security scan creates a review item', async () => {
@@ -518,8 +1138,8 @@ describe('desktop app shell', () => {
     await waitFor(() => expect(api.getWorkspaceState).toHaveBeenCalledTimes(2));
     fireEvent.click(screen.getByRole('button', { name: 'Reviews' }));
 
-    expect(screen.getByText('High Risk Helper security review')).toBeInTheDocument();
-    expect(screen.getByText('Dangerous shell command')).toBeInTheDocument();
+    expect(screen.getAllByText('High Risk Helper security review').length).toBeGreaterThan(0);
+    expect(screen.getAllByText('Dangerous shell command').length).toBeGreaterThan(0);
   });
 });
 
@@ -576,5 +1196,71 @@ function workspaceState(overrides: Partial<DesktopWorkspaceState> = {}): Desktop
       plugins: []
     },
     ...overrides
+  };
+}
+
+function skillDetail(skill: {
+  id: string;
+  versionId: string;
+  name: string;
+  description: string;
+  versionNo: number;
+}) {
+  return {
+    skill: {
+      ...skill,
+      slug: skill.name.toLowerCase().replaceAll(' ', '-'),
+      tags: ['runtime']
+    },
+    source: {
+      type: 'local',
+      url: '/tmp/runtime-helper',
+      trustLevel: 'verified'
+    },
+    versions: [
+      {
+        versionId: 'version-1',
+        skillId: skill.id,
+        versionNo: 1,
+        changeSummary: 'Initial import',
+        createdAt: '2026-06-05T00:00:00.000Z',
+        lifecycle: 'released',
+        releaseChannel: 'stable'
+      }
+    ],
+    files: [
+      {
+        relativePath: 'SKILL.md',
+        hash: 'hash-runtime',
+        size: 140,
+        kind: 'markdown'
+      },
+      {
+        relativePath: 'references/guide.md',
+        hash: 'hash-guide',
+        size: 80,
+        kind: 'markdown'
+      }
+    ],
+    skillMarkdown: '# Runtime Helper\n\nRuntime helper instructions.',
+    latestScan: {
+      scanId: 'scan-runtime',
+      score: 0,
+      level: 'safe',
+      blocked: false,
+      scannedAt: '2026-06-05T00:00:00.000Z'
+    },
+    installations: [
+      {
+        installationId: 'installation-runtime',
+        agent: 'Codex',
+        rootPath: '/tmp/.codex/skills',
+        scope: 'user',
+        installPath: '/tmp/.codex/skills/runtime-helper',
+        status: 'installed',
+        versionNo: skill.versionNo
+      }
+    ],
+    riskStatus: 'safe'
   };
 }

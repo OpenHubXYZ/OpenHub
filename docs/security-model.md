@@ -38,6 +38,20 @@ Exemptions are scoped to a skill and install scope. Each exemption records a
 reason and creation timestamp. Revoking an exemption immediately makes the
 policy evaluate the skill normally again.
 
+## Security Center Actions
+
+The renderer exposes security operations through typed preload IPC only:
+
+- rescan one selected skill or all indexed skills
+- view finding detail for a skill, scan, or rule
+- create a scoped exemption with a reason
+- revoke an exemption
+- show high and critical block reasons before an install writes files
+
+Repeated scans for the same skill version and ruleset update the existing scan
+record, so history stays readable while the latest policy result remains
+auditable.
+
 ## Limitations
 
 Security scanning is pattern-based. It can miss obfuscated or novel behavior,

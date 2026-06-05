@@ -10,6 +10,7 @@ export interface RecordScannedInstallationInput {
   adapterVersion: string;
   rootPath: string;
   rootScope: string;
+  rootKind?: 'user' | 'project';
   writable: boolean;
   isDefault: boolean;
   skillPath: string;
@@ -64,12 +65,13 @@ export function createLibraryRepository(database: SqliteDatabase): LibraryReposi
           .prepare(
             `
               insert into agent_roots
-                (id, agent_id, root_path, scope, writable, is_default)
+                (id, agent_id, root_path, scope, writable, is_default, root_kind)
               values
-                (@id, @agentId, @rootPath, @scope, @writable, @isDefault)
+                (@id, @agentId, @rootPath, @scope, @writable, @isDefault, @rootKind)
               on conflict(agent_id, root_path, scope) do update set
                 writable = excluded.writable,
-                is_default = excluded.is_default
+                is_default = excluded.is_default,
+                root_kind = excluded.root_kind
             `
           )
           .run({
@@ -77,6 +79,7 @@ export function createLibraryRepository(database: SqliteDatabase): LibraryReposi
             agentId,
             rootPath: input.rootPath,
             scope: input.rootScope,
+            rootKind: input.rootKind ?? 'user',
             writable: input.writable ? 1 : 0,
             isDefault: input.isDefault ? 1 : 0
           });

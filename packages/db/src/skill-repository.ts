@@ -39,7 +39,9 @@ export interface SkillRepository {
   listSkills(): SkillRecord[];
   getSkill(skillId: string): SkillRecord | null;
   updateSkillMetadata(skillId: string, input: UpdateSkillMetadataInput): void;
-  searchSkills(query: string): SkillRecord[];
+  searchSkills(query: string, options?: { favoritesOnly?: boolean }): SkillRecord[];
+  setFavorite(skillId: string, favorite: boolean): void;
+  listFavorites(): SkillRecord[];
   deleteSkill(skillId: string): void;
 }
 
@@ -136,7 +138,7 @@ export function createSkillRepository(database: SqliteDatabase): SkillRepository
             });
         }
 
-        refreshSkillSearch(database, skillId);
+        refreshSkillSearch(database, skillId, input.files.map((file) => file.content).join('\n'));
       });
 
       create();
@@ -200,7 +202,7 @@ export function createSkillRepository(database: SqliteDatabase): SkillRepository
       update();
     },
 
-    searchSkills(query) {
+    searchSkills(query, options = {}) {
       const ftsQuery = toFtsQuery(query);
       if (!ftsQuery) {
         return [];
@@ -220,12 +222,47 @@ export function createSkillRepository(database: SqliteDatabase): SkillRepository
             from skill_search ss
             join skills s on s.id = ss.skill_id
             join skill_versions sv on sv.skill_id = s.id
+            ${options.favoritesOnly ? 'join skill_favorites sfav on sfav.skill_id = s.id' : ''}
             where skill_search match @query
             group by s.id
             order by rank
           `
         )
         .all({ query: ftsQuery })
+        .map(skillRow);
+    },
+
+    setFavorite(skillId, favorite) {
+      if (favorite) {
+        database
+          .prepare('insert or ignore into skill_favorites (skill_id) values (?)')
+          .run(skillId);
+        return;
+      }
+
+      database.prepare('delete from skill_favorites where skill_id = ?').run(skillId);
+    },
+
+    listFavorites() {
+      return database
+        .prepare(
+          `
+            select
+              s.id,
+              s.slug,
+              s.name,
+              s.description,
+              s.tags_json as tagsJson,
+              sv.id as versionId,
+              max(sv.version_no) as versionNo
+            from skill_favorites fav
+            join skills s on s.id = fav.skill_id
+            join skill_versions sv on sv.skill_id = s.id
+            group by s.id
+            order by fav.created_at desc, s.name collate nocase
+          `
+        )
+        .all()
         .map(skillRow);
     },
 
@@ -263,7 +300,10 @@ function getSkillRecord(database: SqliteDatabase, skillId: string): SkillRecord 
   return row ? skillRow(row) : null;
 }
 
-function refreshSkillSearch(database: SqliteDatabase, skillId: string): void {
+function refreshSkillSearch(database: SqliteDatabase, skillId: string, fileContent?: string): void {
+  const existing = database
+    .prepare('select file_content as fileContent from skill_search where skill_id = ? limit 1')
+    .get(skillId) as { fileContent: string } | undefined;
   const row = database
     .prepare(
       `
@@ -291,8 +331,8 @@ function refreshSkillSearch(database: SqliteDatabase, skillId: string): void {
   database
     .prepare(
       `
-        insert into skill_search (skill_id, name, description, tags, file_paths)
-        values (@skillId, @name, @description, @tags, @filePaths)
+        insert into skill_search (skill_id, name, description, tags, file_paths, file_content)
+        values (@skillId, @name, @description, @tags, @filePaths, @fileContent)
       `
     )
     .run({
@@ -300,7 +340,8 @@ function refreshSkillSearch(database: SqliteDatabase, skillId: string): void {
       name: search.name,
       description: search.description,
       tags: JSON.parse(search.tagsJson).join(' '),
-      filePaths: search.filePaths ?? ''
+      filePaths: search.filePaths ?? '',
+      fileContent: fileContent ?? existing?.fileContent ?? ''
     });
 }
 

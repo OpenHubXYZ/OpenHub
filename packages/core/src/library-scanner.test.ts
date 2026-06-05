@@ -20,11 +20,13 @@ describe('agent library scanner', () => {
     tempDirectories.push(homeDirectory);
 
     const codexSkill = path.join(homeDirectory, '.codex/skills/path-safety');
+    const codexSystemSkill = path.join(homeDirectory, '.codex/skills/.system/openai-docs');
     const claudeMissing = path.join(homeDirectory, '.claude/skills/missing-manifest');
     const geminiMalformed = path.join(homeDirectory, '.gemini/skills/malformed');
     const opencodeSkill = path.join(homeDirectory, '.opencode/skills/story-helper');
 
     await mkdir(codexSkill, { recursive: true });
+    await mkdir(codexSystemSkill, { recursive: true });
     await mkdir(claudeMissing, { recursive: true });
     await mkdir(geminiMalformed, { recursive: true });
     await mkdir(opencodeSkill, { recursive: true });
@@ -38,6 +40,17 @@ describe('agent library scanner', () => {
         'tags: [security, imports]',
         '---',
         '# Path Safety'
+      ].join('\n')
+    );
+    await writeFile(
+      path.join(codexSystemSkill, 'SKILL.md'),
+      [
+        '---',
+        'name: openai-docs',
+        'description: Searches local OpenAI docs.',
+        'tags: [docs]',
+        '---',
+        '# OpenAI Docs'
       ].join('\n')
     );
     await writeFile(path.join(codexSkill, 'checklist.md'), 'zip slip symlink escape');
@@ -58,6 +71,7 @@ describe('agent library scanner', () => {
     });
 
     expect(result.indexedSkills.map((skill) => skill.name).sort()).toEqual([
+      'openai-docs',
       'path-safety',
       'story-helper'
     ]);
@@ -75,6 +89,12 @@ describe('agent library scanner', () => {
     ]);
 
     expect(createLibraryRepository(database).listLibrarySkills()).toEqual([
+      expect.objectContaining({
+        name: 'openai-docs',
+        sourceAgent: 'Codex',
+        path: codexSystemSkill,
+        installStatus: 'installed'
+      }),
       expect.objectContaining({
         name: 'path-safety',
         sourceAgent: 'Codex',

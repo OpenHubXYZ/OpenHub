@@ -117,10 +117,38 @@ export async function scanAgentLibraries(
 
 async function listSkillCandidates(root: AgentRoot): Promise<string[]> {
   const entries = await readdir(root.rootPath, { withFileTypes: true });
-  return entries
-    .filter((entry) => entry.isDirectory())
-    .map((entry) => path.join(root.rootPath, entry.name))
-    .sort();
+  const candidates: string[] = [];
+
+  for (const entry of entries) {
+    if (!entry.isDirectory()) {
+      continue;
+    }
+
+    const directChildPath = path.join(root.rootPath, entry.name);
+    const nestedCandidates = await collectSkillCandidates(directChildPath);
+    candidates.push(...(nestedCandidates.length > 0 ? nestedCandidates : [directChildPath]));
+  }
+
+  return candidates.sort();
+}
+
+async function collectSkillCandidates(directoryPath: string): Promise<string[]> {
+  if (await fileExists(path.join(directoryPath, 'SKILL.md'))) {
+    return [directoryPath];
+  }
+
+  const entries = await readdir(directoryPath, { withFileTypes: true });
+  const candidates: string[] = [];
+
+  for (const entry of entries) {
+    if (!entry.isDirectory()) {
+      continue;
+    }
+
+    candidates.push(...(await collectSkillCandidates(path.join(directoryPath, entry.name))));
+  }
+
+  return candidates;
 }
 
 async function collectSkillFiles(

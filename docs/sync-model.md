@@ -28,6 +28,20 @@ local domain state.
 - `mock-rest`: reserves the mode for REST interface contracts and conflict
   lifecycle tests. No live network driver is enabled in Phase 7.
 
+## User Workflow
+
+Sync is surfaced in Settings as an explicit action center:
+
+- create a disabled or enabled profile for `shared-folder`, `git`, or
+  `mock-rest`
+- enqueue a local change only after the local entity exists in SQLite
+- push queued packages to the selected profile
+- pull remote packages into `sync_inbox`
+- list open conflicts and record an explicit resolution
+
+The desktop app does not auto-start sync on a fresh database. Startup planning
+returns `shouldStart: false` until at least one profile is enabled.
+
 ## Boundaries
 
 - Sync is disabled until a profile is created and enabled.
@@ -36,5 +50,6 @@ local domain state.
 - Local writes are persisted before outbox enqueue.
 - Conflict resolution records the chosen resolution before future workflows can
   apply it.
-- Credentials and remote authentication references must stay outside plaintext
-  SQLite and use the OS keychain when implemented.
+- Credentials and remote authentication references are represented as `auth_ref`
+  values. Secrets must stay outside plaintext SQLite and use the OS keychain
+  when implemented.

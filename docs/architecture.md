@@ -89,6 +89,10 @@ Implemented migrations:
   inbox, conflict records, and sync events.
 - `006_plugin_runtime`: plugin manifests, declared permission grants, and
   plugin error logs.
+- `007_review_usage_events`: local usage event, review item, and review note
+  records used by the Usage and Reviews surfaces.
+- `008_discover_sources`: configured Discover sources and cached preview rows
+  for local/Git source listings.
 
 Repository tests use `:memory:` databases. They do not write to real user
 directories or agent roots.
@@ -103,8 +107,8 @@ directories or agent roots.
 4. File contents are stored in a content-addressed blob store.
 5. Installation creates a plan, reports conflicts, then clean plans project
    files into an agent root and record app-owned targets.
-6. Later security and verification phases will compare recorded hashes with
-   target files before broader release gates.
+6. Security scans and release smoke verification compare recorded state with
+   runtime behavior before writes are treated as ready.
 
 ## Runtime IPC Integration
 
@@ -119,12 +123,32 @@ Runtime channels currently cover:
   sync, and plugin panel state.
 - `library.scan` and `library.list`: scan detected Codex, Claude, Gemini, and
   OpenCode roots, then list indexed installed projections.
-- `import.localFolder`: stage and import a local skill directory.
-- `install.createPlan` and `install.applyPlan`: create conflict-aware copy
-  projection plans and apply clean plans.
-- `security.scan`: scan the latest skill version and persist findings.
-- `sync.startupPlan`: prove sync remains disabled without an enabled profile.
-- `plugins.centerState`: expose constrained plugin runtime state.
+- `library.search` and `library.detail`: run FTS-backed search and aggregate
+  selected skill metadata, source, files, versions, scan state, and installs.
+- `import.localFolder`, `import.git`, and `import.zip`: stage and import local
+  folders, Git URLs, and ZIP archives.
+- `export.skill`, `collection.create`, `collection.export`, and
+  `collection.import`: create portable skill and collection packages.
+- `install.listTargets`, `install.createPlan`, `install.applyPlan`, and
+  `install.uninstall`: discover writable agent roots, create conflict-aware
+  copy projection plans, apply clean plans, and remove app-owned files.
+- `version.list`, `version.diff`, and `version.rollback`: inspect version
+  history, compare file hashes, and rewrite an installed projection to an older
+  version.
+- `security.scan`, `security.rescan`, `security.findingDetail`,
+  `security.createExemption`, and `security.revokeExemption`: scan latest
+  versions, batch rescan, inspect findings, and manage scoped exemptions.
+- `sync.startupPlan`, `sync.createProfile`, `sync.enqueueLocalChange`,
+  `sync.push`, `sync.pull`, `sync.listConflicts`, and `sync.resolveConflict`:
+  keep sync disabled by default and expose explicit profile, push/pull, and
+  conflict operations.
+- `plugins.centerState`, `plugins.install`, `plugins.authorizePermission`,
+  `plugins.enable`, `plugins.disable`, and `plugins.registry`: install plugin
+  folders, authorize declared permissions, enable/disable plugins, and inspect
+  registered capabilities.
+- `discover.addSource`, `discover.previewSource`, and
+  `discover.migrationPreview`: configure local/Git sources and preview source
+  or migration imports before writing skills.
 
 The preload bridge validates every response before exposing it to the renderer.
 Renderer code still has no direct Node, filesystem, SQLite, or `ipcRenderer`
@@ -238,6 +262,23 @@ content-addressed blob store:
 - The renderer can display History, Diff, and Collections state without
   privileged access.
 
+## Discover Sources And Migration
+
+The Discover layer is intentionally local-first and preview-oriented:
+
+- `discover_sources` stores configured local or Git sources, trust metadata,
+  verification flags, cache status, and timestamps.
+- `discover_source_cache` stores preview rows for skill name, description,
+  tags, path, and risk status.
+- Adding a source records metadata only; Git or local reads happen when the user
+  explicitly asks to preview.
+- Migration preview adapters conservatively scan OpenSkills agent directories,
+  Skills-Manager config paths, SkillHub local state, and skills-manager-client
+  metadata. They report what would be imported and do not write skill records or
+  agent-root files.
+- The renderer exposes configured source, preview, and migration actions through
+  preload IPC only.
+
 ## Phase 7 Offline-First Sync
 
 The Phase 7 implementation keeps sync opt-in and local-first:
@@ -298,8 +339,9 @@ generated artifacts:
 - `release:inventory` writes a dependency inventory for root and workspace
   package manifests.
 - `release:smoke` validates package entrypoints, packaged main startup under
-  the Electron runtime, privacy defaults, database migration coverage, Phase 4
-  import/install smoke, first-launch window options, and redacted release logs.
+  the Electron runtime, privacy defaults, database migration coverage, local,
+  Git, and ZIP import, FTS search, skill export, install, app-owned uninstall,
+  first-launch window options, and redacted release logs.
 
 ## Phase 10 Maintainer Operations
 

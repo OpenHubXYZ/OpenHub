@@ -50,3 +50,9 @@ jobs:
 
       - name: Release smoke
         run: pnpm release:smoke
+
+      - name: Release checksums
+        run: pnpm release:checksums
+
+      - name: Release inventory
+        run: pnpm release:inventory

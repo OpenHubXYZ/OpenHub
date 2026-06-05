@@ -4,16 +4,36 @@ import path from 'node:path';
 
 import { createBuiltInAgentAdapters } from '@theopenhub/adapters';
 import {
+  createCollectionService,
+  type ContentStore,
   createContentStore,
+  createDiscoverService,
+  createExportService,
+  createGitSyncDriver,
+  createInMemorySecretStore,
   createImportService,
   createInstallService,
+  createMockRestSyncDriver,
   createPluginService,
+  createRestSyncDriver,
   createSecurityService,
+  createSharedFolderSyncDriver,
   createSyncService,
+  createVersionService,
   scanAgentLibraries,
+  type DiscoverPreviewResult as CoreDiscoverPreviewResult,
   type InstallPlan as CoreInstallPlan,
   type InstallResult as CoreInstallResult,
-  type SecurityScanResult as CoreSecurityScanResult
+  type PluginPermission,
+  type SecurityExemption as CoreSecurityExemption,
+  type SecurityScanResult as CoreSecurityScanResult,
+  type SecretStore,
+  type SyncConflictRecord as CoreSyncConflictRecord,
+  type SyncDriver,
+  type SyncInboxRecord as CoreSyncInboxRecord,
+  type SyncMode,
+  type SyncOutboxRecord as CoreSyncOutboxRecord,
+  type SyncProfile as CoreSyncProfile
 } from '@theopenhub/core';
 import {
   createFileDatabase,
@@ -30,18 +50,42 @@ import {
   desktopShellContract,
   parseIpcRequest,
   parseIpcResponse,
+  type CollectionExportResult,
+  type CollectionImportResult,
+  type CollectionRecord,
+  type DiscoverPreviewResult,
+  type DiscoverSource,
   type DesktopWorkspaceState,
+  type ExportSkillResult,
+  type FileDiff,
   type ImportedSkillResult,
   type InstallPlan,
   type InstallResult,
+  type InstallTarget,
+  type InstallUninstallResult,
   type IpcChannel,
   type LibraryScanResult,
   type LibrarySkillSummary,
+  type MigrationPreviewResult,
+  type PluginInstallResult,
+  type PluginRegistry,
   type PluginsState,
   type SecurityCenterState,
+  type SecurityExemption,
+  type SecurityFindingDetail,
+  type SecurityRevokeExemptionResult,
   type SecurityScanResult,
+  type SkillDetail,
+  type SkillSummary,
+  type SkillVersionSummary,
+  type StatusOnlyResult,
+  type SyncConflictRecord,
+  type SyncInboxRecord,
+  type SyncOutboxRecord,
+  type SyncProfile,
   type SyncCenterState,
-  type SyncStartupPlan
+  type SyncStartupPlan,
+  type VersionRollbackResult
 } from '@theopenhub/shared';
 
 export interface CreateDesktopRuntimeInput {
@@ -64,17 +108,95 @@ type RuntimeDispatchResult<C extends IpcChannel> = C extends typeof desktopShell
         ? DesktopWorkspaceState
         : C extends typeof desktopShellContract.importLocalFolder.channel
           ? ImportedSkillResult
-          : C extends typeof desktopShellContract.installCreatePlan.channel
-            ? InstallPlan
-            : C extends typeof desktopShellContract.installApplyPlan.channel
-              ? InstallResult
-              : C extends typeof desktopShellContract.securityScan.channel
-                ? SecurityScanResult
-                : C extends typeof desktopShellContract.syncStartupPlan.channel
-                  ? SyncStartupPlan
-                  : C extends typeof desktopShellContract.pluginsCenterState.channel
-                    ? PluginsState
-                    : never;
+          : C extends typeof desktopShellContract.importGit.channel
+            ? ImportedSkillResult
+            : C extends typeof desktopShellContract.importZip.channel
+              ? ImportedSkillResult
+              : C extends typeof desktopShellContract.importTar.channel
+                ? ImportedSkillResult
+                : C extends typeof desktopShellContract.importGitSparse.channel
+                  ? ImportedSkillResult
+                  : C extends typeof desktopShellContract.importMirror.channel
+                    ? ImportedSkillResult
+                    : C extends typeof desktopShellContract.exportSkill.channel
+                      ? ExportSkillResult
+                      : C extends typeof desktopShellContract.exportSignedSkill.channel
+                        ? ExportSkillResult
+                        : C extends typeof desktopShellContract.collectionCreate.channel
+                          ? CollectionRecord
+                          : C extends typeof desktopShellContract.collectionExport.channel
+                            ? CollectionExportResult
+                            : C extends typeof desktopShellContract.collectionImport.channel
+                              ? CollectionImportResult
+                              : C extends typeof desktopShellContract.librarySearch.channel
+                                ? SkillSummary[]
+                                : C extends typeof desktopShellContract.libraryDetail.channel
+                                  ? SkillDetail
+                                  : C extends typeof desktopShellContract.installCreatePlan.channel
+                                    ? InstallPlan
+                                    : C extends typeof desktopShellContract.installCreateMultiTargetPlan.channel
+                                      ? InstallPlan[]
+                                      : C extends typeof desktopShellContract.installApplyPlan.channel
+                                        ? InstallResult
+                                        : C extends typeof desktopShellContract.installListTargets.channel
+                                          ? InstallTarget[]
+                                          : C extends typeof desktopShellContract.installUninstall.channel
+                                            ? InstallUninstallResult
+                                            : C extends typeof desktopShellContract.versionList.channel
+                                              ? SkillVersionSummary[]
+                                              : C extends typeof desktopShellContract.versionDiff.channel
+                                                ? FileDiff[]
+                                                : C extends typeof desktopShellContract.versionRollback.channel
+                                                  ? VersionRollbackResult
+                                                  : C extends typeof desktopShellContract.securityScan.channel
+                                                    ? SecurityScanResult
+                                                    : C extends typeof desktopShellContract.securityRescan.channel
+                                                      ? SecurityScanResult[]
+                                                      : C extends typeof desktopShellContract.securityFindingDetail.channel
+                                                        ? SecurityFindingDetail
+                                                        : C extends typeof desktopShellContract.securityCreateExemption.channel
+                                                          ? SecurityExemption
+                                                          : C extends typeof desktopShellContract.securityRevokeExemption.channel
+                                                            ? SecurityRevokeExemptionResult
+                                                            : C extends typeof desktopShellContract.syncStartupPlan.channel
+                                                              ? SyncStartupPlan
+                                                              : C extends typeof desktopShellContract.syncCreateProfile.channel
+                                                                ? SyncProfile
+                                                                : C extends typeof desktopShellContract.syncInspectCredential.channel
+                                                                  ? { authRef: string; label: string; masked: string } | null
+                                                                  : C extends typeof desktopShellContract.syncDeleteCredential.channel
+                                                                    ? StatusOnlyResult
+                                                                    : C extends typeof desktopShellContract.syncEnqueueLocalChange.channel
+                                                                      ? SyncOutboxRecord
+                                                                      : C extends typeof desktopShellContract.syncPush.channel
+                                                                        ? StatusOnlyResult
+                                                                        : C extends typeof desktopShellContract.syncPull.channel
+                                                                          ? SyncInboxRecord[]
+                                                                          : C extends typeof desktopShellContract.syncListConflicts.channel
+                                                                            ? SyncConflictRecord[]
+                                                                            : C extends typeof desktopShellContract.syncResolveConflict.channel
+                                                                              ? SyncConflictRecord
+                                                                              : C extends typeof desktopShellContract.syncApplyConflict.channel
+                                                                                ? SyncConflictRecord & { draftVersionIds?: string[] }
+                                                                                : C extends typeof desktopShellContract.pluginsCenterState.channel
+                                                                  ? PluginsState
+                                                                  : C extends typeof desktopShellContract.pluginsInstall.channel
+                                                                    ? PluginInstallResult
+                                                                    : C extends typeof desktopShellContract.pluginsAuthorizePermission.channel
+                                                                      ? StatusOnlyResult
+                                                                      : C extends typeof desktopShellContract.pluginsEnable.channel
+                                                                        ? PluginRegistry
+                                                                        : C extends typeof desktopShellContract.pluginsDisable.channel
+                                                                          ? StatusOnlyResult
+                                                                          : C extends typeof desktopShellContract.pluginsRegistry.channel
+                                                                            ? PluginRegistry
+                                                                            : C extends typeof desktopShellContract.discoverAddSource.channel
+                                                                              ? DiscoverSource
+                                                                              : C extends typeof desktopShellContract.discoverPreviewSource.channel
+                                                                                ? DiscoverPreviewResult
+                                                                                : C extends typeof desktopShellContract.discoverMigrationPreview.channel
+                                                                                  ? MigrationPreviewResult
+                                                                                  : never;
 
 interface RuntimeMemory {
   importItems: Array<{ label: string; status: string }>;
@@ -93,10 +215,23 @@ export function createDesktopRuntime(input: CreateDesktopRuntimeInput): DesktopR
     contentStore,
     stagingDirectory: path.join(input.dataDirectory, 'staging')
   });
+  const exporter = createExportService({ database, contentStore });
+  const collections = createCollectionService({ database, contentStore });
   const installer = createInstallService({ database, contentStore });
+  const versions = createVersionService({ database, contentStore });
   const security = createSecurityService({ database, contentStore });
-  const sync = createSyncService({ database });
+  const secretStore = createInMemorySecretStore();
+  const sync = createSyncService({
+    database,
+    contentStore,
+    secretStore,
+    drivers: createRuntimeSyncDrivers(secretStore)
+  });
   const plugins = createPluginService({ database });
+  const discover = createDiscoverService({
+    database,
+    cacheDirectory: path.join(input.dataDirectory, 'discover-cache')
+  });
   const adapters = createBuiltInAgentAdapters(
     input.homeDirectory ? { homeDirectory: input.homeDirectory } : {}
   );
@@ -159,6 +294,128 @@ export function createDesktopRuntime(input: CreateDesktopRuntimeInput): DesktopR
         return parseIpcResponse(channel, result) as RuntimeDispatchResult<C>;
       }
 
+      if (channel === desktopShellContract.importGit.channel) {
+        await mkdir(input.dataDirectory, { recursive: true });
+        const imported = await importer.importGit(request as { gitUrl: string });
+        const result = toImportedSkillResult(imported);
+        memory.importItems = [{ label: result.skill.name, status: 'git imported' }, ...memory.importItems].slice(0, 5);
+        createUsageRepository(database).recordEvent({
+          eventType: 'skill.import',
+          skillId: result.skill.id,
+          skillName: result.skill.name,
+          subject: `Imported ${result.skill.name} from Git`,
+          metadata: {
+            fileCount: result.files.length,
+            stagedFrom: result.stagedFrom
+          }
+        });
+        return parseIpcResponse(channel, result) as RuntimeDispatchResult<C>;
+      }
+
+      if (channel === desktopShellContract.importZip.channel) {
+        await mkdir(input.dataDirectory, { recursive: true });
+        const imported = await importer.importZip(request as { zipPath: string });
+        const result = toImportedSkillResult(imported);
+        memory.importItems = [{ label: result.skill.name, status: 'zip imported' }, ...memory.importItems].slice(0, 5);
+        createUsageRepository(database).recordEvent({
+          eventType: 'skill.import',
+          skillId: result.skill.id,
+          skillName: result.skill.name,
+          subject: `Imported ${result.skill.name} from ZIP`,
+          metadata: {
+            fileCount: result.files.length,
+            stagedFrom: result.stagedFrom
+          }
+        });
+        return parseIpcResponse(channel, result) as RuntimeDispatchResult<C>;
+      }
+
+      if (channel === desktopShellContract.importTar.channel) {
+        await mkdir(input.dataDirectory, { recursive: true });
+        const imported = await importer.importTar(request as { tarPath: string });
+        const result = toImportedSkillResult(imported);
+        memory.importItems = [{ label: result.skill.name, status: 'tar imported' }, ...memory.importItems].slice(0, 5);
+        return parseIpcResponse(channel, result) as RuntimeDispatchResult<C>;
+      }
+
+      if (channel === desktopShellContract.importGitSparse.channel) {
+        await mkdir(input.dataDirectory, { recursive: true });
+        const imported = await importer.importGitSparse(request as { gitUrl: string; subpath: string });
+        const result = toImportedSkillResult(imported);
+        memory.importItems = [{ label: result.skill.name, status: 'sparse imported' }, ...memory.importItems].slice(0, 5);
+        return parseIpcResponse(channel, result) as RuntimeDispatchResult<C>;
+      }
+
+      if (channel === desktopShellContract.importMirror.channel) {
+        await mkdir(input.dataDirectory, { recursive: true });
+        const imported = await importer.importMirror(request as { mirrorDirectory: string });
+        const result = toImportedSkillResult(imported);
+        memory.importItems = [{ label: result.skill.name, status: 'mirror imported' }, ...memory.importItems].slice(0, 5);
+        return parseIpcResponse(channel, result) as RuntimeDispatchResult<C>;
+      }
+
+      if (channel === desktopShellContract.exportSkill.channel) {
+        const result = await exporter.exportSkill(request as { skillId: string; outputDirectory: string });
+        const skill = createSkillRepository(database).getSkill((request as { skillId: string }).skillId);
+        createUsageRepository(database).recordEvent({
+          eventType: 'export.package',
+          ...(skill ? { skillId: skill.id, skillName: skill.name } : {}),
+          subject: `Exported ${skill?.name ?? 'skill package'}`,
+          metadata: {
+            outputDirectory: result.outputDirectory
+          }
+        });
+        return parseIpcResponse(channel, result) as RuntimeDispatchResult<C>;
+      }
+
+      if (channel === desktopShellContract.exportSignedSkill.channel) {
+        const result = await exporter.exportSignedSkill(
+          request as { skillId: string; outputDirectory: string; signer: string }
+        );
+        return parseIpcResponse(channel, result) as RuntimeDispatchResult<C>;
+      }
+
+      if (channel === desktopShellContract.collectionCreate.channel) {
+        const result = collections.createCollection(
+          request as { name: string; description: string; skillIds: string[] }
+        );
+        return parseIpcResponse(channel, result) as RuntimeDispatchResult<C>;
+      }
+
+      if (channel === desktopShellContract.collectionExport.channel) {
+        const result = await collections.exportCollection(
+          request as { collectionId: string; outputDirectory: string }
+        );
+        return parseIpcResponse(channel, result) as RuntimeDispatchResult<C>;
+      }
+
+      if (channel === desktopShellContract.collectionImport.channel) {
+        const result = await collections.importCollection(request as { packageDirectory: string });
+        return parseIpcResponse(
+          channel,
+          {
+            collection: result.collection,
+            skills: result.skills.map(toSkillSummary)
+          }
+        ) as RuntimeDispatchResult<C>;
+      }
+
+      if (channel === desktopShellContract.librarySearch.channel) {
+        const searchRequest = request as { query: string; favoritesOnly?: boolean };
+        const result = createSkillRepository(database)
+          .searchSkills(
+            searchRequest.query,
+            searchRequest.favoritesOnly === undefined ? {} : { favoritesOnly: searchRequest.favoritesOnly }
+          )
+          .map(toSkillSummary);
+        return parseIpcResponse(channel, result) as RuntimeDispatchResult<C>;
+      }
+
+      if (channel === desktopShellContract.libraryDetail.channel) {
+        const result = await skillDetail(database, contentStore, (request as { skillId: string }).skillId);
+        return parseIpcResponse(channel, result) as RuntimeDispatchResult<C>;
+      }
+
       if (channel === desktopShellContract.installCreatePlan.channel) {
         const plan = await installer.createInstallPlan(
           request as {
@@ -168,6 +425,8 @@ export function createDesktopRuntime(input: CreateDesktopRuntimeInput): DesktopR
             agentDisplayName: string;
             adapterVersion: string;
             scope: string;
+            rootKind?: 'user' | 'project';
+            projectionMode?: 'copy' | 'symlink' | 'hardlink' | 'mirror-export';
           }
         );
         const result = toInstallPlan(plan);
@@ -212,12 +471,30 @@ export function createDesktopRuntime(input: CreateDesktopRuntimeInput): DesktopR
         return parseIpcResponse(channel, result) as RuntimeDispatchResult<C>;
       }
 
+      if (channel === desktopShellContract.installCreateMultiTargetPlan.channel) {
+        const plans = await installer.createMultiTargetInstallPlan(
+          request as {
+            skillId: string;
+            projectionMode?: 'copy' | 'symlink' | 'hardlink' | 'mirror-export';
+            targets: Array<{
+              targetRoot: string;
+              agentCode: string;
+              agentDisplayName: string;
+              adapterVersion: string;
+              scope: string;
+              rootKind?: 'user' | 'project';
+            }>;
+          }
+        );
+        return parseIpcResponse(channel, plans.map(toInstallPlan)) as RuntimeDispatchResult<C>;
+      }
+
       if (channel === desktopShellContract.installApplyPlan.channel) {
         const { plan } = request as { plan: InstallPlan };
         const result = toInstallResult(await installer.applyInstallPlan(plan as CoreInstallPlan));
         memory.installResult = {
           status: result.status,
-          message: `Installed ${plan.writes.length} files by copy projection.`
+          message: `${result.status === 'exported' ? 'Exported' : 'Installed'} ${plan.writes.length} files by ${plan.projectionMode} projection.`
         };
         createUsageRepository(database).recordEvent({
           eventType: 'install.apply',
@@ -229,6 +506,74 @@ export function createDesktopRuntime(input: CreateDesktopRuntimeInput): DesktopR
           metadata: {
             installationId: result.installationId,
             writeCount: plan.writes.length
+          }
+        });
+        return parseIpcResponse(channel, result) as RuntimeDispatchResult<C>;
+      }
+
+      if (channel === desktopShellContract.installListTargets.channel) {
+        const roots = (
+          await Promise.all(adapters.map((adapter) => adapter.detectRoots()))
+        )
+          .flat()
+          .map((root) => ({
+            agentCode: root.agentCode,
+            agentDisplayName: root.agentDisplayName,
+            adapterVersion: root.adapterVersion,
+            rootPath: root.rootPath,
+            scope: root.scope,
+            writable: root.writable,
+            isDefault: root.isDefault
+          }))
+          .sort((left, right) => `${left.agentCode}:${left.rootPath}`.localeCompare(`${right.agentCode}:${right.rootPath}`));
+        return parseIpcResponse(channel, roots) as RuntimeDispatchResult<C>;
+      }
+
+      if (channel === desktopShellContract.installUninstall.channel) {
+        const { installationId } = request as { installationId: string };
+        await installer.uninstall({ installationId });
+        const result = { status: 'uninstalled' as const, installationId };
+        memory.installResult = {
+          status: result.status,
+          message: `Uninstalled app-owned files for ${installationId}.`
+        };
+        createUsageRepository(database).recordEvent({
+          eventType: 'install.uninstall',
+          subject: `Uninstalled ${installationId}`,
+          metadata: { installationId }
+        });
+        return parseIpcResponse(channel, result) as RuntimeDispatchResult<C>;
+      }
+
+      if (channel === desktopShellContract.versionList.channel) {
+        const result = versions.listVersions(request as { skillId: string });
+        return parseIpcResponse(channel, result) as RuntimeDispatchResult<C>;
+      }
+
+      if (channel === desktopShellContract.versionDiff.channel) {
+        const result = versions.diffVersions(
+          request as { fromVersionId: string; toVersionId: string }
+        );
+        return parseIpcResponse(channel, result) as RuntimeDispatchResult<C>;
+      }
+
+      if (channel === desktopShellContract.versionRollback.channel) {
+        const { installationId, targetVersionId } = request as {
+          installationId: string;
+          targetVersionId: string;
+        };
+        await versions.rollbackInstallation({ installationId, targetVersionId });
+        const result = {
+          status: 'rolled_back' as const,
+          installationId,
+          versionId: targetVersionId
+        };
+        createUsageRepository(database).recordEvent({
+          eventType: 'install.rollback',
+          subject: `Rolled back ${installationId}`,
+          metadata: {
+            installationId,
+            targetVersionId
           }
         });
         return parseIpcResponse(channel, result) as RuntimeDispatchResult<C>;
@@ -253,12 +598,188 @@ export function createDesktopRuntime(input: CreateDesktopRuntimeInput): DesktopR
         return parseIpcResponse(channel, result) as RuntimeDispatchResult<C>;
       }
 
+      if (channel === desktopShellContract.securityRescan.channel) {
+        const skillIds =
+          (request as { skillIds?: string[] }).skillIds ??
+          createSkillRepository(database).listSkills().map((skill) => skill.id);
+        const results = (await security.batchRescan({ skillIds })).map(toSecurityScanResult);
+        for (const result of results) {
+          recordReviewForSecurityScan(database, result, createSkillRepository(database).getSkill(result.skillId));
+        }
+        return parseIpcResponse(channel, results) as RuntimeDispatchResult<C>;
+      }
+
+      if (channel === desktopShellContract.securityFindingDetail.channel) {
+        const result = securityFindingDetail(
+          database,
+          request as { scanId?: string; skillId?: string; ruleId?: string }
+        );
+        return parseIpcResponse(channel, result) as RuntimeDispatchResult<C>;
+      }
+
+      if (channel === desktopShellContract.securityCreateExemption.channel) {
+        const result = toSecurityExemption(
+          security.createExemption(request as { skillId: string; scope: string; reason: string })
+        );
+        return parseIpcResponse(channel, result) as RuntimeDispatchResult<C>;
+      }
+
+      if (channel === desktopShellContract.securityRevokeExemption.channel) {
+        const { exemptionId } = request as { exemptionId: string };
+        security.revokeExemption({ exemptionId });
+        return parseIpcResponse(
+          channel,
+          { status: 'revoked', exemptionId }
+        ) as RuntimeDispatchResult<C>;
+      }
+
       if (channel === desktopShellContract.syncStartupPlan.channel) {
         return parseIpcResponse(channel, sync.getStartupPlan()) as RuntimeDispatchResult<C>;
       }
 
+      if (channel === desktopShellContract.syncCreateProfile.channel) {
+        const result = toSyncProfile(
+          sync.createProfile(
+            request as {
+              mode: SyncMode;
+              remoteUrl: string;
+              enabled: boolean;
+              authRef?: string | null;
+              auth?: { label: string; token: string };
+            }
+          )
+        );
+        return parseIpcResponse(channel, result) as RuntimeDispatchResult<C>;
+      }
+
+      if (channel === desktopShellContract.syncInspectCredential.channel) {
+        const result = sync.inspectCredential(request as { authRef: string });
+        return parseIpcResponse(channel, result) as RuntimeDispatchResult<C>;
+      }
+
+      if (channel === desktopShellContract.syncDeleteCredential.channel) {
+        sync.deleteCredential(request as { authRef: string });
+        return parseIpcResponse(channel, { status: 'deleted' }) as RuntimeDispatchResult<C>;
+      }
+
+      if (channel === desktopShellContract.syncEnqueueLocalChange.channel) {
+        const result = toSyncOutboxRecord(
+          sync.recordLocalChange(
+            request as {
+              profileId: string;
+              entityType: string;
+              entityId: string;
+              payload: unknown;
+            }
+          )
+        );
+        return parseIpcResponse(channel, result) as RuntimeDispatchResult<C>;
+      }
+
+      if (channel === desktopShellContract.syncPush.channel) {
+        await sync.pushOutbox(request as { profileId: string });
+        return parseIpcResponse(channel, { status: 'pushed' }) as RuntimeDispatchResult<C>;
+      }
+
+      if (channel === desktopShellContract.syncPull.channel) {
+        const result = (await sync.pullInbox(request as { profileId: string })).map(toSyncInboxRecord);
+        return parseIpcResponse(channel, result) as RuntimeDispatchResult<C>;
+      }
+
+      if (channel === desktopShellContract.syncListConflicts.channel) {
+        const result = listSyncConflicts(database, request as { profileId?: string });
+        return parseIpcResponse(channel, result) as RuntimeDispatchResult<C>;
+      }
+
+      if (channel === desktopShellContract.syncResolveConflict.channel) {
+        const result = toSyncConflictRecord(
+          sync.resolveConflict(request as { conflictId: string; resolution: string })
+        );
+        return parseIpcResponse(channel, result) as RuntimeDispatchResult<C>;
+      }
+
+      if (channel === desktopShellContract.syncApplyConflict.channel) {
+        const result = await sync.applyConflictResolution(
+          request as {
+            conflictId: string;
+            confirm: boolean;
+            resolution: Parameters<typeof sync.applyConflictResolution>[0]['resolution'];
+          }
+        );
+        return parseIpcResponse(
+          channel,
+          {
+            ...toSyncConflictRecord(result),
+            ...(result.draftVersionIds ? { draftVersionIds: result.draftVersionIds } : {})
+          }
+        ) as RuntimeDispatchResult<C>;
+      }
+
       if (channel === desktopShellContract.pluginsCenterState.channel) {
         return parseIpcResponse(channel, plugins.getPluginCenterState()) as RuntimeDispatchResult<C>;
+      }
+
+      if (channel === desktopShellContract.pluginsInstall.channel) {
+        const installed = await plugins.installPlugin(request as { rootPath: string });
+        const result = {
+          id: installed.id,
+          name: installed.name,
+          version: installed.version,
+          status: installed.status,
+          rootPath: installed.rootPath
+        };
+        return parseIpcResponse(channel, result) as RuntimeDispatchResult<C>;
+      }
+
+      if (channel === desktopShellContract.pluginsAuthorizePermission.channel) {
+        plugins.authorizePermission(
+          request as { pluginId: string; permission: PluginPermission; reason: string }
+        );
+        return parseIpcResponse(channel, { status: 'authorized' }) as RuntimeDispatchResult<C>;
+      }
+
+      if (channel === desktopShellContract.pluginsEnable.channel) {
+        const result = plugins.getRegistry();
+        const enabled = await plugins.enablePlugin(request as { pluginId: string });
+        return parseIpcResponse(channel, enabled ?? result) as RuntimeDispatchResult<C>;
+      }
+
+      if (channel === desktopShellContract.pluginsDisable.channel) {
+        plugins.disablePlugin(request as { pluginId: string });
+        return parseIpcResponse(channel, { status: 'disabled' }) as RuntimeDispatchResult<C>;
+      }
+
+      if (channel === desktopShellContract.pluginsRegistry.channel) {
+        return parseIpcResponse(channel, plugins.getRegistry()) as RuntimeDispatchResult<C>;
+      }
+
+      if (channel === desktopShellContract.discoverAddSource.channel) {
+        const result = discover.addSource(
+          request as {
+            name: string;
+            sourceType: 'local' | 'git';
+            url: string;
+            trustLevel: string;
+          }
+        );
+        return parseIpcResponse(channel, result) as RuntimeDispatchResult<C>;
+      }
+
+      if (channel === desktopShellContract.discoverPreviewSource.channel) {
+        const result = toDiscoverPreviewResult(
+          await discover.previewSource(request as { sourceId: string })
+        );
+        return parseIpcResponse(channel, result) as RuntimeDispatchResult<C>;
+      }
+
+      if (channel === desktopShellContract.discoverMigrationPreview.channel) {
+        const result = await discover.previewMigration(
+          request as {
+            adapter: 'openskills' | 'skills-manager' | 'skillhub' | 'skills-manager-client';
+            sourcePath: string;
+          }
+        );
+        return parseIpcResponse(channel, result) as RuntimeDispatchResult<C>;
       }
 
       throw new Error(`Unhandled IPC channel: ${channel}`);
@@ -412,15 +933,393 @@ function syncCenterState(database: SqliteDatabase): SyncCenterState {
   return { profiles, outbox, inbox, conflicts };
 }
 
+function createRuntimeSyncDrivers(secretStore: SecretStore): Partial<Record<SyncMode, SyncDriver>> {
+  const mockRest = createMockRestSyncDriver();
+
+  return {
+    'shared-folder': {
+      push(profile, records) {
+        return createSharedFolderSyncDriver({ directory: profile.remoteUrl }).push(profile, records);
+      },
+      pull(profile) {
+        return createSharedFolderSyncDriver({ directory: profile.remoteUrl }).pull(profile);
+      }
+    },
+    git: {
+      push(profile, records) {
+        return createGitSyncDriver({ repositoryDirectory: profile.remoteUrl }).push(profile, records);
+      },
+      pull(profile) {
+        return createGitSyncDriver({ repositoryDirectory: profile.remoteUrl }).pull(profile);
+      }
+    },
+    rest: createRestSyncDriver({
+      secretStore,
+      async request(request) {
+        const init: RequestInit = {
+          method: request.method,
+          headers: request.headers,
+          ...(request.body === undefined ? {} : { body: request.body })
+        };
+        const response = await fetch(request.url, init);
+        return {
+          status: response.status,
+          json: () => response.json() as Promise<unknown>
+        };
+      }
+    }),
+    'mock-rest': mockRest
+  };
+}
+
+async function skillDetail(
+  database: SqliteDatabase,
+  contentStore: ContentStore,
+  skillId: string
+): Promise<SkillDetail> {
+  const row = database
+    .prepare(
+      `
+        select
+          s.id,
+          s.slug,
+          s.name,
+          s.description,
+          s.tags_json as tagsJson,
+          sv.id as versionId,
+          sv.version_no as versionNo,
+          coalesce(src.source_type, 'unknown') as sourceType,
+          src.url as sourceUrl,
+          coalesce(src.trust_level, 'unknown') as trustLevel
+        from skills s
+        join skill_versions sv on sv.skill_id = s.id
+        left join sources src on src.id = s.canonical_source_id
+        where s.id = @skillId
+          and sv.version_no = (
+            select max(version_no)
+            from skill_versions
+            where skill_id = @skillId
+          )
+      `
+    )
+    .get({ skillId }) as
+    | {
+        id: string;
+        slug: string;
+        name: string;
+        description: string;
+        tagsJson: string;
+        versionId: string;
+        versionNo: number;
+        sourceType: string;
+        sourceUrl: string | null;
+        trustLevel: string;
+      }
+    | undefined;
+
+  if (!row) {
+    throw new Error(`Skill not found: ${skillId}`);
+  }
+
+  const files = latestSkillFiles(database, skillId);
+  const manifest = files.find((file) => file.relativePath === 'SKILL.md');
+  const skillMarkdown = manifest ? (await contentStore.readBlob(manifest.hash)).toString('utf8') : '';
+  const latestScan = latestSecurityScan(database, skillId);
+
+  return {
+    skill: {
+      id: row.id,
+      versionId: row.versionId,
+      slug: row.slug,
+      name: row.name,
+      description: row.description,
+      tags: JSON.parse(row.tagsJson) as string[],
+      versionNo: row.versionNo
+    },
+    source: {
+      type: row.sourceType,
+      url: row.sourceUrl,
+      trustLevel: row.trustLevel
+    },
+    versions: versionSummaries(database, skillId),
+    files,
+    skillMarkdown,
+    latestScan,
+    installations: installationSummaries(database, skillId),
+    riskStatus: latestScan ? (latestScan.blocked ? 'blocked' : latestScan.level) : 'unscanned'
+  };
+}
+
+function latestSkillFiles(database: SqliteDatabase, skillId: string): SkillDetail['files'] {
+  return database
+    .prepare(
+      `
+        select
+          sf.relative_path as relativePath,
+          sf.blob_hash as hash,
+          sf.file_size as size,
+          sf.file_kind as kind
+        from skill_files sf
+        join skill_versions sv on sv.id = sf.skill_version_id
+        where sv.skill_id = @skillId
+          and sv.version_no = (
+            select max(version_no)
+            from skill_versions
+            where skill_id = @skillId
+          )
+        order by
+          case when sf.relative_path = 'SKILL.md' then 0 else 1 end,
+          sf.relative_path collate nocase
+      `
+    )
+    .all({ skillId }) as SkillDetail['files'];
+}
+
+function versionSummaries(database: SqliteDatabase, skillId: string): SkillVersionSummary[] {
+  return database
+    .prepare(
+      `
+        select
+          id as versionId,
+          skill_id as skillId,
+          version_no as versionNo,
+          coalesce(change_summary, '') as changeSummary,
+          created_at as createdAt,
+          lifecycle,
+          release_channel as releaseChannel
+        from skill_versions
+        where skill_id = ?
+        order by version_no desc
+      `
+    )
+    .all(skillId) as SkillVersionSummary[];
+}
+
+function latestSecurityScan(
+  database: SqliteDatabase,
+  skillId: string
+): SkillDetail['latestScan'] {
+  const row = database
+    .prepare(
+      `
+        select
+          ss.id as scanId,
+          ss.score,
+          ss.level,
+          ss.blocked,
+          ss.scanned_at as scannedAt
+        from security_scans ss
+        join skill_versions sv on sv.id = ss.skill_version_id
+        where sv.skill_id = ?
+        order by ss.scanned_at desc
+        limit 1
+      `
+    )
+    .get(skillId) as
+    | {
+        scanId: string;
+        score: number;
+        level: string;
+        blocked: number;
+        scannedAt: string;
+      }
+    | undefined;
+
+  return row
+    ? {
+        scanId: row.scanId,
+        score: row.score,
+        level: row.level,
+        blocked: row.blocked === 1,
+        scannedAt: row.scannedAt
+      }
+    : null;
+}
+
+function installationSummaries(
+  database: SqliteDatabase,
+  skillId: string
+): SkillDetail['installations'] {
+  return database
+    .prepare(
+      `
+        select
+          i.id as installationId,
+          a.display_name as agent,
+          ar.root_path as rootPath,
+          ar.scope,
+          i.install_path as installPath,
+          i.status,
+          sv.version_no as versionNo
+        from installations i
+        join agent_roots ar on ar.id = i.agent_root_id
+        join agents a on a.id = ar.agent_id
+        join skill_versions sv on sv.id = i.installed_version_id
+        where i.skill_id = ?
+        order by i.installed_at desc
+      `
+    )
+    .all(skillId) as SkillDetail['installations'];
+}
+
+function securityFindingDetail(
+  database: SqliteDatabase,
+  input: { scanId?: string; skillId?: string; ruleId?: string }
+): SecurityFindingDetail {
+  const rows = database
+    .prepare(
+      `
+        select
+          s.name as skillName,
+          ss.id as scanId,
+          sf.rule_id as ruleId,
+          sf.severity,
+          sf.category,
+          sf.relative_path as relativePath,
+          sf.line_no as lineNo,
+          sf.excerpt
+        from security_findings sf
+        join security_scans ss on ss.id = sf.scan_id
+        join skill_versions sv on sv.id = ss.skill_version_id
+        join skills s on s.id = sv.skill_id
+        where (@scanId is null or ss.id = @scanId)
+          and (@skillId is null or s.id = @skillId)
+          and (@ruleId is null or sf.rule_id = @ruleId)
+        order by
+          case sf.severity
+            when 'critical' then 0
+            when 'high' then 1
+            when 'medium' then 2
+            else 3
+          end,
+          sf.relative_path collate nocase
+        limit 1
+      `
+    )
+    .all({
+      scanId: input.scanId ?? null,
+      skillId: input.skillId ?? null,
+      ruleId: input.ruleId ?? null
+    }) as Array<{
+    skillName: string;
+    scanId: string;
+    ruleId: string;
+    severity: string;
+    category: string;
+    relativePath: string;
+    lineNo: number | null;
+    excerpt: string;
+  }>;
+  const row = rows[0];
+  if (!row) {
+    throw new Error('Security finding not found');
+  }
+
+  return {
+    ...row,
+    ruleName: titleizeRuleId(row.ruleId)
+  };
+}
+
+function toSecurityExemption(exemption: CoreSecurityExemption): SecurityExemption {
+  return {
+    id: exemption.id,
+    skillId: exemption.skillId,
+    scope: exemption.scope,
+    reason: exemption.reason,
+    createdAt: exemption.createdAt,
+    revokedAt: exemption.revokedAt
+  };
+}
+
+function toSyncProfile(profile: CoreSyncProfile): SyncProfile {
+  return { ...profile };
+}
+
+function toSyncOutboxRecord(record: CoreSyncOutboxRecord): SyncOutboxRecord {
+  return { ...record };
+}
+
+function toSyncInboxRecord(record: CoreSyncInboxRecord): SyncInboxRecord {
+  return { ...record };
+}
+
+function toSyncConflictRecord(record: CoreSyncConflictRecord): SyncConflictRecord {
+  return { ...record };
+}
+
+function listSyncConflicts(
+  database: SqliteDatabase,
+  input: { profileId?: string }
+): SyncConflictRecord[] {
+  const query = `
+    select
+      id,
+      profile_id as profileId,
+      entity_type as entityType,
+      entity_id as entityId,
+      base_json as baseJson,
+      local_json as localJson,
+      remote_json as remoteJson,
+      status,
+      resolution_json as resolutionJson
+    from sync_conflicts
+    where (@profileId is null or profile_id = @profileId)
+    order by created_at desc
+  `;
+  return database
+    .prepare(query)
+    .all({ profileId: input.profileId ?? null })
+    .map(syncConflictRow);
+}
+
+function syncConflictRow(row: unknown): SyncConflictRecord {
+  const conflict = row as {
+    id: string;
+    profileId: string;
+    entityType: string;
+    entityId: string;
+    baseJson: string;
+    localJson: string;
+    remoteJson: string;
+    status: 'open' | 'resolved';
+    resolutionJson: string | null;
+  };
+
+  return {
+    id: conflict.id,
+    profileId: conflict.profileId,
+    entityType: conflict.entityType,
+    entityId: conflict.entityId,
+    base: JSON.parse(conflict.baseJson),
+    local: JSON.parse(conflict.localJson),
+    remote: JSON.parse(conflict.remoteJson),
+    status: conflict.status,
+    resolution: conflict.resolutionJson
+      ? (JSON.parse(conflict.resolutionJson) as { resolution: string }).resolution
+      : null
+  };
+}
+
+function toDiscoverPreviewResult(input: CoreDiscoverPreviewResult): DiscoverPreviewResult {
+  return {
+    source: input.source,
+    skills: input.skills,
+    writesPlanned: input.writesPlanned
+  };
+}
+
 function toImportedSkillResult(input: {
   skill: SkillRecord;
   files: ImportedSkillResult['files'];
   stagedFrom: string;
+  signatureStatus?: ImportedSkillResult['signatureStatus'];
 }): ImportedSkillResult {
   return {
     skill: toSkillSummary(input.skill),
     files: input.files,
-    stagedFrom: input.stagedFrom
+    stagedFrom: input.stagedFrom,
+    ...(input.signatureStatus ? { signatureStatus: input.signatureStatus } : {})
   };
 }
 
@@ -446,6 +1345,8 @@ function toInstallPlan(plan: CoreInstallPlan): InstallPlan {
     agentDisplayName: plan.agentDisplayName,
     adapterVersion: plan.adapterVersion,
     scope: plan.scope,
+    rootKind: plan.rootKind,
+    projectionMode: plan.projectionMode,
     conflictState: plan.conflictState,
     writes: plan.writes
   };
@@ -455,6 +1356,7 @@ function toInstallResult(result: CoreInstallResult): InstallResult {
   return {
     status: result.status,
     installationId: result.installationId,
+    ...(result.targetRoot ? { targetRoot: result.targetRoot } : {}),
     security: {
       level: result.security.level,
       warnings: result.security.warnings

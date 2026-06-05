@@ -42,6 +42,21 @@ Supported permissions:
 Unknown permissions, unknown capability types, unsafe entry paths, incompatible
 API versions, and entry integrity mismatches reject installation or enablement.
 
+## User Workflow
+
+Plugins are managed from Settings through preload IPC:
+
+- install a local plugin folder containing `plugin.json`
+- inspect manifest details, declared permissions, grants, capabilities, and
+  recorded errors
+- authorize a declared permission with a reason
+- enable the plugin after all declared permissions have active grants
+- inspect the runtime registry after enablement
+- disable the plugin and remove its registered capabilities from the registry
+
+Installation records metadata and validation failures in SQLite. Enablement is
+the step that runs the constrained registration entry.
+
 ## Entry Module
 
 The v1 entry is a small JavaScript module that assigns `exports.register`:
@@ -64,6 +79,7 @@ The host currently exposes registration methods only:
 
 Every registration must match a declared manifest capability. Disabling a plugin
 removes all capabilities registered by that plugin from the runtime registry.
+Undeclared registrations fail and are recorded as plugin errors for the UI.
 
 ## Security Limits
 

@@ -33,10 +33,10 @@ real user directories.
 
 - Add Codex, Claude, Gemini, and OpenCode adapters.
 - Parse `SKILL.md` files.
-- Expose Library, Skill Detail, and Settings roots UI.
+- Expose Library search, Skill Detail, and Settings roots UI.
 
 Acceptance: fixture roots scan, malformed files produce explainable errors, and
-IPC library tests pass.
+IPC library search/detail tests pass.
 
 ## Phase 4: Import, Export, Install, Uninstall
 
@@ -45,7 +45,18 @@ IPC library tests pass.
   portable export packages.
 
 Acceptance: fixture imports, security rejection fixtures, install plans,
-uninstall safety, and UI flows pass.
+export packages, uninstall safety, and UI flows pass.
+
+## Phase 4.5: Discover Sources And Migration Preview
+
+- Add local and Git source configuration.
+- Cache source preview listings.
+- Add conservative migration previews for OpenSkills, Skills-Manager, SkillHub,
+  and skills-manager-client local state.
+
+Acceptance: adding a source performs no network or import writes by itself,
+preview reports candidate skills before import, migration preview is read-only,
+and no account, telemetry, or remote catalog fetch is required by default.
 
 ## Phase 5: Security Center And Governance
 
@@ -67,22 +78,27 @@ Acceptance: dedupe, versioning, diff, rollback, and collection tests pass.
 - Add disabled-by-default sync profiles, outbox, inbox, shared folder sync, Git
   sync, mock REST interface, and conflict center.
 
-Acceptance: no profile means no sync activity, fixture sync works, and conflict
-lifecycle tests pass.
+Acceptance: no profile means no sync activity, shared-folder and Git fixture
+sync work through explicit push/pull actions, credentials are represented by
+`auth_ref`, and conflict lifecycle tests pass.
 
 ## Phase 8: Plugin Runtime And Extension APIs
 
 - Add manifest validation, constrained host API, permissions, and plugin UI.
 
-Acceptance: unauthorized plugins cannot access agent roots or network APIs, and
-example plugin contract tests pass.
+Acceptance: unauthorized plugins cannot enable, unsafe entries and integrity
+mismatches fail visibly, registered capabilities appear only after enablement,
+disabling a plugin removes them from the registry, and example plugin contract
+tests pass.
 
 ## Phase 9: Packaging, Release, OSS Launch
 
 - Add desktop packaging, smoke tests, release checklist, checksums, dependency
   inventory, and launch README.
 
-Acceptance: current-platform package build and Phase 4 smoke flow pass.
+Acceptance: current-platform package build and smoke coverage for search,
+Git/ZIP import, export, install, uninstall, sync disabled default, and plugin
+disabled default pass.
 
 ## Phase 10: Maintainer Operations
 

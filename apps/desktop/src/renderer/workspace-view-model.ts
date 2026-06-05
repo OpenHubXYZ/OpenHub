@@ -181,15 +181,8 @@ export function createWorkspaceViewModel(state: DesktopWorkspaceState): Workspac
   const blockedCount = state.securityCenter.queue.filter((item) => item.status.toLowerCase().includes('blocked')).length;
   const openFindings = state.securityCenter.findings.length;
   const runtimeReviewCount = state.reviewCenter.queue.filter((item) => item.status === 'Open').length;
-  const reviewCount =
-    openFindings + (state.reviewCenter.queue.length > 0 ? runtimeReviewCount : fixtureBacked.reviewQueue.filter((item) => item.status === 'Open').length);
-  const agentRoots = cloneAgentRoots(fixtureBacked.agentRoots);
-  const hasUsageState =
-    state.usageCenter.dailyActivity.length > 0 ||
-    state.usageCenter.topSkills.length > 0 ||
-    state.usageCenter.agentSplit.length > 0 ||
-    state.usageCenter.recent.length > 0 ||
-    Object.values(state.usageCenter.totals).some((value) => value > 0);
+  const reviewCount = openFindings + runtimeReviewCount;
+  const agentRoots = createAgentRootViews(state.librarySkills);
 
   return {
     appInfo: state.appInfo,
@@ -198,72 +191,59 @@ export function createWorkspaceViewModel(state: DesktopWorkspaceState): Workspac
       key,
       label: pageLabels[key]
     })),
-    databasePath: fixtureBacked.databasePath,
-    lastScanLabel: fixtureBacked.lastScanLabel,
+    databasePath: 'App data SQLite',
+    lastScanLabel: state.managementFlow.importItems.length > 0 ? 'Last scan: current session' : 'No scan run this session',
     dashboard: {
       metrics: [
-        metric('Indexed skills', state.librarySkills.length, `${state.skills.length} imported skills`),
-        metric('Installed projections', installedCount, `${agentRoots.length} agents detected`),
+        metric('Indexed skills', state.librarySkills.length, `${state.skills.length} local skill records`),
+        metric('Installed projections', installedCount, `${agentRoots.length} indexed roots`),
         metric('Needs review', reviewCount, `${openFindings} security findings`),
         metric('Blocked installs', blockedCount, 'policy enforced')
       ],
-      activity: [
-        ...state.managementFlow.importItems.map((item) => ({ label: item.label, value: item.status })),
-        ...fixtureBacked.activity
-      ].slice(0, 5),
+      activity: state.managementFlow.importItems.map((item) => ({ label: item.label, value: item.status })).slice(0, 5),
       readinessRows: createReadinessRows(state),
       agentRoots,
-      agentCoverageBars: [...fixtureBacked.agentCoverageBars]
+      agentCoverageBars: normalizeBars(agentRoots.map((root) => Number.parseInt(root.status, 10)).filter((count) => count > 0))
     },
     discover: {
-      sources: cloneSources(fixtureBacked.sources),
-      sourceUpdates: cloneTableRows(fixtureBacked.sourceUpdates)
+      sources: [],
+      sourceUpdates: []
     },
     installs: {
       plans: createInstallPlanRows(state),
-      resultStream: [
-        ...(state.managementFlow.installResult
-          ? [{ label: state.managementFlow.installResult.message, value: state.managementFlow.installResult.status }]
-          : []),
-        ...fixtureBacked.installResults
-      ].slice(0, 4),
-      exportPackages: cloneKeyValueRows(fixtureBacked.exportPackages)
+      resultStream: state.managementFlow.installResult
+        ? [{ label: state.managementFlow.installResult.message, value: state.managementFlow.installResult.status }]
+        : [],
+      exportPackages: []
     },
     usage: {
-      metrics: hasUsageState
-        ? [
-            metric('Skill launches', state.usageCenter.totals.launches, 'local events only'),
-            metric('Install actions', state.usageCenter.totals.installs, `${state.managementFlow.installPlan ? 1 : 0} active plan`),
-            metric('Security scans', state.usageCenter.totals.scans, '100% stored locally'),
-            metric('Exports', state.usageCenter.totals.exports, 'hash verified')
-          ]
-        : [
-            metric('Skill launches', fixtureBacked.usageTotals.launches, 'local events only'),
-            metric('Install actions', fixtureBacked.usageTotals.installs, `${state.managementFlow.installPlan ? 1 : 0} active plan`),
-            metric('Security scans', Math.max(fixtureBacked.usageTotals.scans, state.securityCenter.history.length), '100% stored locally'),
-            metric('Exports', fixtureBacked.usageTotals.exports, 'hash verified')
-          ],
+      metrics: [
+        metric('Skill launches', state.usageCenter.totals.launches, 'local events only'),
+        metric('Install actions', state.usageCenter.totals.installs, `${state.managementFlow.installPlan ? 1 : 0} active plan`),
+        metric('Security scans', state.usageCenter.totals.scans, '100% stored locally'),
+        metric('Exports', state.usageCenter.totals.exports, 'hash verified')
+      ],
       dailyBars:
         state.usageCenter.dailyActivity.length > 0
           ? normalizeBars(state.usageCenter.dailyActivity.map((item) => item.count))
-          : [...fixtureBacked.dailyBars],
+          : [],
       topSkills:
         state.usageCenter.topSkills.length > 0
           ? state.usageCenter.topSkills.map((item) => ({ label: item.skillName, value: String(item.count) }))
-          : cloneKeyValueRows(fixtureBacked.topSkills),
+          : [],
       agentSplit:
         state.usageCenter.agentSplit.length > 0
           ? state.usageCenter.agentSplit.map((item) => ({ label: item.agent, value: `${item.count} events` }))
-          : cloneKeyValueRows(fixtureBacked.agentSplit),
+          : [],
       recentUsage:
         state.usageCenter.recent.length > 0
           ? state.usageCenter.recent.map((item) => ({ label: item.label, value: item.value }))
-          : cloneKeyValueRows(fixtureBacked.recentUsage)
+          : []
     },
     reviews: {
       queue: createReviewRows(state),
-      notes: state.reviewCenter.notes.length > 0 ? cloneKeyValueRows(state.reviewCenter.notes) : cloneKeyValueRows(fixtureBacked.reviewNotes),
-      communitySignal: cloneKeyValueRows(fixtureBacked.communitySignal)
+      notes: cloneKeyValueRows(state.reviewCenter.notes),
+      communitySignal: []
     },
     security: {
       metrics: [
@@ -273,17 +253,13 @@ export function createWorkspaceViewModel(state: DesktopWorkspaceState): Workspac
         metric('Blocked installs', blockedCount, 'default policy')
       ],
       queue: createSecurityRows(state),
-      ruleDetails: [
-        ...state.securityCenter.findings.map((finding) => ({
+      ruleDetails: state.securityCenter.findings
+        .map((finding) => ({
           label: finding.ruleName,
           value: titleCase(finding.severity)
-        })),
-        ...fixtureBacked.ruleDetails
-      ].slice(0, 5),
-      exemptions:
-        state.securityCenter.exemptions.length > 0
-          ? state.securityCenter.exemptions.map((item) => ({ label: item.reason, value: item.scope }))
-          : cloneKeyValueRows(fixtureBacked.exemptions)
+        }))
+        .slice(0, 5),
+      exemptions: state.securityCenter.exemptions.map((item) => ({ label: item.reason, value: item.scope }))
     },
     settings: {
       agentRoots,
@@ -295,8 +271,8 @@ export function createWorkspaceViewModel(state: DesktopWorkspaceState): Workspac
           selected: true,
           cells: [
             { label: 'SQLite database' },
-            { label: fixtureBacked.databasePath },
-            { label: 'Healthy', tone: 'low' }
+            { label: 'App data SQLite' },
+            { label: 'Ready', tone: 'low' }
           ]
         },
         {
@@ -308,12 +284,18 @@ export function createWorkspaceViewModel(state: DesktopWorkspaceState): Workspac
           cells: [{ label: 'Secrets storage' }, { label: 'OS keychain only' }, { label: 'Required', tone: 'low' }]
         }
       ],
-      defaults: cloneKeyValueRows(fixtureBacked.defaults),
+      defaults: [
+        { label: 'Node integration', value: 'Off' },
+        { label: 'Context isolation', value: 'On' },
+        { label: 'Sync profile', value: 'None' },
+        { label: 'Telemetry', value: 'None' },
+        { label: 'Plugin grants', value: 'Manual' }
+      ],
       syncPreview: [
         { label: 'Outbox', value: `${state.syncCenter.outbox.length} queued` },
         { label: 'Inbox', value: `${state.syncCenter.inbox.length} pending` },
         { label: 'Conflicts', value: `${state.syncCenter.conflicts.length} open` },
-        { label: 'Drivers', value: '3 available' }
+        { label: 'Drivers', value: state.syncCenter.profiles.length > 0 ? `${state.syncCenter.profiles.length} configured` : 'None configured' }
       ]
     }
   };
@@ -328,7 +310,7 @@ export function mergeScanIntoWorkspaceState(
     name: skill.name,
     sourceAgent: titleCase(skill.agentCode),
     path: skill.path,
-    installStatus: 'indexed'
+    installStatus: 'installed'
   }));
   const existingById = new Map(state.librarySkills.map((skill) => [skill.id, skill]));
   for (const skill of scannedSkills) {
@@ -359,10 +341,24 @@ function metric(label: string, value: number | string, detail: string): MetricCa
 
 function createReadinessRows(state: DesktopWorkspaceState): TableRow[] {
   const runtimeRows: TableRow[] = [];
+  if (state.securityCenter.queue.length > 0) {
+    runtimeRows.push({
+      id: 'security-scan-queue',
+      selected: true,
+      cells: [
+        { label: 'Security scan queue', detail: `${state.securityCenter.queue.length} items`, avatar: 'S' },
+        { label: 'Security' },
+        { label: `${state.securityCenter.findings.length} findings` },
+        { label: 'Local SQLite' },
+        { label: state.securityCenter.level, tone: severityTone(state.securityCenter.level) }
+      ]
+    });
+  }
+
   if (state.securityCenter.exemptions.length > 0) {
     runtimeRows.push({
       id: 'security-exemptions',
-      selected: true,
+      selected: runtimeRows.length === 0,
       cells: [
         { label: 'Security exemptions', detail: `${state.securityCenter.exemptions.length} active`, avatar: 'S' },
         { label: 'Security' },
@@ -373,7 +369,21 @@ function createReadinessRows(state: DesktopWorkspaceState): TableRow[] {
     });
   }
 
-  return [...runtimeRows, ...cloneTableRows(fixtureBacked.readinessRows)].slice(0, 4);
+  if (state.syncCenter.conflicts.length > 0) {
+    runtimeRows.push({
+      id: 'sync-conflicts',
+      selected: runtimeRows.length === 0,
+      cells: [
+        { label: 'Sync conflicts', detail: `${state.syncCenter.conflicts.length} open`, avatar: 'C' },
+        { label: 'Sync' },
+        { label: 'Conflict' },
+        { label: 'Local SQLite' },
+        { label: 'Review', tone: 'medium' }
+      ]
+    });
+  }
+
+  return runtimeRows.slice(0, 4);
 }
 
 function createInstallPlanRows(state: DesktopWorkspaceState): TableRow[] {
@@ -395,39 +405,24 @@ function createInstallPlanRows(state: DesktopWorkspaceState): TableRow[] {
       ]
     : [];
 
-  return [...runtimeRows, ...cloneTableRows(fixtureBacked.installPlans)].slice(0, 4);
+  return runtimeRows.slice(0, 4);
 }
 
 function createReviewRows(state: DesktopWorkspaceState): TableRow[] {
-  if (state.reviewCenter.queue.length > 0) {
-    return state.reviewCenter.queue.map((item, index) => ({
-      id: item.id,
-      selected: index === 0,
-      cells: [
-        {
-          label: item.title,
-          detail: item.detail,
-          avatar: (item.skillName ?? item.title).slice(0, 1).toUpperCase(),
-          avatarTone: index === 0 ? 'dark' : 'default'
-        },
-        { label: item.reason },
-        { label: item.source },
-        { label: item.reviewer },
-        { label: item.risk, tone: severityTone(item.risk) },
-        { label: item.status }
-      ]
-    }));
-  }
-
-  return fixtureBacked.reviewQueue.map((item, index) => ({
-    id: item.name,
+  return state.reviewCenter.queue.map((item, index) => ({
+    id: item.id,
     selected: index === 0,
     cells: [
-      { label: item.name, detail: item.detail, avatar: item.name.slice(0, 1).toUpperCase(), avatarTone: index === 0 ? 'dark' : 'default' },
+      {
+        label: item.title,
+        detail: item.detail,
+        avatar: (item.skillName ?? item.title).slice(0, 1).toUpperCase(),
+        avatarTone: index === 0 ? 'dark' : 'default'
+      },
       { label: item.reason },
       { label: item.source },
       { label: item.reviewer },
-      { label: item.risk, tone: item.risk === 'High' ? 'high' : item.risk === 'Medium' ? 'medium' : 'low' },
+      { label: item.risk, tone: severityTone(item.risk) },
       { label: item.status }
     ]
   }));
@@ -446,23 +441,23 @@ function createSecurityRows(state: DesktopWorkspaceState): TableRow[] {
     ]
   }));
 
-  return [...runtimeRows, ...cloneTableRows(fixtureBacked.securityRows)].slice(0, 5);
+  return runtimeRows.slice(0, 5);
 }
 
 function createSyncRows(state: DesktopWorkspaceState): KeyValueRow[] {
   if (state.syncCenter.profiles.length === 0) {
-    return cloneKeyValueRows(fixtureBacked.syncRows);
+    return [{ label: 'Sync profiles', value: 'None enabled' }];
   }
 
   return state.syncCenter.profiles.map((profile) => ({
-    label: profile.mode,
+    label: displaySyncMode(profile.mode),
     value: profile.status
   }));
 }
 
 function createPluginRows(state: DesktopWorkspaceState): KeyValueRow[] {
   if (state.plugins.plugins.length === 0) {
-    return cloneKeyValueRows(fixtureBacked.pluginRows);
+    return [{ label: 'Installed plugins', value: '0' }];
   }
 
   return state.plugins.plugins.flatMap((plugin) => [
@@ -473,47 +468,44 @@ function createPluginRows(state: DesktopWorkspaceState): KeyValueRow[] {
   ]);
 }
 
-function cloneAgentRoots(rows: ReadonlyArray<AgentRootView>): AgentRootView[] {
-  return rows.map((row) => ({ ...row }));
+function createAgentRootViews(librarySkills: LibrarySkillSummary[]): AgentRootView[] {
+  const rootsByAgentAndPath = new Map<string, { agent: string; path: string; count: number }>();
+
+  for (const skill of librarySkills) {
+    const rootPath = parentPath(skill.path);
+    const key = `${skill.sourceAgent}:${rootPath}`;
+    const current = rootsByAgentAndPath.get(key);
+    rootsByAgentAndPath.set(key, {
+      agent: skill.sourceAgent,
+      path: rootPath,
+      count: (current?.count ?? 0) + 1
+    });
+  }
+
+  return Array.from(rootsByAgentAndPath.values()).map((root) => ({
+    agent: root.agent,
+    path: root.path,
+    status: `${root.count} indexed`,
+    tone: 'low'
+  }));
+}
+
+function parentPath(filePath: string): string {
+  const normalized = filePath.replace(/[/\\]+$/, '');
+  const separatorIndex = Math.max(normalized.lastIndexOf('/'), normalized.lastIndexOf('\\'));
+  return separatorIndex > 0 ? normalized.slice(0, separatorIndex) : normalized;
+}
+
+function displaySyncMode(mode: string): string {
+  if (mode === 'rest') {
+    return 'REST';
+  }
+
+  return mode === 'mock-rest' ? 'REST contract' : mode;
 }
 
 function cloneKeyValueRows(rows: ReadonlyArray<KeyValueRow>): KeyValueRow[] {
   return rows.map((row) => ({ ...row }));
-}
-
-function cloneTableRows(
-  rows: ReadonlyArray<{
-    id: string;
-    selected?: boolean;
-    cells: ReadonlyArray<TableCell>;
-  }>
-): TableRow[] {
-  return rows.map((row) => {
-    const cloned: TableRow = {
-      id: row.id,
-      cells: row.cells.map((cell) => ({ ...cell }))
-    };
-    if (row.selected !== undefined) {
-      cloned.selected = row.selected;
-    }
-    return cloned;
-  });
-}
-
-function cloneSources(
-  sources: ReadonlyArray<{
-    name: string;
-    sourcePath: string;
-    description: string;
-    risk: 'Low' | 'Medium';
-    tags: readonly string[];
-    selected?: boolean;
-  }>
-): SourceCard[] {
-  return sources.map((source) => ({
-    ...source,
-    tags: [...source.tags]
-  }));
 }
 
 function countHighFindings(state: DesktopWorkspaceState): number {
@@ -535,6 +527,10 @@ function severityTone(severity: string): Tone {
 }
 
 function normalizeBars(values: number[]): number[] {
+  if (values.length === 0) {
+    return [];
+  }
+
   const max = Math.max(...values, 1);
   return values.map((value) => Math.max(36, Math.round((value / max) * 120)));
 }
@@ -557,315 +553,3 @@ const pageLabels: Record<PageKey, string> = {
   security: 'Security',
   settings: 'Settings'
 };
-
-// Fixture-backed values mirror docs/design/mockups and are isolated here so Goal 6/7 can replace them with SQLite state.
-const fixtureBacked = {
-  databasePath: 'local SQLite library.db',
-  lastScanLabel: 'Last scan: local runtime',
-  agentRoots: [
-    { agent: 'Codex', path: '~/.codex/skills', status: 'OK', tone: 'low' },
-    { agent: 'Claude', path: '~/.claude/skills', status: 'OK', tone: 'low' },
-    { agent: 'Gemini', path: '~/.gemini/skills', status: 'OK', tone: 'low' },
-    { agent: 'OpenCode', path: '~/.opencode/skills', status: 'Manual', tone: 'neutral' }
-  ],
-  activity: [
-    { label: 'openai-docs installed to Codex and Claude', value: 'fixture' },
-    { label: 'browser-control scan completed with warning', value: 'fixture' },
-    { label: 'markdown-pro package exported for review', value: 'fixture' }
-  ],
-  agentCoverageBars: [74, 98, 51, 64, 112, 43, 84, 132, 70, 55, 92, 124, 48, 80, 102, 67, 118, 45],
-  readinessRows: [
-    {
-      id: 'agent-root-scan',
-      selected: true,
-      cells: [
-        { label: 'Agent root scan', detail: 'OpenCode root manual', avatar: 'A', avatarTone: 'blue' },
-        { label: 'Adapters' },
-        { label: 'Missing root' },
-        { label: 'Local check' },
-        { label: 'Low', tone: 'low' }
-      ]
-    },
-    {
-      id: 'plugin-permissions',
-      cells: [
-        { label: 'Plugin permissions', detail: 'manual grants', avatar: 'P', avatarTone: 'green' },
-        { label: 'Plugins' },
-        { label: 'Disabled by default' },
-        { label: 'Local check' },
-        { label: 'Queued', tone: 'neutral' }
-      ]
-    },
-    {
-      id: 'release-smoke',
-      cells: [
-        { label: 'Release smoke', detail: 'Latest package verified', avatar: 'R' },
-        { label: 'Release' },
-        { label: 'Healthy' },
-        { label: 'Local check' },
-        { label: 'Ready', tone: 'low' }
-      ]
-    }
-  ] satisfies TableRow[],
-  sources: [
-    {
-      name: 'openai-docs',
-      sourcePath: 'skills.sh/openai-docs',
-      description: 'Search and summarize OpenAI API references.',
-      risk: 'Low',
-      tags: ['verified', 'docs'],
-      selected: true
-    },
-    {
-      name: 'gh-fix-ci',
-      sourcePath: 'skills.sh/gh-fix-ci',
-      description: 'Diagnose and explain failing GitHub Actions checks.',
-      risk: 'Low',
-      tags: ['verified', 'github']
-    },
-    {
-      name: 'spreadsheet-auditor',
-      sourcePath: 'skills.sh/spreadsheet-auditor',
-      description: 'Audit spreadsheet formulas and data consistency.',
-      risk: 'Medium',
-      tags: ['verified', 'excel']
-    },
-    {
-      name: 'browser-control',
-      sourcePath: 'skills.sh/browser-control',
-      description: 'Control browsers and extract UI evidence safely.',
-      risk: 'Low',
-      tags: ['verified', 'browser']
-    },
-    {
-      name: 'skill-creator',
-      sourcePath: 'skills.sh/skill-creator',
-      description: 'Create durable Codex skills with valid structure.',
-      risk: 'Low',
-      tags: ['verified', 'codex']
-    },
-    {
-      name: 'release-packager',
-      sourcePath: 'skills.sh/release-packager',
-      description: 'Package desktop releases with checksums.',
-      risk: 'Low',
-      tags: ['verified', 'release']
-    }
-  ],
-  sourceUpdates: [
-    {
-      id: 'skills-sh',
-      selected: true,
-      cells: [
-        { label: 'skills.sh official' },
-        { label: 'Verified signature' },
-        { label: '12' },
-        { label: 'Offline cache' },
-        { label: 'Ready', tone: 'low' }
-      ]
-    },
-    {
-      id: 'github-curated',
-      cells: [
-        { label: 'GitHub curated' },
-        { label: 'Maintainer allowlist' },
-        { label: '8' },
-        { label: 'Offline cache' },
-        { label: 'Review', tone: 'medium' }
-      ]
-    },
-    {
-      id: 'local-packages',
-      cells: [
-        { label: 'Local packages' },
-        { label: 'User supplied' },
-        { label: '5' },
-        { label: 'Local only' },
-        { label: 'Cached', tone: 'neutral' }
-      ]
-    }
-  ] satisfies TableRow[],
-  installPlans: [
-    {
-      id: 'sui-move-contract',
-      selected: true,
-      cells: [
-        { label: 'sui-move-contract', detail: 'v1.4.2', avatar: 'S' },
-        { label: 'Codex' },
-        { label: '~/.codex/skills' },
-        { label: '24' },
-        { label: 'Clean', tone: 'low' },
-        { label: 'Ready' }
-      ]
-    },
-    {
-      id: 'gh-fix-ci',
-      cells: [
-        { label: 'gh-fix-ci', detail: 'v1.2.1', avatar: 'G', avatarTone: 'dark' },
-        { label: 'Claude' },
-        { label: '~/.claude/skills' },
-        { label: '18' },
-        { label: 'Exists', tone: 'high' },
-        { label: 'Blocked' }
-      ]
-    },
-    {
-      id: 'browser-control',
-      cells: [
-        { label: 'browser-control', detail: 'v0.9.3', avatar: 'B', avatarTone: 'blue' },
-        { label: 'OpenCode' },
-        { label: '~/.opencode/skills' },
-        { label: '31' },
-        { label: 'Warn', tone: 'medium' },
-        { label: 'Review' }
-      ]
-    }
-  ] satisfies TableRow[],
-  installResults: [
-    { label: 'openai-docs copied to Codex', value: 'installed' },
-    { label: 'terraform-helper rollback applied', value: 'verified' },
-    { label: 'markdown-pro uninstall skipped unknown file', value: 'safe' },
-    { label: 'browser-control plan blocked on warning', value: 'review' }
-  ],
-  exportPackages: [
-    { label: 'security-baseline.zip', value: '42 files' },
-    { label: 'docs-tools.zip', value: '19 files' },
-    { label: 'devops-pack.zip', value: '57 files' },
-    { label: 'browser-safe-pack.zip', value: '23 files' }
-  ],
-  usageTotals: {
-    launches: 1482,
-    installs: 86,
-    scans: 214,
-    exports: 31
-  },
-  dailyBars: [76, 60, 92, 48, 82, 115, 66, 101, 54, 132, 80, 72, 118, 40, 86, 124, 55, 90, 111, 68, 134, 58, 76, 96, 43, 84, 127, 62, 108, 142],
-  topSkills: [
-    { label: 'sui-move-contract', value: '312' },
-    { label: 'openai-docs', value: '241' },
-    { label: 'browser-control', value: '188' },
-    { label: 'gh-fix-ci', value: '173' }
-  ],
-  agentSplit: [
-    { label: 'Codex', value: '44%' },
-    { label: 'Claude', value: '29%' },
-    { label: 'Gemini', value: '17%' },
-    { label: 'OpenCode', value: '10%' }
-  ],
-  recentUsage: [
-    { label: 'Codex ran openai-docs', value: '9:41 AM' },
-    { label: 'Claude used gh-fix-ci', value: '8:12 AM' },
-    { label: 'Export package created', value: 'Yesterday' },
-    { label: 'Security rescan completed', value: 'Yesterday' }
-  ],
-  reviewQueue: [
-    {
-      name: 'gh-fix-ci update',
-      detail: 'v1.2.0 -> v1.2.1',
-      reason: 'Executable script added',
-      source: 'GitHub',
-      reviewer: 'alice.dev',
-      risk: 'High',
-      status: 'Open'
-    },
-    {
-      name: 'browser-control import',
-      detail: 'New local package',
-      reason: 'Network capability',
-      source: 'Local ZIP',
-      reviewer: 'web3-builder',
-      risk: 'Medium',
-      status: 'Open'
-    },
-    {
-      name: 'spreadsheet-auditor',
-      detail: 'Rule warning',
-      reason: 'Large fixture file',
-      source: 'skills.sh',
-      reviewer: 'move-enthusiast',
-      risk: 'Medium',
-      status: 'Open'
-    },
-    {
-      name: 'openai-docs',
-      detail: 'Source refresh',
-      reason: 'Docs changed',
-      source: 'skills.sh',
-      reviewer: 'alice.dev',
-      risk: 'Low',
-      status: 'Approved'
-    }
-  ],
-  reviewNotes: [
-    { label: 'Explain why shell script is required.', value: 'open' },
-    { label: 'Confirm no token content is exported.', value: 'open' },
-    { label: 'Attach hash diff for changed files.', value: 'done' }
-  ],
-  communitySignal: [
-    { label: 'Average rating', value: '4.6 / 5' },
-    { label: 'Recent reviews', value: '48' },
-    { label: 'Maintainer response', value: '1 day' }
-  ],
-  securityRows: [
-    {
-      id: 'gh-fix-ci-security',
-      selected: true,
-      cells: [
-        { label: 'gh-fix-ci', detail: 'v1.2.1', avatar: 'G', avatarTone: 'dark' },
-        { label: 'Executable script' },
-        { label: 'runtime' },
-        { label: 'High', tone: 'high' },
-        { label: 'Blocked' }
-      ]
-    },
-    {
-      id: 'browser-control-security',
-      cells: [
-        { label: 'browser-control', detail: 'v0.9.3', avatar: 'B' },
-        { label: 'External transfer' },
-        { label: 'network' },
-        { label: 'Medium', tone: 'medium' },
-        { label: 'Warn' }
-      ]
-    },
-    {
-      id: 'linux-hardening-security',
-      cells: [
-        { label: 'linux-hardening', detail: 'v1.1.0', avatar: 'L', avatarTone: 'green' },
-        { label: 'Sensitive path' },
-        { label: 'filesystem' },
-        { label: 'High', tone: 'high' },
-        { label: 'Blocked' }
-      ]
-    }
-  ] satisfies TableRow[],
-  ruleDetails: [
-    { label: 'Dangerous shell command', value: 'High' },
-    { label: 'External data transfer', value: 'Medium' },
-    { label: 'Path traversal reference', value: 'High' }
-  ],
-  exemptions: [
-    { label: 'browser-control network check', value: 'project' },
-    { label: 'terraform-helper script fixture', value: 'user' },
-    { label: 'expired exemptions', value: '0' }
-  ],
-  syncRows: [
-    { label: 'No enabled sync profile', value: 'default' },
-    { label: 'Shared-folder driver', value: 'available' },
-    { label: 'Git package driver', value: 'available' },
-    { label: 'Conflict center', value: 'ready' }
-  ],
-  pluginRows: [
-    { label: 'Manifest validation', value: 'required' },
-    { label: 'Permissions', value: 'manual grant' },
-    { label: 'Network access', value: 'denied' },
-    { label: 'Host API escape scan', value: 'enabled' }
-  ],
-  defaults: [
-    { label: 'Node integration', value: 'Off' },
-    { label: 'Context isolation', value: 'On' },
-    { label: 'Sync profile', value: 'None' },
-    { label: 'Telemetry', value: 'None' },
-    { label: 'Plugin grants', value: 'Manual' }
-  ]
-} as const;

@@ -86,6 +86,89 @@ describe('import service', () => {
       code: 'path_outside_root'
     });
   });
+
+  it('imports TAR, Git sparse subpaths, and verified offline mirrors', async () => {
+    const workspace = await tempDir('theopenhub-import-expanded-');
+    const tarSource = await createSkillFixture(path.join(workspace, 'tar-skill'), 'tar-helper');
+    const tarPath = path.join(workspace, 'tar-helper.tar');
+    await execFileAsync('tar', ['-cf', tarPath, '-C', tarSource, '.']);
+    const sparseRepo = path.join(workspace, 'sparse-repo');
+    await createSkillFixture(path.join(sparseRepo, 'skills/git-sparse-helper'), 'git-sparse-helper');
+    await createSkillFixture(path.join(sparseRepo, 'other/ignored-helper'), 'ignored-helper');
+    await execFileAsync('git', ['init'], { cwd: sparseRepo });
+    await execFileAsync('git', ['add', '.'], { cwd: sparseRepo });
+    await execFileAsync(
+      'git',
+      ['-c', 'user.name=OpenHub Test', '-c', 'user.email=test@example.com', 'commit', '-m', 'fixture'],
+      { cwd: sparseRepo }
+    );
+
+    const mirrorDirectory = path.join(workspace, 'mirror');
+    await mkdir(path.join(mirrorDirectory, 'files'), { recursive: true });
+    const mirrorContent = ['---', 'name: mirror-helper', 'description: Mirror helper', '---'].join('\n');
+    const mirrorHash = await import('node:crypto').then(({ createHash }) =>
+      createHash('sha256').update(mirrorContent).digest('hex')
+    );
+    await writeFile(path.join(mirrorDirectory, 'files/SKILL.md'), mirrorContent);
+    await writeFile(
+      path.join(mirrorDirectory, 'manifest.json'),
+      JSON.stringify(
+        {
+          name: 'mirror-helper',
+          slug: 'mirror-helper',
+          versionNo: 1,
+          signature: { status: 'unsigned' },
+          files: [{ relativePath: 'SKILL.md', hash: mirrorHash, size: Buffer.byteLength(mirrorContent) }]
+        },
+        null,
+        2
+      )
+    );
+
+    const database = createMemoryDatabase();
+    runMigrations(database);
+    const importer = createImportService({
+      database,
+      contentStore: createContentStore(path.join(workspace, 'blobs')),
+      stagingDirectory: path.join(workspace, 'staging')
+    });
+
+    const tarResult = await importer.importTar({ tarPath });
+    const sparseResult = await importer.importGitSparse({
+      gitUrl: `file://${sparseRepo}`,
+      subpath: 'skills/git-sparse-helper'
+    });
+    const mirrorResult = await importer.importMirror({ mirrorDirectory });
+
+    expect([tarResult.skill.name, sparseResult.skill.name, mirrorResult.skill.name]).toEqual([
+      'tar-helper',
+      'git-sparse-helper',
+      'mirror-helper'
+    ]);
+    expect(mirrorResult.signatureStatus).toBe('unsigned');
+    expect(countRows(database, 'skills')).toBe(3);
+  });
+
+  it('rejects tar slip and unsafe TAR link fixtures', async () => {
+    const workspace = await tempDir('theopenhub-import-tar-risk-');
+    const importer = createImportService({
+      database: createMemoryDatabase(),
+      contentStore: createContentStore(path.join(workspace, 'blobs')),
+      stagingDirectory: path.join(workspace, 'staging')
+    });
+
+    await expect(
+      importer.importTar({ tarPath: await createRawTarArchive(path.join(workspace, 'tar-slip.tar'), '../SKILL.md') })
+    ).rejects.toMatchObject({ code: 'zip_slip' });
+    await expect(
+      importer.importTar({
+        tarPath: await createRawTarArchive(path.join(workspace, 'tar-link.tar'), 'SKILL.md', {
+          typeFlag: '2',
+          linkName: '/etc/passwd'
+        })
+      })
+    ).rejects.toThrow(/unsafe TAR link/);
+  });
 });
 
 async function tempDir(prefix: string): Promise<string> {
@@ -211,4 +294,37 @@ function createRawZipSlipArchive(fileName: string, content: string): Buffer {
   endOfCentralDirectory.writeUInt16LE(0, offset);
 
   return Buffer.concat([localRecord, centralRecord, endOfCentralDirectory]);
+}
+
+async function createRawTarArchive(
+  tarPath: string,
+  fileName: string,
+  options: { typeFlag?: string; linkName?: string } = {}
+): Promise<string> {
+  const content = Buffer.from('---\nname: bad\n---\n');
+  const header = Buffer.alloc(512, 0);
+  header.write(fileName, 0, 100, 'utf8');
+  header.write('0000644\0', 100, 8, 'ascii');
+  header.write('0000000\0', 108, 8, 'ascii');
+  header.write('0000000\0', 116, 8, 'ascii');
+  header.write((options.typeFlag ? 0 : content.length).toString(8).padStart(11, '0') + '\0', 124, 12, 'ascii');
+  header.write('00000000000\0', 136, 12, 'ascii');
+  header.fill(0x20, 148, 156);
+  header.write(options.typeFlag ?? '0', 156, 1, 'ascii');
+  if (options.linkName) {
+    header.write(options.linkName, 157, 100, 'utf8');
+  }
+  header.write('ustar\0', 257, 6, 'ascii');
+  header.write('00', 263, 2, 'ascii');
+  let checksum = 0;
+  for (const byte of header) {
+    checksum += byte;
+  }
+  header.write(checksum.toString(8).padStart(6, '0') + '\0 ', 148, 8, 'ascii');
+  await writeFile(tarPath, Buffer.concat([header, options.typeFlag ? Buffer.alloc(0) : content, Buffer.alloc(1024)]));
+  return tarPath;
+}
+
+function countRows(database: ReturnType<typeof createMemoryDatabase>, tableName: string): number {
+  return (database.prepare(`select count(*) as count from ${tableName}`).get() as { count: number }).count;
 }

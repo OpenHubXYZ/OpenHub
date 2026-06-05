@@ -94,6 +94,8 @@ export const installPlanSchema = z
     agentDisplayName: z.string().min(1),
     adapterVersion: z.string().min(1),
     scope: z.string().min(1),
+    rootKind: z.enum(['user', 'project']),
+    projectionMode: z.enum(['copy', 'symlink', 'hardlink', 'mirror-export']),
     conflictState: z.enum(['clean', 'conflict']),
     writes: z.array(installWriteSchema)
   })
@@ -103,8 +105,9 @@ export type InstallPlan = z.infer<typeof installPlanSchema>;
 
 export const installResultSchema = z
   .object({
-    status: z.literal('installed'),
-    installationId: z.string().min(1),
+    status: z.enum(['installed', 'exported']),
+    installationId: z.string().min(1).nullable(),
+    targetRoot: z.string().min(1).optional(),
     security: z
       .object({
         level: z.string().min(1),
@@ -140,7 +143,8 @@ export const importedSkillResultSchema = z
         })
         .strict()
     ),
-    stagedFrom: z.string().min(1)
+    stagedFrom: z.string().min(1),
+    signatureStatus: z.enum(['unsigned', 'signed', 'untrusted']).optional()
   })
   .strict();
 
@@ -372,7 +376,10 @@ const pluginsStateSchema = z
     plugins: z.array(
       z
         .object({
+          id: z.string().min(1).optional(),
           name: z.string().min(1),
+          version: z.string().min(1).optional(),
+          rootPath: z.string().min(1).optional(),
           status: z.string().min(1),
           capabilities: z.array(z.string().min(1)),
           permissions: z.array(
@@ -448,6 +455,353 @@ export const syncStartupPlanSchema = z
 
 export type SyncStartupPlan = z.infer<typeof syncStartupPlanSchema>;
 
+export const exportSkillResultSchema = z
+  .object({
+    outputDirectory: z.string().min(1)
+  })
+  .strict();
+
+export type ExportSkillResult = z.infer<typeof exportSkillResultSchema>;
+
+export const collectionRecordSchema = z
+  .object({
+    id: z.string().min(1),
+    name: z.string().min(1),
+    description: z.string()
+  })
+  .strict();
+
+export type CollectionRecord = z.infer<typeof collectionRecordSchema>;
+
+export const collectionExportResultSchema = z
+  .object({
+    outputDirectory: z.string().min(1)
+  })
+  .strict();
+
+export type CollectionExportResult = z.infer<typeof collectionExportResultSchema>;
+
+export const collectionImportResultSchema = z
+  .object({
+    collection: collectionRecordSchema,
+    skills: z.array(skillSummarySchema)
+  })
+  .strict();
+
+export type CollectionImportResult = z.infer<typeof collectionImportResultSchema>;
+
+const skillFileSummarySchema = z
+  .object({
+    relativePath: z.string().min(1),
+    hash: z.string().min(1),
+    size: z.number().int().nonnegative(),
+    kind: z.string().min(1)
+  })
+  .strict();
+
+export type SkillFileSummary = z.infer<typeof skillFileSummarySchema>;
+
+const skillVersionSummarySchema = z
+  .object({
+    versionId: z.string().min(1),
+    skillId: z.string().min(1),
+    versionNo: z.number().int().positive(),
+    changeSummary: z.string(),
+    createdAt: z.string().min(1),
+    lifecycle: z.enum(['draft', 'released']),
+    releaseChannel: z.enum(['stable', 'beta', 'local'])
+  })
+  .strict();
+
+export type SkillVersionSummary = z.infer<typeof skillVersionSummarySchema>;
+
+const fileDiffSchema = z
+  .object({
+    relativePath: z.string().min(1),
+    changeType: z.enum(['added', 'modified', 'deleted']),
+    fromHash: z.string().min(1).nullable(),
+    toHash: z.string().min(1).nullable()
+  })
+  .strict();
+
+export type FileDiff = z.infer<typeof fileDiffSchema>;
+
+export const skillDetailSchema = z
+  .object({
+    skill: z
+      .object({
+        id: z.string().min(1),
+        versionId: z.string().min(1),
+        slug: z.string().min(1),
+        name: z.string().min(1),
+        description: z.string(),
+        tags: z.array(z.string()),
+        versionNo: z.number().int().positive()
+      })
+      .strict(),
+    source: z
+      .object({
+        type: z.string().min(1),
+        url: z.string().nullable(),
+        trustLevel: z.string().min(1)
+      })
+      .strict(),
+    versions: z.array(skillVersionSummarySchema),
+    files: z.array(skillFileSummarySchema),
+    skillMarkdown: z.string(),
+    latestScan: z
+      .object({
+        scanId: z.string().min(1),
+        score: z.number().int().nonnegative(),
+        level: z.string().min(1),
+        blocked: z.boolean(),
+        scannedAt: z.string().min(1)
+      })
+      .strict()
+      .nullable(),
+    installations: z.array(
+      z
+        .object({
+          installationId: z.string().min(1),
+          agent: z.string().min(1),
+          rootPath: z.string().min(1),
+          scope: z.string().min(1),
+          installPath: z.string().min(1),
+          status: z.string().min(1),
+          versionNo: z.number().int().positive()
+        })
+        .strict()
+    ),
+    riskStatus: z.string().min(1)
+  })
+  .strict();
+
+export type SkillDetail = z.infer<typeof skillDetailSchema>;
+
+const installTargetSchema = z
+  .object({
+    agentCode: z.string().min(1),
+    agentDisplayName: z.string().min(1),
+    adapterVersion: z.string().min(1),
+    rootPath: z.string().min(1),
+    scope: z.string().min(1),
+    rootKind: z.enum(['user', 'project']).optional(),
+    writable: z.boolean(),
+    isDefault: z.boolean()
+  })
+  .strict();
+
+export type InstallTarget = z.infer<typeof installTargetSchema>;
+
+export const installUninstallResultSchema = z
+  .object({
+    status: z.literal('uninstalled'),
+    installationId: z.string().min(1)
+  })
+  .strict();
+
+export type InstallUninstallResult = z.infer<typeof installUninstallResultSchema>;
+
+export const versionRollbackResultSchema = z
+  .object({
+    status: z.literal('rolled_back'),
+    installationId: z.string().min(1),
+    versionId: z.string().min(1)
+  })
+  .strict();
+
+export type VersionRollbackResult = z.infer<typeof versionRollbackResultSchema>;
+
+const securityFindingDetailSchema = z
+  .object({
+    skillName: z.string().min(1),
+    scanId: z.string().min(1),
+    ruleId: z.string().min(1),
+    ruleName: z.string().min(1),
+    severity: z.string().min(1),
+    category: z.string().min(1),
+    relativePath: z.string().min(1),
+    lineNo: z.number().int().nullable(),
+    excerpt: z.string()
+  })
+  .strict();
+
+export type SecurityFindingDetail = z.infer<typeof securityFindingDetailSchema>;
+
+const securityExemptionSchema = z
+  .object({
+    id: z.string().min(1),
+    skillId: z.string().min(1),
+    scope: z.string().min(1),
+    reason: z.string().min(1),
+    createdAt: z.string().min(1),
+    revokedAt: z.string().nullable()
+  })
+  .strict();
+
+export type SecurityExemption = z.infer<typeof securityExemptionSchema>;
+
+export const securityRevokeExemptionResultSchema = z
+  .object({
+    status: z.literal('revoked'),
+    exemptionId: z.string().min(1)
+  })
+  .strict();
+
+export type SecurityRevokeExemptionResult = z.infer<typeof securityRevokeExemptionResultSchema>;
+
+const syncModeSchema = z.enum(['shared-folder', 'git', 'rest', 'mock-rest']);
+
+const syncProfileSchema = z
+  .object({
+    id: z.string().min(1),
+    mode: syncModeSchema,
+    remoteUrl: z.string().min(1),
+    authRef: z.string().min(1).nullable(),
+    enabled: z.boolean()
+  })
+  .strict();
+
+export type SyncProfile = z.infer<typeof syncProfileSchema>;
+
+const syncOutboxRecordSchema = z
+  .object({
+    id: z.string().min(1),
+    profileId: z.string().min(1),
+    entityType: z.string().min(1),
+    entityId: z.string().min(1),
+    payload: z.unknown(),
+    status: z.string().min(1)
+  })
+  .strict();
+
+export type SyncOutboxRecord = z.infer<typeof syncOutboxRecordSchema>;
+
+const syncInboxRecordSchema = z
+  .object({
+    id: z.string().min(1),
+    profileId: z.string().min(1),
+    remoteEventId: z.string().min(1),
+    entityType: z.string().min(1),
+    entityId: z.string().min(1),
+    payload: z.unknown(),
+    status: z.string().min(1)
+  })
+  .strict();
+
+export type SyncInboxRecord = z.infer<typeof syncInboxRecordSchema>;
+
+const syncConflictRecordSchema = z
+  .object({
+    id: z.string().min(1),
+    profileId: z.string().min(1),
+    entityType: z.string().min(1),
+    entityId: z.string().min(1),
+    base: z.unknown(),
+    local: z.unknown(),
+    remote: z.unknown(),
+    status: z.enum(['open', 'resolved']),
+    resolution: z.string().nullable()
+  })
+  .strict();
+
+export type SyncConflictRecord = z.infer<typeof syncConflictRecordSchema>;
+
+const statusOnlyResultSchema = z
+  .object({
+    status: z.string().min(1)
+  })
+  .strict();
+
+export type StatusOnlyResult = z.infer<typeof statusOnlyResultSchema>;
+
+const pluginPermissionSchema = z.enum([
+  'agent-root:read',
+  'agent-root:write',
+  'network:fetch',
+  'import:local',
+  'sync-driver'
+]);
+
+const pluginRegistrySchema = z
+  .object({
+    agentAdapters: z.array(
+      z.object({ pluginId: z.string().min(1), code: z.string().min(1), displayName: z.string().min(1) }).strict()
+    ),
+    importers: z.array(
+      z.object({ pluginId: z.string().min(1), id: z.string().min(1), name: z.string().min(1) }).strict()
+    ),
+    securityRules: z.array(
+      z.object({ pluginId: z.string().min(1), id: z.string().min(1), name: z.string().min(1) }).strict()
+    ),
+    syncDrivers: z.array(
+      z.object({ pluginId: z.string().min(1), id: z.string().min(1), name: z.string().min(1) }).strict()
+    )
+  })
+  .strict();
+
+export type PluginRegistry = z.infer<typeof pluginRegistrySchema>;
+
+const pluginInstallResultSchema = z
+  .object({
+    id: z.string().min(1),
+    name: z.string().min(1),
+    version: z.string().min(1),
+    status: z.string().min(1),
+    rootPath: z.string().min(1)
+  })
+  .strict();
+
+export type PluginInstallResult = z.infer<typeof pluginInstallResultSchema>;
+
+const discoverSourceSchema = z
+  .object({
+    id: z.string().min(1),
+    name: z.string().min(1),
+    sourceType: z.enum(['local', 'git']),
+    url: z.string().min(1),
+    trustLevel: z.string().min(1),
+    verified: z.boolean(),
+    status: z.string().min(1),
+    cachedAt: z.string().nullable()
+  })
+  .strict();
+
+export type DiscoverSource = z.infer<typeof discoverSourceSchema>;
+
+const discoverSkillPreviewSchema = z
+  .object({
+    name: z.string().min(1),
+    description: z.string(),
+    tags: z.array(z.string()),
+    path: z.string().min(1),
+    riskStatus: z.string().min(1)
+  })
+  .strict();
+
+export type DiscoverSkillPreview = z.infer<typeof discoverSkillPreviewSchema>;
+
+const discoverPreviewResultSchema = z
+  .object({
+    source: discoverSourceSchema,
+    skills: z.array(discoverSkillPreviewSchema),
+    writesPlanned: z.literal(false)
+  })
+  .strict();
+
+export type DiscoverPreviewResult = z.infer<typeof discoverPreviewResultSchema>;
+
+const migrationPreviewResultSchema = z
+  .object({
+    adapter: z.enum(['openskills', 'skills-manager', 'skillhub', 'skills-manager-client']),
+    sourcePath: z.string().min(1),
+    skills: z.array(discoverSkillPreviewSchema),
+    writesPlanned: z.literal(false)
+  })
+  .strict();
+
+export type MigrationPreviewResult = z.infer<typeof migrationPreviewResultSchema>;
+
 export const appInfo: AppInfo = {
   productName: PRODUCT_NAME,
   phase: CURRENT_PHASE,
@@ -456,6 +810,7 @@ export const appInfo: AppInfo = {
 
 const emptyRequestSchema = z.object({}).strict();
 const skillIdRequestSchema = z.object({ skillId: z.string().min(1) }).strict();
+const collectionIdRequestSchema = z.object({ collectionId: z.string().min(1) }).strict();
 
 export const desktopShellContract = {
   appInfo: {
@@ -483,6 +838,78 @@ export const desktopShellContract = {
     request: z.object({ folderPath: z.string().min(1) }).strict(),
     response: importedSkillResultSchema
   },
+  importGit: {
+    channel: 'import.git',
+    request: z.object({ gitUrl: z.string().min(1) }).strict(),
+    response: importedSkillResultSchema
+  },
+  importZip: {
+    channel: 'import.zip',
+    request: z.object({ zipPath: z.string().min(1) }).strict(),
+    response: importedSkillResultSchema
+  },
+  importTar: {
+    channel: 'import.tar',
+    request: z.object({ tarPath: z.string().min(1) }).strict(),
+    response: importedSkillResultSchema
+  },
+  importGitSparse: {
+    channel: 'import.gitSparse',
+    request: z.object({ gitUrl: z.string().min(1), subpath: z.string().min(1) }).strict(),
+    response: importedSkillResultSchema
+  },
+  importMirror: {
+    channel: 'import.mirror',
+    request: z.object({ mirrorDirectory: z.string().min(1) }).strict(),
+    response: importedSkillResultSchema
+  },
+  exportSkill: {
+    channel: 'export.skill',
+    request: z.object({ skillId: z.string().min(1), outputDirectory: z.string().min(1) }).strict(),
+    response: exportSkillResultSchema
+  },
+  exportSignedSkill: {
+    channel: 'export.signedSkill',
+    request: z
+      .object({
+        skillId: z.string().min(1),
+        outputDirectory: z.string().min(1),
+        signer: z.string().min(1)
+      })
+      .strict(),
+    response: exportSkillResultSchema
+  },
+  collectionCreate: {
+    channel: 'collection.create',
+    request: z
+      .object({
+        name: z.string().min(1),
+        description: z.string(),
+        skillIds: z.array(z.string().min(1))
+      })
+      .strict(),
+    response: collectionRecordSchema
+  },
+  collectionExport: {
+    channel: 'collection.export',
+    request: collectionIdRequestSchema.extend({ outputDirectory: z.string().min(1) }).strict(),
+    response: collectionExportResultSchema
+  },
+  collectionImport: {
+    channel: 'collection.import',
+    request: z.object({ packageDirectory: z.string().min(1) }).strict(),
+    response: collectionImportResultSchema
+  },
+  librarySearch: {
+    channel: 'library.search',
+    request: z.object({ query: z.string(), favoritesOnly: z.boolean().optional() }).strict(),
+    response: z.array(skillSummarySchema)
+  },
+  libraryDetail: {
+    channel: 'library.detail',
+    request: skillIdRequestSchema,
+    response: skillDetailSchema
+  },
   installCreatePlan: {
     channel: 'install.createPlan',
     request: z
@@ -492,30 +919,248 @@ export const desktopShellContract = {
         agentCode: z.string().min(1),
         agentDisplayName: z.string().min(1),
         adapterVersion: z.string().min(1),
-        scope: z.string().min(1)
+        scope: z.string().min(1),
+        rootKind: z.enum(['user', 'project']).optional(),
+        projectionMode: z.enum(['copy', 'symlink', 'hardlink', 'mirror-export']).optional()
       })
       .strict(),
     response: installPlanSchema
+  },
+  installCreateMultiTargetPlan: {
+    channel: 'install.createMultiTargetPlan',
+    request: z
+      .object({
+        skillId: z.string().min(1),
+        projectionMode: z.enum(['copy', 'symlink', 'hardlink', 'mirror-export']).optional(),
+        targets: z.array(
+          z
+            .object({
+              targetRoot: z.string().min(1),
+              agentCode: z.string().min(1),
+              agentDisplayName: z.string().min(1),
+              adapterVersion: z.string().min(1),
+              scope: z.string().min(1),
+              rootKind: z.enum(['user', 'project']).optional()
+            })
+            .strict()
+        )
+      })
+      .strict(),
+    response: z.array(installPlanSchema)
   },
   installApplyPlan: {
     channel: 'install.applyPlan',
     request: z.object({ plan: installPlanSchema }).strict(),
     response: installResultSchema
   },
+  installListTargets: {
+    channel: 'install.listTargets',
+    request: emptyRequestSchema,
+    response: z.array(installTargetSchema)
+  },
+  installUninstall: {
+    channel: 'install.uninstall',
+    request: z.object({ installationId: z.string().min(1) }).strict(),
+    response: installUninstallResultSchema
+  },
+  versionList: {
+    channel: 'version.list',
+    request: skillIdRequestSchema,
+    response: z.array(skillVersionSummarySchema)
+  },
+  versionDiff: {
+    channel: 'version.diff',
+    request: z.object({ fromVersionId: z.string().min(1), toVersionId: z.string().min(1) }).strict(),
+    response: z.array(fileDiffSchema)
+  },
+  versionRollback: {
+    channel: 'version.rollback',
+    request: z.object({ installationId: z.string().min(1), targetVersionId: z.string().min(1) }).strict(),
+    response: versionRollbackResultSchema
+  },
   securityScan: {
     channel: 'security.scan',
     request: skillIdRequestSchema,
     response: securityScanResultSchema
+  },
+  securityRescan: {
+    channel: 'security.rescan',
+    request: z.object({ skillIds: z.array(z.string().min(1)).optional() }).strict(),
+    response: z.array(securityScanResultSchema)
+  },
+  securityFindingDetail: {
+    channel: 'security.findingDetail',
+    request: z
+      .object({
+        scanId: z.string().min(1).optional(),
+        skillId: z.string().min(1).optional(),
+        ruleId: z.string().min(1).optional()
+      })
+      .strict(),
+    response: securityFindingDetailSchema
+  },
+  securityCreateExemption: {
+    channel: 'security.createExemption',
+    request: z
+      .object({
+        skillId: z.string().min(1),
+        scope: z.string().min(1),
+        reason: z.string().min(1)
+      })
+      .strict(),
+    response: securityExemptionSchema
+  },
+  securityRevokeExemption: {
+    channel: 'security.revokeExemption',
+    request: z.object({ exemptionId: z.string().min(1) }).strict(),
+    response: securityRevokeExemptionResultSchema
   },
   syncStartupPlan: {
     channel: 'sync.startupPlan',
     request: emptyRequestSchema,
     response: syncStartupPlanSchema
   },
+  syncCreateProfile: {
+    channel: 'sync.createProfile',
+    request: z
+      .object({
+        mode: syncModeSchema,
+        remoteUrl: z.string().min(1),
+        enabled: z.boolean(),
+        authRef: z.string().min(1).nullable().optional(),
+        auth: z
+          .object({
+            label: z.string().min(1),
+            token: z.string().min(1)
+          })
+          .strict()
+          .optional()
+      })
+      .strict(),
+    response: syncProfileSchema
+  },
+  syncInspectCredential: {
+    channel: 'sync.inspectCredential',
+    request: z.object({ authRef: z.string().min(1) }).strict(),
+    response: z
+      .object({
+        authRef: z.string().min(1),
+        label: z.string().min(1),
+        masked: z.string().min(1)
+      })
+      .strict()
+      .nullable()
+  },
+  syncDeleteCredential: {
+    channel: 'sync.deleteCredential',
+    request: z.object({ authRef: z.string().min(1) }).strict(),
+    response: statusOnlyResultSchema
+  },
+  syncEnqueueLocalChange: {
+    channel: 'sync.enqueueLocalChange',
+    request: z
+      .object({
+        profileId: z.string().min(1),
+        entityType: z.string().min(1),
+        entityId: z.string().min(1),
+        payload: z.unknown()
+      })
+      .strict(),
+    response: syncOutboxRecordSchema
+  },
+  syncPush: {
+    channel: 'sync.push',
+    request: z.object({ profileId: z.string().min(1) }).strict(),
+    response: statusOnlyResultSchema
+  },
+  syncPull: {
+    channel: 'sync.pull',
+    request: z.object({ profileId: z.string().min(1) }).strict(),
+    response: z.array(syncInboxRecordSchema)
+  },
+  syncListConflicts: {
+    channel: 'sync.listConflicts',
+    request: z.object({ profileId: z.string().min(1).optional() }).strict(),
+    response: z.array(syncConflictRecordSchema)
+  },
+  syncResolveConflict: {
+    channel: 'sync.resolveConflict',
+    request: z.object({ conflictId: z.string().min(1), resolution: z.string().min(1) }).strict(),
+    response: syncConflictRecordSchema
+  },
+  syncApplyConflict: {
+    channel: 'sync.applyConflict',
+    request: z
+      .object({
+        conflictId: z.string().min(1),
+        confirm: z.boolean(),
+        resolution: z.unknown()
+      })
+      .strict(),
+    response: syncConflictRecordSchema.extend({ draftVersionIds: z.array(z.string().min(1)).optional() }).strict()
+  },
   pluginsCenterState: {
     channel: 'plugins.centerState',
     request: emptyRequestSchema,
     response: pluginsStateSchema
+  },
+  pluginsInstall: {
+    channel: 'plugins.install',
+    request: z.object({ rootPath: z.string().min(1) }).strict(),
+    response: pluginInstallResultSchema
+  },
+  pluginsAuthorizePermission: {
+    channel: 'plugins.authorizePermission',
+    request: z
+      .object({
+        pluginId: z.string().min(1),
+        permission: pluginPermissionSchema,
+        reason: z.string().min(1)
+      })
+      .strict(),
+    response: statusOnlyResultSchema
+  },
+  pluginsEnable: {
+    channel: 'plugins.enable',
+    request: z.object({ pluginId: z.string().min(1) }).strict(),
+    response: pluginRegistrySchema
+  },
+  pluginsDisable: {
+    channel: 'plugins.disable',
+    request: z.object({ pluginId: z.string().min(1) }).strict(),
+    response: statusOnlyResultSchema
+  },
+  pluginsRegistry: {
+    channel: 'plugins.registry',
+    request: emptyRequestSchema,
+    response: pluginRegistrySchema
+  },
+  discoverAddSource: {
+    channel: 'discover.addSource',
+    request: z
+      .object({
+        name: z.string().min(1),
+        sourceType: z.enum(['local', 'git']),
+        url: z.string().min(1),
+        trustLevel: z.string().min(1)
+      })
+      .strict(),
+    response: discoverSourceSchema
+  },
+  discoverPreviewSource: {
+    channel: 'discover.previewSource',
+    request: z.object({ sourceId: z.string().min(1) }).strict(),
+    response: discoverPreviewResultSchema
+  },
+  discoverMigrationPreview: {
+    channel: 'discover.migrationPreview',
+    request: z
+      .object({
+        adapter: z.enum(['openskills', 'skills-manager', 'skillhub', 'skills-manager-client']),
+        sourcePath: z.string().min(1)
+      })
+      .strict(),
+    response: migrationPreviewResultSchema
   }
 } as const;
 
@@ -553,25 +1198,181 @@ export function parseIpcResponse(
   payload: unknown
 ): ImportedSkillResult;
 export function parseIpcResponse(
+  channel: typeof desktopShellContract.importGit.channel,
+  payload: unknown
+): ImportedSkillResult;
+export function parseIpcResponse(
+  channel: typeof desktopShellContract.importZip.channel,
+  payload: unknown
+): ImportedSkillResult;
+export function parseIpcResponse(
+  channel: typeof desktopShellContract.importTar.channel,
+  payload: unknown
+): ImportedSkillResult;
+export function parseIpcResponse(
+  channel: typeof desktopShellContract.importGitSparse.channel,
+  payload: unknown
+): ImportedSkillResult;
+export function parseIpcResponse(
+  channel: typeof desktopShellContract.importMirror.channel,
+  payload: unknown
+): ImportedSkillResult;
+export function parseIpcResponse(
+  channel: typeof desktopShellContract.exportSkill.channel,
+  payload: unknown
+): ExportSkillResult;
+export function parseIpcResponse(
+  channel: typeof desktopShellContract.exportSignedSkill.channel,
+  payload: unknown
+): ExportSkillResult;
+export function parseIpcResponse(
+  channel: typeof desktopShellContract.collectionCreate.channel,
+  payload: unknown
+): CollectionRecord;
+export function parseIpcResponse(
+  channel: typeof desktopShellContract.collectionExport.channel,
+  payload: unknown
+): CollectionExportResult;
+export function parseIpcResponse(
+  channel: typeof desktopShellContract.collectionImport.channel,
+  payload: unknown
+): CollectionImportResult;
+export function parseIpcResponse(
+  channel: typeof desktopShellContract.librarySearch.channel,
+  payload: unknown
+): SkillSummary[];
+export function parseIpcResponse(
+  channel: typeof desktopShellContract.libraryDetail.channel,
+  payload: unknown
+): SkillDetail;
+export function parseIpcResponse(
   channel: typeof desktopShellContract.installCreatePlan.channel,
   payload: unknown
 ): InstallPlan;
+export function parseIpcResponse(
+  channel: typeof desktopShellContract.installCreateMultiTargetPlan.channel,
+  payload: unknown
+): InstallPlan[];
 export function parseIpcResponse(
   channel: typeof desktopShellContract.installApplyPlan.channel,
   payload: unknown
 ): InstallResult;
 export function parseIpcResponse(
+  channel: typeof desktopShellContract.installListTargets.channel,
+  payload: unknown
+): InstallTarget[];
+export function parseIpcResponse(
+  channel: typeof desktopShellContract.installUninstall.channel,
+  payload: unknown
+): InstallUninstallResult;
+export function parseIpcResponse(
+  channel: typeof desktopShellContract.versionList.channel,
+  payload: unknown
+): SkillVersionSummary[];
+export function parseIpcResponse(
+  channel: typeof desktopShellContract.versionDiff.channel,
+  payload: unknown
+): FileDiff[];
+export function parseIpcResponse(
+  channel: typeof desktopShellContract.versionRollback.channel,
+  payload: unknown
+): VersionRollbackResult;
+export function parseIpcResponse(
   channel: typeof desktopShellContract.securityScan.channel,
   payload: unknown
 ): SecurityScanResult;
+export function parseIpcResponse(
+  channel: typeof desktopShellContract.securityRescan.channel,
+  payload: unknown
+): SecurityScanResult[];
+export function parseIpcResponse(
+  channel: typeof desktopShellContract.securityFindingDetail.channel,
+  payload: unknown
+): SecurityFindingDetail;
+export function parseIpcResponse(
+  channel: typeof desktopShellContract.securityCreateExemption.channel,
+  payload: unknown
+): SecurityExemption;
+export function parseIpcResponse(
+  channel: typeof desktopShellContract.securityRevokeExemption.channel,
+  payload: unknown
+): SecurityRevokeExemptionResult;
 export function parseIpcResponse(
   channel: typeof desktopShellContract.syncStartupPlan.channel,
   payload: unknown
 ): SyncStartupPlan;
 export function parseIpcResponse(
+  channel: typeof desktopShellContract.syncCreateProfile.channel,
+  payload: unknown
+): SyncProfile;
+export function parseIpcResponse(
+  channel: typeof desktopShellContract.syncInspectCredential.channel,
+  payload: unknown
+): { authRef: string; label: string; masked: string } | null;
+export function parseIpcResponse(
+  channel: typeof desktopShellContract.syncDeleteCredential.channel,
+  payload: unknown
+): StatusOnlyResult;
+export function parseIpcResponse(
+  channel: typeof desktopShellContract.syncEnqueueLocalChange.channel,
+  payload: unknown
+): SyncOutboxRecord;
+export function parseIpcResponse(
+  channel: typeof desktopShellContract.syncPush.channel,
+  payload: unknown
+): StatusOnlyResult;
+export function parseIpcResponse(
+  channel: typeof desktopShellContract.syncPull.channel,
+  payload: unknown
+): SyncInboxRecord[];
+export function parseIpcResponse(
+  channel: typeof desktopShellContract.syncListConflicts.channel,
+  payload: unknown
+): SyncConflictRecord[];
+export function parseIpcResponse(
+  channel: typeof desktopShellContract.syncResolveConflict.channel,
+  payload: unknown
+): SyncConflictRecord;
+export function parseIpcResponse(
+  channel: typeof desktopShellContract.syncApplyConflict.channel,
+  payload: unknown
+): SyncConflictRecord & { draftVersionIds?: string[] };
+export function parseIpcResponse(
   channel: typeof desktopShellContract.pluginsCenterState.channel,
   payload: unknown
 ): PluginsState;
+export function parseIpcResponse(
+  channel: typeof desktopShellContract.pluginsInstall.channel,
+  payload: unknown
+): PluginInstallResult;
+export function parseIpcResponse(
+  channel: typeof desktopShellContract.pluginsAuthorizePermission.channel,
+  payload: unknown
+): StatusOnlyResult;
+export function parseIpcResponse(
+  channel: typeof desktopShellContract.pluginsEnable.channel,
+  payload: unknown
+): PluginRegistry;
+export function parseIpcResponse(
+  channel: typeof desktopShellContract.pluginsDisable.channel,
+  payload: unknown
+): StatusOnlyResult;
+export function parseIpcResponse(
+  channel: typeof desktopShellContract.pluginsRegistry.channel,
+  payload: unknown
+): PluginRegistry;
+export function parseIpcResponse(
+  channel: typeof desktopShellContract.discoverAddSource.channel,
+  payload: unknown
+): DiscoverSource;
+export function parseIpcResponse(
+  channel: typeof desktopShellContract.discoverPreviewSource.channel,
+  payload: unknown
+): DiscoverPreviewResult;
+export function parseIpcResponse(
+  channel: typeof desktopShellContract.discoverMigrationPreview.channel,
+  payload: unknown
+): MigrationPreviewResult;
 export function parseIpcResponse(channel: string, payload: unknown): unknown {
   const contract = contractForChannel(channel);
   if (!contract) {

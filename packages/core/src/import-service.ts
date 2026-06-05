@@ -1,4 +1,5 @@
 import { execFile } from 'node:child_process';
+import { createHash } from 'node:crypto';
 import {
   copyFile,
   lstat,
@@ -22,7 +23,8 @@ import { parseSkillManifest } from './skill-parser';
 
 const execFileAsync = promisify(execFile);
 
-export type ImportSourceType = 'local' | 'git' | 'zip';
+export type ImportSourceType = 'local' | 'git' | 'git-sparse' | 'zip' | 'tar' | 'mirror';
+export type ImportSignatureStatus = 'unsigned' | 'signed' | 'untrusted';
 
 export interface CreateImportServiceInput {
   database: SqliteDatabase;
@@ -40,18 +42,23 @@ export interface ImportedSkillResult {
   skill: SkillRecord;
   files: ImportedSkillFile[];
   stagedFrom: string;
+  signatureStatus?: ImportSignatureStatus;
 }
 
 export interface ImportService {
   importLocalFolder(input: { folderPath: string }): Promise<ImportedSkillResult>;
   importGit(input: { gitUrl: string }): Promise<ImportedSkillResult>;
+  importGitSparse(input: { gitUrl: string; subpath: string }): Promise<ImportedSkillResult>;
   importZip(input: { zipPath: string }): Promise<ImportedSkillResult>;
+  importTar(input: { tarPath: string }): Promise<ImportedSkillResult>;
+  importMirror(input: { mirrorDirectory: string }): Promise<ImportedSkillResult>;
 }
 
 interface StagedImportInput {
   stagedDirectory: string;
   sourceType: ImportSourceType;
   sourceUrl: string | null;
+  signatureStatus?: ImportSignatureStatus;
 }
 
 interface CollectedSkillFile {
@@ -92,6 +99,30 @@ export function createImportService(input: CreateImportServiceInput): ImportServ
       });
     },
 
+    async importGitSparse({ gitUrl, subpath }) {
+      const outerStage = await createStageDirectory(input.stagingDirectory);
+      const repositoryStage = path.join(outerStage, 'repo');
+      const stagedDirectory = path.join(outerStage, 'skill');
+      const safeSubpath = assertZipEntryPathSafe(subpath);
+
+      await execFileAsync('git', ['clone', '--depth', '1', '--filter=blob:none', '--sparse', gitUrl, repositoryStage]);
+      await execFileAsync('git', ['sparse-checkout', 'set', safeSubpath], { cwd: repositoryStage });
+      const sourceRoot = await ensurePathInsideRoot(repositoryStage, path.join(repositoryStage, safeSubpath));
+      await mkdir(stagedDirectory, { recursive: true });
+      await copyDirectoryIntoStage({
+        sourceRoot,
+        currentSource: sourceRoot,
+        stagedRoot: stagedDirectory,
+        relativePrefix: ''
+      });
+
+      return importFromStage(input, {
+        stagedDirectory,
+        sourceType: 'git-sparse',
+        sourceUrl: `${gitUrl}#${safeSubpath}`
+      });
+    },
+
     async importZip({ zipPath }) {
       const stagedDirectory = await createStageDirectory(input.stagingDirectory);
       const zip = new AdmZip(zipPath);
@@ -114,6 +145,47 @@ export function createImportService(input: CreateImportServiceInput): ImportServ
         stagedDirectory,
         sourceType: 'zip',
         sourceUrl: zipPath
+      });
+    },
+
+    async importTar({ tarPath }) {
+      const stagedDirectory = await createStageDirectory(input.stagingDirectory);
+      await assertTarArchiveSafe(tarPath);
+      await execFileAsync('tar', ['-xf', tarPath, '-C', stagedDirectory]);
+
+      return importFromStage(input, {
+        stagedDirectory,
+        sourceType: 'tar',
+        sourceUrl: tarPath
+      });
+    },
+
+    async importMirror({ mirrorDirectory }) {
+      const sourceRoot = await ensurePathInsideRoot(mirrorDirectory, mirrorDirectory);
+      const manifestPath = await ensurePathInsideRoot(sourceRoot, path.join(sourceRoot, 'manifest.json'));
+      const manifest = JSON.parse(await readFile(manifestPath, 'utf8')) as MirrorManifest;
+      const filesDirectory = await ensurePathInsideRoot(sourceRoot, path.join(sourceRoot, 'files'));
+      const stagedDirectory = await createStageDirectory(input.stagingDirectory);
+
+      for (const file of manifest.files) {
+        const relativePath = assertZipEntryPathSafe(file.relativePath);
+        const sourcePath = await ensurePathInsideRoot(filesDirectory, path.join(filesDirectory, ...relativePath.split('/')));
+        const content = await readFile(sourcePath);
+        const actualHash = createHash('sha256').update(content).digest('hex');
+        if (actualHash !== file.hash) {
+          throw new Error(`Mirror hash mismatch: ${relativePath}`);
+        }
+
+        const targetPath = await ensurePathInsideRoot(stagedDirectory, path.join(stagedDirectory, ...relativePath.split('/')));
+        await mkdir(path.dirname(targetPath), { recursive: true });
+        await writeFile(targetPath, content);
+      }
+
+      return importFromStage(input, {
+        stagedDirectory,
+        sourceType: 'mirror',
+        sourceUrl: mirrorDirectory,
+        signatureStatus: verifyMirrorSignature(manifest)
       });
     }
   };
@@ -157,8 +229,67 @@ async function importFromStage(
   return {
     skill,
     files: storedFiles,
-    stagedFrom: importInput.stagedDirectory
+    stagedFrom: importInput.stagedDirectory,
+    ...(importInput.signatureStatus ? { signatureStatus: importInput.signatureStatus } : {})
   };
+}
+
+interface MirrorManifest {
+  name?: string;
+  slug?: string;
+  versionNo?: number;
+  files: Array<{ relativePath: string; hash: string; size: number }>;
+  signature?: {
+    status?: ImportSignatureStatus;
+    algorithm?: 'sha256';
+    signer?: string;
+    value?: string;
+  };
+}
+
+async function assertTarArchiveSafe(tarPath: string): Promise<void> {
+  const { stdout: names } = await execFileAsync('tar', ['-tf', tarPath]);
+  for (const rawName of names.split(/\r?\n/).filter(Boolean)) {
+    if (rawName === '.' || rawName === './') {
+      continue;
+    }
+    assertZipEntryPathSafe(rawName);
+  }
+
+  const { stdout: listing } = await execFileAsync('tar', ['-tvf', tarPath]);
+  const unsafeLink = listing
+    .split(/\r?\n/)
+    .filter(Boolean)
+    .find((line) => line.startsWith('l') || line.startsWith('h'));
+  if (unsafeLink) {
+    throw new Error(`unsafe TAR link: ${unsafeLink}`);
+  }
+}
+
+function verifyMirrorSignature(manifest: MirrorManifest): ImportSignatureStatus {
+  if (!manifest.signature || manifest.signature.status === 'unsigned') {
+    return 'unsigned';
+  }
+
+  if (
+    manifest.signature.status === 'signed' &&
+    manifest.signature.algorithm === 'sha256' &&
+    manifest.signature.value === signedManifestValue(manifest, manifest.signature.signer ?? '')
+  ) {
+    return 'signed';
+  }
+
+  return 'untrusted';
+}
+
+export function signedManifestValue(manifest: MirrorManifest, signer: string): string {
+  const payload = {
+    name: manifest.name,
+    slug: manifest.slug,
+    versionNo: manifest.versionNo,
+    files: manifest.files
+  };
+  return createHash('sha256').update(`${JSON.stringify(payload)}:${signer}`).digest('hex');
 }
 
 async function createStageDirectory(stagingDirectory: string): Promise<string> {

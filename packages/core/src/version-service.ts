@@ -8,6 +8,8 @@ import type { ContentStore } from './content-store';
 import { assertZipEntryPathSafe, ensurePathInsideRoot } from './path-safety';
 
 export type FileChangeType = 'added' | 'modified' | 'deleted';
+export type VersionLifecycle = 'draft' | 'released';
+export type ReleaseChannel = 'stable' | 'beta' | 'local';
 
 export interface CreateVersionServiceInput {
   database: SqliteDatabase;
@@ -20,6 +22,8 @@ export interface SkillVersionSummary {
   versionNo: number;
   changeSummary: string;
   createdAt: string;
+  lifecycle: VersionLifecycle;
+  releaseChannel: ReleaseChannel;
 }
 
 export interface VersionFileInput {
@@ -38,8 +42,11 @@ export interface VersionService {
   createVersion(input: {
     skillId: string;
     changeSummary: string;
+    lifecycle?: VersionLifecycle;
+    releaseChannel?: ReleaseChannel;
     files: VersionFileInput[];
   }): Promise<SkillVersionSummary>;
+  promoteVersion(input: { versionId: string; releaseChannel: ReleaseChannel }): SkillVersionSummary;
   listVersions(input: { skillId: string }): SkillVersionSummary[];
   diffVersions(input: { fromVersionId: string; toVersionId: string }): FileDiff[];
   rollbackInstallation(input: { installationId: string; targetVersionId: string }): Promise<void>;
@@ -61,11 +68,12 @@ interface InstallationRow {
 
 export function createVersionService(input: CreateVersionServiceInput): VersionService {
   return {
-    async createVersion({ skillId, changeSummary, files }) {
+    async createVersion({ skillId, changeSummary, files, lifecycle = 'released', releaseChannel }) {
       const nextVersionNo = getNextVersionNo(input.database, skillId);
       const versionId = randomUUID();
       const manifest = files.find((file) => file.relativePath === 'SKILL.md');
       const manifestHash = hashContent(manifest?.content ?? `${skillId}:${nextVersionNo}`);
+      const normalizedReleaseChannel = releaseChannel ?? (lifecycle === 'draft' ? 'local' : 'stable');
 
       for (const file of files) {
         assertZipEntryPathSafe(file.relativePath);
@@ -77,9 +85,9 @@ export function createVersionService(input: CreateVersionServiceInput): VersionS
           .prepare(
             `
               insert into skill_versions
-                (id, skill_id, version_no, change_summary, manifest_hash)
+                (id, skill_id, version_no, change_summary, manifest_hash, lifecycle, release_channel, released)
               values
-                (@id, @skillId, @versionNo, @changeSummary, @manifestHash)
+                (@id, @skillId, @versionNo, @changeSummary, @manifestHash, @lifecycle, @releaseChannel, @released)
             `
           )
           .run({
@@ -87,7 +95,10 @@ export function createVersionService(input: CreateVersionServiceInput): VersionS
             skillId,
             versionNo: nextVersionNo,
             changeSummary,
-            manifestHash
+            manifestHash,
+            lifecycle,
+            releaseChannel: normalizedReleaseChannel,
+            released: lifecycle === 'released' ? 1 : 0
           });
 
         for (const file of files) {
@@ -130,11 +141,38 @@ export function createVersionService(input: CreateVersionServiceInput): VersionS
             });
         }
 
-        refreshSkillSearch(input.database, skillId);
+        refreshSkillSearch(input.database, skillId, files.map((file) => file.content).join('\n'));
       });
 
       create();
       return first(this.listVersions({ skillId }));
+    },
+
+    promoteVersion({ versionId, releaseChannel }) {
+      const row = input.database
+        .prepare('select skill_id as skillId from skill_versions where id = ?')
+        .get(versionId) as { skillId: string } | undefined;
+      if (!row) {
+        throw new Error(`Version not found: ${versionId}`);
+      }
+
+      input.database
+        .prepare(
+          `
+            update skill_versions
+            set lifecycle = 'released',
+                release_channel = @releaseChannel,
+                released = 1
+            where id = @versionId
+          `
+        )
+        .run({ versionId, releaseChannel });
+
+      const promoted = this.listVersions({ skillId: row.skillId }).find((version) => version.versionId === versionId);
+      if (!promoted) {
+        throw new Error(`Promoted version not found: ${versionId}`);
+      }
+      return promoted;
     },
 
     listVersions({ skillId }) {
@@ -146,7 +184,9 @@ export function createVersionService(input: CreateVersionServiceInput): VersionS
               skill_id as skillId,
               version_no as versionNo,
               coalesce(change_summary, '') as changeSummary,
-              created_at as createdAt
+              created_at as createdAt,
+              lifecycle,
+              release_channel as releaseChannel
             from skill_versions
             where skill_id = ?
             order by version_no desc
@@ -352,7 +392,10 @@ function recordRollback(
   record();
 }
 
-function refreshSkillSearch(database: SqliteDatabase, skillId: string): void {
+function refreshSkillSearch(database: SqliteDatabase, skillId: string, fileContent?: string): void {
+  const existing = database
+    .prepare('select file_content as fileContent from skill_search where skill_id = ? limit 1')
+    .get(skillId) as { fileContent: string } | undefined;
   const row = database
     .prepare(
       `
@@ -384,8 +427,8 @@ function refreshSkillSearch(database: SqliteDatabase, skillId: string): void {
   database
     .prepare(
       `
-        insert into skill_search (skill_id, name, description, tags, file_paths)
-        values (@skillId, @name, @description, @tags, @filePaths)
+        insert into skill_search (skill_id, name, description, tags, file_paths, file_content)
+        values (@skillId, @name, @description, @tags, @filePaths, @fileContent)
       `
     )
     .run({
@@ -393,7 +436,8 @@ function refreshSkillSearch(database: SqliteDatabase, skillId: string): void {
       name: row.name,
       description: row.description,
       tags: JSON.parse(row.tagsJson).join(' '),
-      filePaths: row.filePaths ?? ''
+      filePaths: row.filePaths ?? '',
+      fileContent: fileContent ?? existing?.fileContent ?? ''
     });
 }
 

@@ -52,27 +52,7 @@ export function createBuiltInAgentAdapters(options: BuiltInAdapterOptions = {}):
     },
 
     async listInstalled(root) {
-      const entries = await readdir(root.rootPath, { withFileTypes: true });
-      const installed: InstalledSkillLocation[] = [];
-
-      for (const entry of entries) {
-        if (!entry.isDirectory()) {
-          continue;
-        }
-
-        const skillPath = path.join(root.rootPath, entry.name);
-        const manifestPath = path.join(skillPath, 'SKILL.md');
-        if (await fileExists(manifestPath)) {
-          installed.push({
-            agentCode: config.id,
-            rootPath: root.rootPath,
-            skillPath,
-            manifestPath
-          });
-        }
-      }
-
-      return installed.sort((left, right) => left.skillPath.localeCompare(right.skillPath));
+      return listInstalledSkillLocations(config.id, root.rootPath);
     },
 
     async install() {
@@ -87,6 +67,37 @@ export function createBuiltInAgentAdapters(options: BuiltInAdapterOptions = {}):
       return phaseFourOnly();
     }
   }));
+}
+
+async function listInstalledSkillLocations(
+  agentCode: AgentCode,
+  rootPath: string,
+  directoryPath = rootPath
+): Promise<InstalledSkillLocation[]> {
+  const manifestPath = path.join(directoryPath, 'SKILL.md');
+  if (directoryPath !== rootPath && (await fileExists(manifestPath))) {
+    return [
+      {
+        agentCode,
+        rootPath,
+        skillPath: directoryPath,
+        manifestPath
+      }
+    ];
+  }
+
+  const entries = await readdir(directoryPath, { withFileTypes: true });
+  const installed: InstalledSkillLocation[] = [];
+
+  for (const entry of entries) {
+    if (!entry.isDirectory()) {
+      continue;
+    }
+
+    installed.push(...(await listInstalledSkillLocations(agentCode, rootPath, path.join(directoryPath, entry.name))));
+  }
+
+  return installed.sort((left, right) => left.skillPath.localeCompare(right.skillPath));
 }
 
 async function directoryExists(directoryPath: string): Promise<boolean> {

@@ -53,4 +53,51 @@ describe('export service', () => {
       'Export Helper'
     );
   });
+
+  it('exports signed archives and rejects tampered mirror imports', async () => {
+    const workspace = await mkdtemp(path.join(tmpdir(), 'theopenhub-signed-export-'));
+    tempDirectories.push(workspace);
+    const source = path.join(workspace, 'source');
+    await mkdir(source, { recursive: true });
+    await writeFile(
+      path.join(source, 'SKILL.md'),
+      ['---', 'name: signed-helper', 'description: Signed helper', '---', '# Signed Helper'].join('\n')
+    );
+    const database = createMemoryDatabase();
+    runMigrations(database);
+    const contentStore = createContentStore(path.join(workspace, 'blobs'));
+    const imported = await createImportService({
+      database,
+      contentStore,
+      stagingDirectory: path.join(workspace, 'staging')
+    }).importLocalFolder({ folderPath: source });
+    const exportDirectory = path.join(workspace, 'signed-package');
+
+    const signed = await createExportService({ database, contentStore }).exportSignedSkill({
+      skillId: imported.skill.id,
+      outputDirectory: exportDirectory,
+      signer: 'OpenHub Test'
+    });
+    const manifest = JSON.parse(await readFile(path.join(signed.outputDirectory, 'manifest.json'), 'utf8'));
+    expect(manifest.signature).toMatchObject({
+      status: 'signed',
+      signer: 'OpenHub Test',
+      algorithm: 'sha256'
+    });
+
+    const importingDb = createMemoryDatabase();
+    runMigrations(importingDb);
+    const importer = createImportService({
+      database: importingDb,
+      contentStore: createContentStore(path.join(workspace, 'imported-blobs')),
+      stagingDirectory: path.join(workspace, 'import-staging')
+    });
+    await expect(importer.importMirror({ mirrorDirectory: exportDirectory })).resolves.toMatchObject({
+      skill: { name: 'signed-helper' },
+      signatureStatus: 'signed'
+    });
+
+    await writeFile(path.join(exportDirectory, 'files/SKILL.md'), 'tampered');
+    await expect(importer.importMirror({ mirrorDirectory: exportDirectory })).rejects.toThrow(/hash mismatch/);
+  });
 });

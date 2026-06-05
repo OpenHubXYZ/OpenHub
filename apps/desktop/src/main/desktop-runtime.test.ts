@@ -1,13 +1,18 @@
+import { createHash } from 'node:crypto';
+import { execFile } from 'node:child_process';
 import { mkdir, readFile, rm, writeFile } from 'node:fs/promises';
 import { mkdtemp } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
+import { promisify } from 'node:util';
 
 import { afterEach, describe, expect, it } from 'vitest';
 import { createMemoryDatabase } from '@theopenhub/db';
+import { createContentStore, createSyncService, createVersionService } from '@theopenhub/core';
 
 import { createDesktopRuntime } from './desktop-runtime';
 
+const execFileAsync = promisify(execFile);
 const tempDirectories: string[] = [];
 
 describe('desktop runtime IPC dispatch', () => {
@@ -202,6 +207,273 @@ describe('desktop runtime IPC dispatch', () => {
       ])
     );
   });
+
+  it('dispatches Git and ZIP import, export, collection, library search, and skill detail workflows', async () => {
+    const workspace = await tempDir();
+    const dataDirectory = path.join(workspace, 'app-data');
+    const runtime = createDesktopRuntime({
+      dataDirectory,
+      homeDirectory: path.join(workspace, 'home')
+    });
+    const localSource = await createSkillFixture(path.join(workspace, 'source-local'), 'local-helper');
+    const gitSource = await createGitFixture(path.join(workspace, 'source-git'), 'git-helper');
+    const zipPath = await createZipFixture(path.join(workspace, 'source-zip.zip'), 'zip-helper');
+
+    const local = await runtime.dispatch('import.localFolder', { folderPath: localSource });
+    const git = await runtime.dispatch('import.git', { gitUrl: `file://${gitSource}` });
+    const zip = await runtime.dispatch('import.zip', { zipPath });
+    const search = await runtime.dispatch('library.search', { query: 'runtime local' });
+    const detail = await runtime.dispatch('library.detail', { skillId: local.skill.id });
+    const exportDirectory = path.join(workspace, 'exported-local');
+    const exported = await runtime.dispatch('export.skill', {
+      skillId: local.skill.id,
+      outputDirectory: exportDirectory
+    });
+    const collection = await runtime.dispatch('collection.create', {
+      name: 'Starter Pack',
+      description: 'Local and Git helpers',
+      skillIds: [local.skill.id, git.skill.id]
+    });
+    const collectionDirectory = path.join(workspace, 'starter-pack');
+    await runtime.dispatch('collection.export', {
+      collectionId: collection.id,
+      outputDirectory: collectionDirectory
+    });
+    const importingRuntime = createDesktopRuntime({
+      dataDirectory: path.join(workspace, 'importing-app-data'),
+      homeDirectory: path.join(workspace, 'importing-home')
+    });
+    const importedCollection = await importingRuntime.dispatch('collection.import', {
+      packageDirectory: collectionDirectory
+    });
+
+    expect([local.skill.name, git.skill.name, zip.skill.name]).toEqual([
+      'local-helper',
+      'git-helper',
+      'zip-helper'
+    ]);
+    expect(search).toEqual(expect.arrayContaining([expect.objectContaining({ name: 'local-helper' })]));
+    expect(detail).toMatchObject({
+      skill: {
+        name: 'local-helper',
+        tags: ['runtime', 'local']
+      },
+      source: {
+        type: 'local',
+        url: localSource
+      },
+      versions: [expect.objectContaining({ versionNo: 1 })],
+      files: expect.arrayContaining([expect.objectContaining({ relativePath: 'SKILL.md' })]),
+      riskStatus: 'unscanned'
+    });
+    expect(detail.skillMarkdown).toContain('local-helper');
+    await expect(readFile(path.join(exported.outputDirectory, 'manifest.json'), 'utf8')).resolves.toContain(
+      'local-helper'
+    );
+    expect(importedCollection.collection.name).toBe('Starter Pack');
+    expect(importedCollection.skills.map((skill) => skill.name)).toEqual(['git-helper', 'local-helper']);
+  });
+
+  it('dispatches install target, uninstall, version diff, rollback, and security exemption workflows', async () => {
+    const workspace = await tempDir();
+    const database = createMemoryDatabase();
+    const dataDirectory = path.join(workspace, 'app-data');
+    const homeDirectory = path.join(workspace, 'home');
+    await mkdir(path.join(homeDirectory, '.codex/skills'), { recursive: true });
+    const runtime = createDesktopRuntime({ dataDirectory, homeDirectory, database });
+    const imported = await runtime.dispatch('import.localFolder', {
+      folderPath: await createSkillFixture(path.join(workspace, 'versioned-source'), 'versioned-helper')
+    });
+    const contentStore = createContentStore(path.join(dataDirectory, 'blobs'));
+    const secondVersion = await createVersionService({ database, contentStore }).createVersion({
+      skillId: imported.skill.id,
+      changeSummary: 'Add rollback guide',
+      files: [
+        {
+          relativePath: 'SKILL.md',
+          content: [
+            '---',
+            'name: versioned-helper',
+            'description: Versioned helper v2',
+            'tags: [runtime, local]',
+            '---',
+            '# Versioned Helper v2'
+          ].join('\n')
+        },
+        { relativePath: 'references/guide.md', content: 'v2 guide' },
+        { relativePath: 'references/new.md', content: 'new file' }
+      ]
+    });
+    const targetRoot = path.join(homeDirectory, '.codex/skills');
+
+    const targets = await runtime.dispatch('install.listTargets', {});
+    const versions = await runtime.dispatch('version.list', { skillId: imported.skill.id });
+    const diff = await runtime.dispatch('version.diff', {
+      fromVersionId: imported.skill.versionId,
+      toVersionId: secondVersion.versionId
+    });
+    const plan = await runtime.dispatch('install.createPlan', {
+      skillId: imported.skill.id,
+      targetRoot,
+      agentCode: 'codex',
+      agentDisplayName: 'Codex',
+      adapterVersion: 'test',
+      scope: 'user'
+    });
+    const installed = await runtime.dispatch('install.applyPlan', { plan });
+    await runtime.dispatch('version.rollback', {
+      installationId: installed.installationId,
+      targetVersionId: imported.skill.versionId
+    });
+    const rolledBackManifest = await readFile(path.join(targetRoot, 'versioned-helper/SKILL.md'), 'utf8');
+    await runtime.dispatch('install.uninstall', { installationId: installed.installationId });
+
+    expect(targets).toEqual([expect.objectContaining({ agentCode: 'codex', rootPath: targetRoot })]);
+    expect(versions.map((version) => version.versionNo)).toEqual([2, 1]);
+    expect(diff).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ relativePath: 'references/new.md', changeType: 'added' }),
+        expect.objectContaining({ relativePath: 'SKILL.md', changeType: 'modified' })
+      ])
+    );
+    expect(rolledBackManifest).toContain('# Skill');
+    await expect(readFile(path.join(targetRoot, 'versioned-helper/SKILL.md'), 'utf8')).rejects.toMatchObject({
+      code: 'ENOENT'
+    });
+
+    const highRisk = await runtime.dispatch('import.localFolder', {
+      folderPath: await createSkillFixture(
+        path.join(workspace, 'high-risk-source'),
+        'high-risk-helper',
+        'Run `rm -rf "$HOME/.codex"`.'
+      )
+    });
+    await runtime.dispatch('security.rescan', { skillIds: [highRisk.skill.id] });
+    const finding = await runtime.dispatch('security.findingDetail', {
+      skillId: highRisk.skill.id,
+      ruleId: 'dangerous-shell-command'
+    });
+    const exemption = await runtime.dispatch('security.createExemption', {
+      skillId: highRisk.skill.id,
+      scope: 'user',
+      reason: 'Maintainer reviewed'
+    });
+    await runtime.dispatch('security.revokeExemption', { exemptionId: exemption.id });
+
+    expect(finding).toMatchObject({
+      skillName: 'high-risk-helper',
+      ruleId: 'dangerous-shell-command',
+      severity: 'critical'
+    });
+    expect(exemption).toMatchObject({ skillId: highRisk.skill.id, scope: 'user' });
+  });
+
+  it('dispatches sync, plugin runtime, and discover source workflows', async () => {
+    const workspace = await tempDir();
+    const database = createMemoryDatabase();
+    const dataDirectory = path.join(workspace, 'app-data');
+    const runtime = createDesktopRuntime({
+      dataDirectory,
+      homeDirectory: path.join(workspace, 'home'),
+      database
+    });
+    const imported = await runtime.dispatch('import.localFolder', {
+      folderPath: await createSkillFixture(path.join(workspace, 'sync-source'), 'sync-runtime-helper')
+    });
+    const sharedDirectory = path.join(workspace, 'shared-sync');
+    const profile = await runtime.dispatch('sync.createProfile', {
+      mode: 'shared-folder',
+      remoteUrl: sharedDirectory,
+      enabled: true,
+      authRef: 'keychain://sync/shared'
+    });
+    const outbox = await runtime.dispatch('sync.enqueueLocalChange', {
+      profileId: profile.id,
+      entityType: 'skill_version',
+      entityId: imported.skill.versionId,
+      payload: { skillId: imported.skill.id }
+    });
+    await runtime.dispatch('sync.push', { profileId: profile.id });
+    await mkdir(path.join(sharedDirectory, 'inbox'), { recursive: true });
+    await writeFile(
+      path.join(sharedDirectory, 'inbox/remote-change.json'),
+      JSON.stringify({ entityType: 'skill_version', entityId: 'remote-v1', payload: { versionNo: 3 } })
+    );
+    const pulled = await runtime.dispatch('sync.pull', { profileId: profile.id });
+    const syncForSetup = createSyncService({ database });
+    const conflict = syncForSetup.detectConflict({
+      profileId: profile.id,
+      entityType: 'skill_version',
+      entityId: imported.skill.versionId,
+      base: { hash: 'base' },
+      local: { hash: 'local' },
+      remote: { hash: 'remote' }
+    });
+    const listedConflicts = await runtime.dispatch('sync.listConflicts', { profileId: profile.id });
+    const resolvedConflict = await runtime.dispatch('sync.resolveConflict', {
+      conflictId: conflict.id,
+      resolution: 'use-local'
+    });
+
+    const pluginRoot = await createPluginFixture({
+      directory: path.join(workspace, 'plugin'),
+      id: 'local-agent-plugin',
+      name: 'Local Agent Plugin',
+      permission: 'network:fetch'
+    });
+    const installedPlugin = await runtime.dispatch('plugins.install', { rootPath: pluginRoot });
+    await runtime.dispatch('plugins.authorizePermission', {
+      pluginId: installedPlugin.id,
+      permission: 'network:fetch',
+      reason: 'Fixture grant'
+    });
+    const enabledRegistry = await runtime.dispatch('plugins.enable', { pluginId: installedPlugin.id });
+    const currentRegistry = await runtime.dispatch('plugins.registry', {});
+    await runtime.dispatch('plugins.disable', { pluginId: installedPlugin.id });
+    const disabledRegistry = await runtime.dispatch('plugins.registry', {});
+
+    const sourcePath = path.join(workspace, 'discover-source');
+    await createSkillFixture(path.join(sourcePath, 'discover-helper'), 'Discover Helper');
+    const source = await runtime.dispatch('discover.addSource', {
+      name: 'Local Discover',
+      sourceType: 'local',
+      url: sourcePath,
+      trustLevel: 'verified'
+    });
+    const preview = await runtime.dispatch('discover.previewSource', { sourceId: source.id });
+    const migration = await runtime.dispatch('discover.migrationPreview', {
+      adapter: 'openskills',
+      sourcePath
+    });
+
+    expect(outbox.status).toBe('queued');
+    await expect(readFile(path.join(sharedDirectory, 'outbox', `${outbox.id}.json`), 'utf8')).resolves.toContain(
+      imported.skill.versionId
+    );
+    expect(pulled).toHaveLength(1);
+    expect(listedConflicts).toEqual([expect.objectContaining({ id: conflict.id, status: 'open' })]);
+    expect(resolvedConflict).toMatchObject({ id: conflict.id, status: 'resolved', resolution: 'use-local' });
+    expect(enabledRegistry.agentAdapters).toEqual([
+      {
+        pluginId: installedPlugin.id,
+        code: 'local-agent',
+        displayName: 'Local Agent'
+      }
+    ]);
+    expect(currentRegistry.agentAdapters).toHaveLength(1);
+    expect(disabledRegistry.agentAdapters).toEqual([]);
+    expect(preview).toMatchObject({
+      source: { name: 'Local Discover', status: 'cached', verified: true },
+      writesPlanned: false,
+      skills: [expect.objectContaining({ name: 'Discover Helper' })]
+    });
+    expect(migration).toMatchObject({
+      adapter: 'openskills',
+      writesPlanned: false,
+      skills: [expect.objectContaining({ name: 'Discover Helper' })]
+    });
+    expect(countRows(database, 'skills')).toBe(1);
+  });
 });
 
 async function tempDir(): Promise<string> {
@@ -220,4 +492,182 @@ async function createSkillFixture(directory: string, name: string, body = '# Ski
   );
   await writeFile(path.join(directory, 'references/guide.md'), `${name} guide`);
   return directory;
+}
+
+async function createGitFixture(directory: string, name: string): Promise<string> {
+  await createSkillFixture(directory, name);
+  await execFileAsync('git', ['init'], { cwd: directory });
+  await execFileAsync('git', ['add', '.'], { cwd: directory });
+  await execFileAsync(
+    'git',
+    ['-c', 'user.name=OpenHub Test', '-c', 'user.email=test@example.com', 'commit', '-m', 'fixture'],
+    { cwd: directory }
+  );
+  return directory;
+}
+
+async function createZipFixture(zipPath: string, name: string): Promise<string> {
+  await writeFile(
+    zipPath,
+    createRawZipArchive([
+      {
+        fileName: 'SKILL.md',
+        content: ['---', `name: ${name}`, `description: ${name} description`, 'tags: [runtime, local]', '---', '# Skill'].join('\n')
+      },
+      {
+        fileName: 'references/guide.md',
+        content: `${name} guide`
+      }
+    ])
+  );
+  return zipPath;
+}
+
+function createRawZipArchive(files: Array<{ fileName: string; content: string }>): Buffer {
+  const localRecords: Buffer[] = [];
+  const centralRecords: Buffer[] = [];
+  let localOffset = 0;
+
+  for (const file of files) {
+    const fileNameBytes = Buffer.from(file.fileName);
+    const contentBytes = Buffer.from(file.content);
+    const checksum = crc32(contentBytes);
+    const localHeader = Buffer.alloc(30);
+    let offset = 0;
+    localHeader.writeUInt32LE(0x04034b50, offset);
+    offset += 4;
+    localHeader.writeUInt16LE(20, offset);
+    offset += 2;
+    localHeader.writeUInt16LE(0, offset);
+    offset += 2;
+    localHeader.writeUInt16LE(0, offset);
+    offset += 2;
+    localHeader.writeUInt16LE(0, offset);
+    offset += 2;
+    localHeader.writeUInt16LE(0, offset);
+    offset += 2;
+    localHeader.writeUInt32LE(checksum, offset);
+    offset += 4;
+    localHeader.writeUInt32LE(contentBytes.length, offset);
+    offset += 4;
+    localHeader.writeUInt32LE(contentBytes.length, offset);
+    offset += 4;
+    localHeader.writeUInt16LE(fileNameBytes.length, offset);
+    offset += 2;
+    localHeader.writeUInt16LE(0, offset);
+
+    const localRecord = Buffer.concat([localHeader, fileNameBytes, contentBytes]);
+    localRecords.push(localRecord);
+
+    const centralHeader = Buffer.alloc(46);
+    offset = 0;
+    centralHeader.writeUInt32LE(0x02014b50, offset);
+    offset += 4;
+    centralHeader.writeUInt16LE(20, offset);
+    offset += 2;
+    centralHeader.writeUInt16LE(20, offset);
+    offset += 2;
+    centralHeader.writeUInt16LE(0, offset);
+    offset += 2;
+    centralHeader.writeUInt16LE(0, offset);
+    offset += 2;
+    centralHeader.writeUInt16LE(0, offset);
+    offset += 2;
+    centralHeader.writeUInt16LE(0, offset);
+    offset += 2;
+    centralHeader.writeUInt32LE(checksum, offset);
+    offset += 4;
+    centralHeader.writeUInt32LE(contentBytes.length, offset);
+    offset += 4;
+    centralHeader.writeUInt32LE(contentBytes.length, offset);
+    offset += 4;
+    centralHeader.writeUInt16LE(fileNameBytes.length, offset);
+    offset += 2;
+    centralHeader.writeUInt16LE(0, offset);
+    offset += 2;
+    centralHeader.writeUInt16LE(0, offset);
+    offset += 2;
+    centralHeader.writeUInt16LE(0, offset);
+    offset += 2;
+    centralHeader.writeUInt16LE(0, offset);
+    offset += 2;
+    centralHeader.writeUInt32LE(0, offset);
+    offset += 4;
+    centralHeader.writeUInt32LE(localOffset, offset);
+    centralRecords.push(Buffer.concat([centralHeader, fileNameBytes]));
+    localOffset += localRecord.length;
+  }
+
+  const centralDirectory = Buffer.concat(centralRecords);
+  const endOfCentralDirectory = Buffer.alloc(22);
+  let offset = 0;
+  endOfCentralDirectory.writeUInt32LE(0x06054b50, offset);
+  offset += 4;
+  endOfCentralDirectory.writeUInt16LE(0, offset);
+  offset += 2;
+  endOfCentralDirectory.writeUInt16LE(0, offset);
+  offset += 2;
+  endOfCentralDirectory.writeUInt16LE(files.length, offset);
+  offset += 2;
+  endOfCentralDirectory.writeUInt16LE(files.length, offset);
+  offset += 2;
+  endOfCentralDirectory.writeUInt32LE(centralDirectory.length, offset);
+  offset += 4;
+  endOfCentralDirectory.writeUInt32LE(localOffset, offset);
+  offset += 4;
+  endOfCentralDirectory.writeUInt16LE(0, offset);
+
+  return Buffer.concat([...localRecords, centralDirectory, endOfCentralDirectory]);
+}
+
+function crc32(buffer: Buffer): number {
+  let checksum = 0xffffffff;
+  for (const byte of buffer) {
+    checksum ^= byte;
+    for (let index = 0; index < 8; index += 1) {
+      checksum = (checksum >>> 1) ^ (0xedb88320 & -(checksum & 1));
+    }
+  }
+
+  return (checksum ^ 0xffffffff) >>> 0;
+}
+
+async function createPluginFixture(input: {
+  directory: string;
+  id: string;
+  name: string;
+  permission: 'network:fetch';
+}): Promise<string> {
+  await mkdir(input.directory, { recursive: true });
+  const source = `
+    exports.register = (host) => {
+      host.registerAgentAdapter({ code: 'local-agent', displayName: 'Local Agent' });
+    };
+  `;
+  await writeFile(path.join(input.directory, 'plugin.js'), source);
+  await writeFile(
+    path.join(input.directory, 'plugin.json'),
+    JSON.stringify(
+      {
+        id: input.id,
+        name: input.name,
+        version: '1.0.0',
+        apiVersion: 1,
+        entry: 'plugin.js',
+        capabilities: [{ type: 'agent-adapter', id: 'local-agent' }],
+        permissions: [input.permission],
+        integrity: {
+          algorithm: 'sha256',
+          hash: createHash('sha256').update(source).digest('hex')
+        }
+      },
+      null,
+      2
+    )
+  );
+  return input.directory;
+}
+
+function countRows(database: ReturnType<typeof createMemoryDatabase>, tableName: string): number {
+  return (database.prepare(`select count(*) as count from ${tableName}`).get() as { count: number }).count;
 }
