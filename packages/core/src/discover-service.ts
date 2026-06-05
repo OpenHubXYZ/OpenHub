@@ -30,6 +30,9 @@ export interface DiscoverSkillPreview {
   tags: string[];
   path: string;
   riskStatus: string;
+  selected?: boolean;
+  importLabel?: string;
+  warnings?: string[];
 }
 
 export interface DiscoverPreviewResult {
@@ -140,11 +143,9 @@ export function createDiscoverService(input: CreateDiscoverServiceInput): Discov
 
     async previewMigration({ adapter, sourcePath }) {
       const roots = await migrationRoots(adapter, sourcePath);
-      const skills = (
+      const skills = addMigrationSelectionMetadata(
         await Promise.all(roots.map((root) => previewSkillDirectory(root)))
-      )
-        .flat()
-        .sort((left, right) => left.name.localeCompare(right.name));
+      );
 
       return {
         adapter,
@@ -154,6 +155,28 @@ export function createDiscoverService(input: CreateDiscoverServiceInput): Discov
       };
     }
   };
+}
+
+function addMigrationSelectionMetadata(
+  previewGroups: DiscoverSkillPreview[][]
+): DiscoverSkillPreview[] {
+  const skills = previewGroups.flat().sort((left, right) => left.name.localeCompare(right.name));
+  const labelCounts = new Map<string, number>();
+  for (const skill of skills) {
+    const label = slugify(skill.name);
+    labelCounts.set(label, (labelCounts.get(label) ?? 0) + 1);
+  }
+
+  return skills.map((skill) => {
+    const importLabel = slugify(skill.name);
+    const warnings = labelCounts.get(importLabel)! > 1 ? ['duplicate-import-label'] : [];
+    return {
+      ...skill,
+      selected: true,
+      importLabel,
+      warnings
+    };
+  });
 }
 
 async function cloneGitSource(input: {
@@ -353,6 +376,15 @@ function discoverSourceRow(row: unknown): DiscoverSource {
     status: source.status,
     cachedAt: source.cachedAt
   };
+}
+
+function slugify(input: string): string {
+  const slug = input
+    .trim()
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/^-+|-+$/g, '');
+  return slug || 'skill';
 }
 
 async function pathExists(targetPath: string): Promise<boolean> {

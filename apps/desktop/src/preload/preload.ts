@@ -64,7 +64,8 @@ const api = {
   async importMigration(input: {
     adapter: 'openskills' | 'skills-manager' | 'skillhub' | 'skills-manager-client';
     sourcePath: string;
-    paths: string[];
+    paths?: string[];
+    items?: Array<{ path: string; selected?: boolean; importLabel?: string }>;
   }): Promise<ImportedSkillResult[]> {
     const payload = await ipcRenderer.invoke(desktopShellContract.onboardingImportMigration.channel, input);
     return parseIpcResponse(desktopShellContract.onboardingImportMigration.channel, payload);

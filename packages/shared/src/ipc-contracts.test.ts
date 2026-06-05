@@ -257,5 +257,24 @@ describe('desktop shell IPC contract', () => {
       url: '/tmp/source',
       trustLevel: 'verified'
     })).toMatchObject({ sourceType: 'local' });
+    expect(
+      desktopShellContract.discoverMigrationPreview.response.parse({
+        adapter: 'openskills',
+        sourcePath: '/tmp/source',
+        writesPlanned: false,
+        skills: [
+          {
+            name: 'Migration Helper',
+            description: '',
+            tags: ['migration'],
+            path: '/tmp/source/migration-helper',
+            riskStatus: 'unscanned',
+            selected: true,
+            importLabel: 'migration-helper',
+            warnings: []
+          }
+        ]
+      }).skills[0]
+    ).toMatchObject({ selected: true, importLabel: 'migration-helper' });
   });
 });

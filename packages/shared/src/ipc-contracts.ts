@@ -878,7 +878,10 @@ const discoverSkillPreviewSchema = z
     description: z.string(),
     tags: z.array(z.string()),
     path: z.string().min(1),
-    riskStatus: z.string().min(1)
+    riskStatus: z.string().min(1),
+    selected: z.boolean().optional(),
+    importLabel: z.string().min(1).optional(),
+    warnings: z.array(z.string().min(1)).optional()
   })
   .strict();
 
@@ -931,6 +934,13 @@ const installTargetRequestSchema = z
     rootPath: z.string().min(1)
   })
   .strict();
+const migrationImportItemSchema = z
+  .object({
+    path: z.string().min(1),
+    selected: z.boolean().default(true),
+    importLabel: z.string().min(1).optional()
+  })
+  .strict();
 
 export const desktopShellContract = {
   appInfo: {
@@ -954,9 +964,13 @@ export const desktopShellContract = {
       .object({
         adapter: z.enum(['openskills', 'skills-manager', 'skillhub', 'skills-manager-client']),
         sourcePath: z.string().min(1),
-        paths: z.array(z.string().min(1)).min(1)
+        paths: z.array(z.string().min(1)).min(1).optional(),
+        items: z.array(migrationImportItemSchema).min(1).optional()
       })
-      .strict(),
+      .strict()
+      .refine((input) => input.paths || input.items, {
+        message: 'Either paths or items is required'
+      }),
     response: z.array(importedSkillResultSchema)
   },
   agentRootsAddProject: {

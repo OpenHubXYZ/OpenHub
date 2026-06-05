@@ -95,6 +95,39 @@ describe('discover service', () => {
     expect(manager.skills).toEqual([expect.objectContaining({ name: 'Manager Helper' })]);
     expect(countRows(database, 'skills')).toBe(0);
   });
+
+  it('adds migration selection metadata and duplicate label warnings without preview writes', async () => {
+    const workspace = await tempDir();
+    const database = createMemoryDatabase();
+    runMigrations(database);
+    const sourcePath = path.join(workspace, 'openskills');
+    await createSkillFixture(path.join(sourcePath, 'first'), 'Duplicate Helper');
+    await createSkillFixture(path.join(sourcePath, 'second'), 'Duplicate Helper');
+    const discover = createDiscoverService({
+      database,
+      cacheDirectory: path.join(workspace, 'discover-cache')
+    });
+
+    const preview = await discover.previewMigration({ adapter: 'openskills', sourcePath });
+
+    expect(preview.skills).toEqual([
+      expect.objectContaining({
+        name: 'Duplicate Helper',
+        selected: true,
+        importLabel: 'duplicate-helper',
+        warnings: ['duplicate-import-label']
+      }),
+      expect.objectContaining({
+        name: 'Duplicate Helper',
+        selected: true,
+        importLabel: 'duplicate-helper',
+        warnings: ['duplicate-import-label']
+      })
+    ]);
+    expect(preview.writesPlanned).toBe(false);
+    expect(countRows(database, 'skills')).toBe(0);
+    expect(countRows(database, 'blob_objects')).toBe(0);
+  });
 });
 
 async function tempDir(): Promise<string> {

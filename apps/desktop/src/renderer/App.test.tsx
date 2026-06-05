@@ -1529,6 +1529,99 @@ describe('desktop app shell', () => {
     expect(screen.getByText('Imported Migrated Helper')).toBeInTheDocument();
   });
 
+  it('selects individual migration items, maps import labels, and surfaces duplicate warnings', async () => {
+    const migratedSkill = {
+      id: 'skill-keep',
+      versionId: 'version-keep',
+      name: 'Keep Helper',
+      description: 'Imported through migration',
+      versionNo: 1,
+      favorite: false
+    };
+    const api = {
+      getOnboardingState: vi.fn().mockResolvedValue({
+        completed: false,
+        detectedRoots: [],
+        migrationPreviews: []
+      }),
+      completeOnboarding: vi.fn(),
+      previewMigration: vi.fn().mockResolvedValue({
+        adapter: 'openskills',
+        sourcePath: '/tmp/openskills',
+        writesPlanned: false,
+        skills: [
+          {
+            name: 'Keep Helper',
+            description: 'Preview keep',
+            tags: ['migration'],
+            path: '/tmp/openskills/keep-helper',
+            riskStatus: 'unscanned',
+            selected: true,
+            importLabel: 'duplicate-helper',
+            warnings: ['duplicate-import-label']
+          },
+          {
+            name: 'Skip Helper',
+            description: 'Preview skip',
+            tags: ['migration'],
+            path: '/tmp/openskills/skip-helper',
+            riskStatus: 'unscanned',
+            selected: true,
+            importLabel: 'duplicate-helper',
+            warnings: ['duplicate-import-label']
+          }
+        ]
+      }),
+      importMigration: vi.fn().mockResolvedValue([
+        {
+          skill: migratedSkill,
+          files: [{ relativePath: 'SKILL.md', hash: 'hash-keep', size: 120 }],
+          stagedFrom: '/tmp/staging/keep'
+        }
+      ]),
+      getPluginCenterState: vi.fn()
+    };
+    window.theOpenHub = api as unknown as NonNullable<typeof window.theOpenHub>;
+
+    render(<App />);
+
+    await screen.findByRole('heading', { name: 'First launch setup' });
+    fireEvent.change(screen.getByLabelText('Migration source path'), {
+      target: { value: '/tmp/openskills' }
+    });
+    fireEvent.click(screen.getByRole('button', { name: 'Preview migration' }));
+    await waitFor(() => expect(api.previewMigration).toHaveBeenCalled());
+    expect(screen.getAllByText('duplicate-import-label').length).toBeGreaterThan(0);
+
+    fireEvent.click(screen.getByRole('button', { name: 'Select none migration items' }));
+    expect(screen.getByLabelText('Select Keep Helper')).not.toBeChecked();
+    fireEvent.click(screen.getByLabelText('Select Keep Helper'));
+    fireEvent.change(screen.getByLabelText('Import label for Keep Helper'), {
+      target: { value: 'custom-keep' }
+    });
+    fireEvent.click(screen.getByRole('button', { name: 'Import selected migration' }));
+
+    await waitFor(() =>
+      expect(api.importMigration).toHaveBeenCalledWith({
+        adapter: 'openskills',
+        sourcePath: '/tmp/openskills',
+        items: [
+          {
+            path: '/tmp/openskills/keep-helper',
+            selected: true,
+            importLabel: 'custom-keep'
+          },
+          {
+            path: '/tmp/openskills/skip-helper',
+            selected: false,
+            importLabel: 'duplicate-helper'
+          }
+        ]
+      })
+    );
+    expect(screen.getByText('Imported Keep Helper')).toBeInTheDocument();
+  });
+
   it('lets the user favorite skills and search only favorites', async () => {
     const runtimeSkill = {
       id: 'skill-runtime',

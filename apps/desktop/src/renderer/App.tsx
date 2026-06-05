@@ -1162,16 +1162,54 @@ export function App({
     setOperationMessage(`Migration preview ${preview.skills.length} skills`);
   }
 
+  function handleMigrationItemSelection(path: string, selected: boolean): void {
+    setDiscoverPreviewSkills((current) =>
+      current.map((skill) => (skill.path === path ? { ...skill, selected } : skill))
+    );
+  }
+
+  function handleMigrationImportLabelChange(path: string, importLabel: string): void {
+    setDiscoverPreviewSkills((current) =>
+      current.map((skill) => (skill.path === path ? { ...skill, importLabel } : skill))
+    );
+  }
+
+  function handleSelectAllMigrationItems(): void {
+    setDiscoverPreviewSkills((current) => current.map((skill) => ({ ...skill, selected: true })));
+  }
+
+  function handleSelectNoMigrationItems(): void {
+    setDiscoverPreviewSkills((current) => current.map((skill) => ({ ...skill, selected: false })));
+  }
+
   async function handleImportMigration(): Promise<void> {
     if (!window.theOpenHub?.importMigration || migrationSourcePath.trim().length === 0 || discoverPreviewSkills.length === 0) {
       return;
     }
 
-    const imported = await window.theOpenHub.importMigration({
+    const selectedSkills = discoverPreviewSkills.filter((skill) => skill.selected ?? true);
+    if (selectedSkills.length === 0) {
+      setOperationMessage('No migration imports selected');
+      return;
+    }
+
+    const mapped = discoverPreviewSkills.some(
+      (skill) => skill.selected === false || (skill.importLabel && skill.importLabel.trim().length > 0)
+    );
+    const importRequest = {
       adapter: migrationAdapter,
       sourcePath: migrationSourcePath.trim(),
-      paths: discoverPreviewSkills.map((skill) => skill.path)
-    });
+      ...(mapped
+        ? {
+            items: discoverPreviewSkills.map((skill) => ({
+              path: skill.path,
+              selected: skill.selected ?? true,
+              ...(skill.importLabel ? { importLabel: skill.importLabel } : {})
+            }))
+          }
+        : { paths: selectedSkills.map((skill) => skill.path) })
+    };
+    const imported = await window.theOpenHub.importMigration(importRequest);
     setWorkspaceState((current) => ({
       ...current,
       skills: [...imported.map((item) => item.skill), ...current.skills],
@@ -1242,10 +1280,14 @@ export function App({
           void handleImportMigration();
         }}
         onMigrationAdapterChange={setMigrationAdapter}
+        onMigrationImportLabelChange={handleMigrationImportLabelChange}
+        onMigrationItemSelection={handleMigrationItemSelection}
         onMigrationSourcePathChange={setMigrationSourcePath}
         onPreviewMigration={() => {
           void handlePreviewMigration();
         }}
+        onSelectAllMigrationItems={handleSelectAllMigrationItems}
+        onSelectNoMigrationItems={handleSelectNoMigrationItems}
         operationMessage={operationMessage}
       />
     );
@@ -1553,8 +1595,12 @@ function FirstLaunchWizard({
   onComplete,
   onImportMigration,
   onMigrationAdapterChange,
+  onMigrationImportLabelChange,
+  onMigrationItemSelection,
   onMigrationSourcePathChange,
   onPreviewMigration,
+  onSelectAllMigrationItems,
+  onSelectNoMigrationItems,
   operationMessage
 }: {
   detectedRoots: InstallTarget[];
@@ -1564,10 +1610,16 @@ function FirstLaunchWizard({
   onComplete: () => void;
   onImportMigration: () => void;
   onMigrationAdapterChange: (value: 'openskills' | 'skills-manager' | 'skillhub' | 'skills-manager-client') => void;
+  onMigrationImportLabelChange: (path: string, value: string) => void;
+  onMigrationItemSelection: (path: string, selected: boolean) => void;
   onMigrationSourcePathChange: (value: string) => void;
   onPreviewMigration: () => void;
+  onSelectAllMigrationItems: () => void;
+  onSelectNoMigrationItems: () => void;
   operationMessage: string;
 }): ReactElement {
+  const selectedCount = discoverPreviewSkills.filter((skill) => skill.selected ?? true).length;
+
   return (
     <main className="screen">
       <section className="app-frame" aria-label="OpenHub first launch">
@@ -1634,9 +1686,17 @@ function FirstLaunchWizard({
                   <button disabled={migrationSourcePath.trim().length === 0} onClick={onPreviewMigration} type="button">
                     Preview migration
                   </button>
-                  <button disabled={discoverPreviewSkills.length === 0} onClick={onImportMigration} type="button">
+                  <button disabled={selectedCount === 0} onClick={onImportMigration} type="button">
                     Import selected migration
                   </button>
+                  <span className="button-pair">
+                    <button disabled={discoverPreviewSkills.length === 0} onClick={onSelectAllMigrationItems} type="button">
+                      Select all migration items
+                    </button>
+                    <button disabled={discoverPreviewSkills.length === 0} onClick={onSelectNoMigrationItems} type="button">
+                      Select none migration items
+                    </button>
+                  </span>
                 </div>
               </article>
               <article className="flow-panel">
@@ -1644,12 +1704,41 @@ function FirstLaunchWizard({
                   <h2>Preview results</h2>
                   <span>{operationMessage || `${discoverPreviewSkills.length} skills`}</span>
                 </header>
-                <KeyValueList
-                  rows={discoverPreviewSkills.map((skill) => ({
-                    label: skill.name,
-                    value: skill.path
-                  }))}
-                />
+                <div className="migration-items">
+                  {discoverPreviewSkills.map((skill) => (
+                    <section className="migration-item" key={skill.path}>
+                      <label className="inline-check" htmlFor={`migration-select-${safeDomId(skill.path)}`}>
+                        <input
+                          aria-label={`Select ${skill.name}`}
+                          checked={skill.selected ?? true}
+                          id={`migration-select-${safeDomId(skill.path)}`}
+                          onChange={(event) => onMigrationItemSelection(skill.path, event.target.checked)}
+                          type="checkbox"
+                        />
+                        {skill.name}
+                      </label>
+                      <label htmlFor={`migration-label-${safeDomId(skill.path)}`}>
+                        Import label
+                        <input
+                          aria-label={`Import label for ${skill.name}`}
+                          id={`migration-label-${safeDomId(skill.path)}`}
+                          onChange={(event) => onMigrationImportLabelChange(skill.path, event.target.value)}
+                          value={skill.importLabel ?? ''}
+                        />
+                      </label>
+                      <span className="path-label">{skill.path}</span>
+                      {skill.warnings && skill.warnings.length > 0 ? (
+                        <div className="tag-row">
+                          {skill.warnings.map((warning) => (
+                            <span className="tag" key={`${skill.path}:${warning}`}>
+                              {warning}
+                            </span>
+                          ))}
+                        </div>
+                      ) : null}
+                    </section>
+                  ))}
+                </div>
               </article>
             </section>
           </div>
@@ -4471,6 +4560,10 @@ function filterValues(input: string): string[] {
     .split(',')
     .map((value) => value.trim())
     .filter(Boolean);
+}
+
+function safeDomId(input: string): string {
+  return input.replace(/[^a-zA-Z0-9_-]+/g, '-');
 }
 
 function CollectionActions({

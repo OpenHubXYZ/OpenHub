@@ -404,6 +404,73 @@ describe('desktop runtime IPC dispatch', () => {
     });
   });
 
+  it('persists migration wizard selection and mapping state while blocking invalid mappings', async () => {
+    const workspace = await tempDir();
+    const sourcePath = path.join(workspace, 'openskills-selective');
+    await createSkillFixture(path.join(sourcePath, 'keep-helper'), 'Keep Helper');
+    await createSkillFixture(path.join(sourcePath, 'skip-helper'), 'Skip Helper');
+    const runtime = createDesktopRuntime({
+      dataDirectory: path.join(workspace, 'app-data'),
+      homeDirectory: path.join(workspace, 'home')
+    });
+
+    const preview = await runtime.dispatch('discover.migrationPreview', {
+      adapter: 'openskills',
+      sourcePath
+    });
+    await expect(
+      runtime.dispatch('onboarding.importMigration', {
+        adapter: 'openskills',
+        sourcePath,
+        items: [
+          {
+            path: preview.skills[0]!.path,
+            selected: true,
+            importLabel: '../bad'
+          }
+        ]
+      })
+    ).rejects.toThrow(/Invalid migration import label/);
+
+    const imported = await runtime.dispatch('onboarding.importMigration', {
+      adapter: 'openskills',
+      sourcePath,
+      items: [
+        {
+          path: preview.skills[0]!.path,
+          selected: true,
+          importLabel: 'custom-keep'
+        },
+        {
+          path: preview.skills[1]!.path,
+          selected: false,
+          importLabel: 'skip-helper'
+        }
+      ]
+    });
+    const resumed = await runtime.dispatch('onboarding.state', {});
+
+    expect(imported.map((item) => item.skill.name)).toEqual(['Keep Helper']);
+    expect(resumed.migrationPreviews).toEqual([
+      expect.objectContaining({
+        adapter: 'openskills',
+        sourcePath,
+        skills: [
+          expect.objectContaining({
+            path: preview.skills[0]!.path,
+            selected: true,
+            importLabel: 'custom-keep'
+          }),
+          expect.objectContaining({
+            path: preview.skills[1]!.path,
+            selected: false,
+            importLabel: 'skip-helper'
+          })
+        ]
+      })
+    ]);
+  });
+
   it('persists project roots, lists them as install targets, applies clean multi-target plans, and reports conflicts', async () => {
     const workspace = await tempDir();
     const dataDirectory = path.join(workspace, 'app-data');

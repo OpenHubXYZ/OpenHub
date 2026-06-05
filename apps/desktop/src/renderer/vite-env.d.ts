@@ -53,7 +53,8 @@ declare global {
       importMigration(input: {
         adapter: 'openskills' | 'skills-manager' | 'skillhub' | 'skills-manager-client';
         sourcePath: string;
-        paths: string[];
+        paths?: string[];
+        items?: Array<{ path: string; selected?: boolean; importLabel?: string }>;
       }): Promise<ImportedSkillResult[]>;
       addProjectRoot(input: {
         agentCode: 'codex' | 'claude' | 'gemini' | 'opencode';
