@@ -6,6 +6,7 @@ import path from 'node:path';
 import { createBuiltInAgentAdapters, type AgentAdapter } from '@theopenhub/adapters';
 import {
   createCollectionService,
+  createAuthorService,
   type ContentStore,
   createContentStore,
   createDiscoverService,
@@ -59,6 +60,8 @@ import {
   type CollectionExportResult,
   type CollectionImportResult,
   type CollectionRecord,
+  type AuthorPackageResult,
+  type AuthorPreflightResult,
   type DiscoverPreviewResult,
   type DiscoverSource,
   type DesktopWorkspaceState,
@@ -113,6 +116,7 @@ export interface CreateDesktopRuntimeInput {
   homeDirectory?: string;
   database?: SqliteDatabase;
   secretStore?: SecretStore;
+  sourceFolderOpener?: (sourcePath: string) => Promise<void> | void;
 }
 
 export interface DesktopRuntime {
@@ -199,6 +203,14 @@ type RuntimeDispatchResult<C extends IpcChannel> = C extends typeof desktopShell
                                                       ? VersionComparisonReport
                                                       : C extends typeof desktopShellContract.versionRollback.channel
                                                         ? VersionRollbackResult
+                                                        : C extends typeof desktopShellContract.authorOpenSourceFolder.channel
+                                                          ? { status: 'opened'; sourcePath: string }
+                                                          : C extends typeof desktopShellContract.authorPreflight.channel
+                                                            ? AuthorPreflightResult
+                                                            : C extends typeof desktopShellContract.authorCreateDraftPackage.channel
+                                                              ? AuthorPackageResult
+                                                              : C extends typeof desktopShellContract.authorPreparePublishPackage.channel
+                                                                ? AuthorPackageResult
                                                   : C extends typeof desktopShellContract.securityScan.channel
                                                     ? SecurityScanResult
                                                     : C extends typeof desktopShellContract.securityRescan.channel
@@ -298,6 +310,7 @@ export function createDesktopRuntime(input: CreateDesktopRuntimeInput): DesktopR
   });
   const exporter = createExportService({ database, contentStore });
   const collections = createCollectionService({ database, contentStore });
+  const author = createAuthorService({ database, contentStore });
   const installer = createInstallService({ database, contentStore });
   const versions = createVersionService({ database, contentStore });
   const security = createSecurityService({ database, contentStore });
@@ -873,6 +886,53 @@ export function createDesktopRuntime(input: CreateDesktopRuntimeInput): DesktopR
             installationId,
             targetVersionId
           }
+        });
+        return parseIpcResponse(channel, result) as RuntimeDispatchResult<C>;
+      }
+
+      if (channel === desktopShellContract.authorOpenSourceFolder.channel) {
+        const { sourcePath } = request as { sourcePath: string };
+        await input.sourceFolderOpener?.(sourcePath);
+        return parseIpcResponse(channel, { status: 'opened', sourcePath }) as RuntimeDispatchResult<C>;
+      }
+
+      if (channel === desktopShellContract.authorPreflight.channel) {
+        const result = await author.preflight(request as { sourcePath: string; signer?: string });
+        return parseIpcResponse(channel, result) as RuntimeDispatchResult<C>;
+      }
+
+      if (channel === desktopShellContract.authorCreateDraftPackage.channel) {
+        const result = await author.createDraftPackage(
+          request as {
+            skillId: string;
+            sourcePath: string;
+            outputDirectory: string;
+            changeSummary: string;
+          }
+        );
+        createUsageRepository(database).recordEvent({
+          eventType: 'author.draftPackage',
+          skillId: (request as { skillId: string }).skillId,
+          subject: 'Created author draft package',
+          metadata: { outputDirectory: result.outputDirectory, versionId: result.versionId }
+        });
+        return parseIpcResponse(channel, result) as RuntimeDispatchResult<C>;
+      }
+
+      if (channel === desktopShellContract.authorPreparePublishPackage.channel) {
+        const result = await author.preparePublishPackage(
+          request as {
+            skillId: string;
+            sourcePath: string;
+            outputDirectory: string;
+            signer: string;
+          }
+        );
+        createUsageRepository(database).recordEvent({
+          eventType: 'author.publishPrep',
+          skillId: (request as { skillId: string }).skillId,
+          subject: 'Prepared signed author publish package',
+          metadata: { outputDirectory: result.outputDirectory, networkUpload: false }
         });
         return parseIpcResponse(channel, result) as RuntimeDispatchResult<C>;
       }

@@ -4,6 +4,7 @@ export const corePackage = {
 } as const;
 
 export { createCollectionService } from './collection-service';
+export { createAuthorService } from './author-service';
 export { createContentStore } from './content-store';
 export { createDiscoverService } from './discover-service';
 export { createExportService } from './export-service';
@@ -26,6 +27,13 @@ export {
 export { createVersionService } from './version-service';
 export { SkillParseError, parseSkillManifest } from './skill-parser';
 
+export type {
+  AuthorPackageResult,
+  AuthorPreflightCheck,
+  AuthorPreflightResult,
+  AuthorService,
+  CreateAuthorServiceInput
+} from './author-service';
 export type {
   CollectionExportResult,
   CollectionImportResult,

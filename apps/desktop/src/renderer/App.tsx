@@ -43,6 +43,8 @@ import type {
   SyncProfile,
   SyncCenterState,
   UsageCenterState,
+  AuthorPackageResult,
+  AuthorPreflightResult,
   VersionComparisonReport
 } from '@theopenhub/shared';
 
@@ -203,6 +205,10 @@ export function App({
   const [compareFromVersionId, setCompareFromVersionId] = useState('');
   const [compareToVersionId, setCompareToVersionId] = useState('');
   const [versionComparison, setVersionComparison] = useState<VersionComparisonReport | null>(null);
+  const [authorOutputDirectory, setAuthorOutputDirectory] = useState('');
+  const [authorSigner, setAuthorSigner] = useState('');
+  const [authorPreflight, setAuthorPreflight] = useState<AuthorPreflightResult | null>(null);
+  const [authorPackage, setAuthorPackage] = useState<AuthorPackageResult | null>(null);
   const [exemptionReason, setExemptionReason] = useState('');
   const [lastExemptionId, setLastExemptionId] = useState('');
   const [policyName, setPolicyName] = useState('');
@@ -556,6 +562,8 @@ export function App({
     setCompareFromVersionId(detail.versions.at(-1)?.versionId ?? '');
     setCompareToVersionId(detail.versions[0]?.versionId ?? '');
     setVersionComparison(null);
+    setAuthorPreflight(null);
+    setAuthorPackage(null);
   }
 
   async function handleExportSkill(): Promise<void> {
@@ -938,6 +946,76 @@ export function App({
     );
     setVersionComparison(comparison);
     setOperationMessage(`Compared ${comparison.files.length} files`);
+  }
+
+  function selectedAuthorSourcePath(): string {
+    return selectedSkillDetail?.source.url ?? '';
+  }
+
+  async function handleOpenAuthorSourceFolder(): Promise<void> {
+    const sourcePath = selectedAuthorSourcePath();
+    if (!window.theOpenHub?.openAuthorSourceFolder || sourcePath.length === 0) {
+      return;
+    }
+
+    await window.theOpenHub.openAuthorSourceFolder(sourcePath);
+    setOperationMessage(`Opened source ${sourcePath}`);
+  }
+
+  async function handleAuthorPreflight(): Promise<void> {
+    const sourcePath = selectedAuthorSourcePath();
+    if (!window.theOpenHub?.preflightAuthorSource || sourcePath.length === 0) {
+      return;
+    }
+
+    const result = await window.theOpenHub.preflightAuthorSource(sourcePath, authorSigner.trim() || undefined);
+    setAuthorPreflight(result);
+    setOperationMessage(result.ok ? 'Author preflight passed' : 'Author preflight blocked');
+  }
+
+  async function handleCreateAuthorDraftPackage(): Promise<void> {
+    const skill = selectedSkillDetail?.skill;
+    const sourcePath = selectedAuthorSourcePath();
+    if (
+      !skill ||
+      !window.theOpenHub?.createAuthorDraftPackage ||
+      sourcePath.length === 0 ||
+      authorOutputDirectory.trim().length === 0
+    ) {
+      return;
+    }
+
+    const result = await window.theOpenHub.createAuthorDraftPackage({
+      skillId: skill.id,
+      sourcePath,
+      outputDirectory: authorOutputDirectory.trim(),
+      changeSummary: draftChangeSummary.trim()
+    });
+    setAuthorPackage(result);
+    setOperationMessage(`Created draft package ${result.outputDirectory}`);
+  }
+
+  async function handlePrepareAuthorPublishPackage(): Promise<void> {
+    const skill = selectedSkillDetail?.skill;
+    const sourcePath = selectedAuthorSourcePath();
+    if (
+      !skill ||
+      !window.theOpenHub?.prepareAuthorPublishPackage ||
+      sourcePath.length === 0 ||
+      authorOutputDirectory.trim().length === 0 ||
+      authorSigner.trim().length === 0
+    ) {
+      return;
+    }
+
+    const result = await window.theOpenHub.prepareAuthorPublishPackage({
+      skillId: skill.id,
+      sourcePath,
+      outputDirectory: authorOutputDirectory.trim(),
+      signer: authorSigner.trim()
+    });
+    setAuthorPackage(result);
+    setOperationMessage(`Prepared publish package ${result.outputDirectory}`);
   }
 
   async function handleSecurityScan(): Promise<void> {
@@ -1591,6 +1669,10 @@ export function App({
                   discoverSourceUrl={discoverSourceUrl}
                   draftChangeSummary={draftChangeSummary}
                   draftSkillMarkdown={draftSkillMarkdown}
+                  authorOutputDirectory={authorOutputDirectory}
+                  authorPackage={authorPackage}
+                  authorPreflight={authorPreflight}
+                  authorSigner={authorSigner}
                   exemptionReason={exemptionReason}
                   exportDirectory={exportDirectory}
                   gitImportUrl={gitImportUrl}
@@ -1666,6 +1748,9 @@ export function App({
                   onCreateDraftVersion={() => {
                     void handleCreateDraftVersion();
                   }}
+                  onCreateAuthorDraftPackage={() => {
+                    void handleCreateAuthorDraftPackage();
+                  }}
                   onCreateExemption={() => {
                     void handleCreateExemption();
                   }}
@@ -1685,6 +1770,8 @@ export function App({
                   onDiscoverSourceUrlChange={setDiscoverSourceUrl}
                   onDraftChangeSummaryChange={setDraftChangeSummary}
                   onDraftSkillMarkdownChange={setDraftSkillMarkdown}
+                  onAuthorOutputDirectoryChange={setAuthorOutputDirectory}
+                  onAuthorSignerChange={setAuthorSigner}
                   onEnablePlugin={() => {
                     void handleEnablePlugin();
                   }}
@@ -1822,6 +1909,15 @@ export function App({
                     void handlePromoteVersion();
                   }}
                   onPromoteVersionIdChange={setPromoteVersionId}
+                  onOpenAuthorSourceFolder={() => {
+                    void handleOpenAuthorSourceFolder();
+                  }}
+                  onPrepareAuthorPublishPackage={() => {
+                    void handlePrepareAuthorPublishPackage();
+                  }}
+                  onRunAuthorPreflight={() => {
+                    void handleAuthorPreflight();
+                  }}
                   onSignedExportSignerChange={setSignedExportSigner}
                   onSparseGitSubpathChange={setSparseGitSubpath}
                   onSparseGitUrlChange={setSparseGitUrl}
@@ -2279,6 +2375,10 @@ type PageContentProps = {
   discoverSourceUrl: string;
   draftChangeSummary: string;
   draftSkillMarkdown: string;
+  authorOutputDirectory: string;
+  authorPackage: AuthorPackageResult | null;
+  authorPreflight: AuthorPreflightResult | null;
+  authorSigner: string;
   exemptionReason: string;
   exportDirectory: string;
   gitImportUrl: string;
@@ -2335,6 +2435,7 @@ type PageContentProps = {
   onCompareToVersionIdChange: (value: string) => void;
   onCompareVersions: () => void;
   onCreateCollection: () => void;
+  onCreateAuthorDraftPackage: () => void;
   onCreateDraftVersion: () => void;
   onCreateExemption: () => void;
   onCreateInstallPlan: () => void;
@@ -2347,6 +2448,8 @@ type PageContentProps = {
   onDiscoverSourceUrlChange: (value: string) => void;
   onDraftChangeSummaryChange: (value: string) => void;
   onDraftSkillMarkdownChange: (value: string) => void;
+  onAuthorOutputDirectoryChange: (value: string) => void;
+  onAuthorSignerChange: (value: string) => void;
   onEnablePlugin: () => void;
   onExemptionReasonChange: (value: string) => void;
   onExportCollection: () => void;
@@ -2411,6 +2514,9 @@ type PageContentProps = {
   onPromoteReleaseChannelChange: (value: 'beta' | 'stable') => void;
   onPromoteVersion: () => void;
   onPromoteVersionIdChange: (value: string) => void;
+  onOpenAuthorSourceFolder: () => void;
+  onPrepareAuthorPublishPackage: () => void;
+  onRunAuthorPreflight: () => void;
   onSetFavorite: (skill: SkillSummary) => void;
   onSignedExportSignerChange: (value: string) => void;
   onSparseGitSubpathChange: (value: string) => void;
@@ -2471,6 +2577,10 @@ function PageContent(props: PageContentProps): ReactElement {
     discoverSourceUrl,
     draftChangeSummary,
     draftSkillMarkdown,
+    authorOutputDirectory,
+    authorPackage,
+    authorPreflight,
+    authorSigner,
     exemptionReason,
     exportDirectory,
     gitImportUrl,
@@ -2518,6 +2628,7 @@ function PageContent(props: PageContentProps): ReactElement {
     onCompareToVersionIdChange,
     onCompareVersions,
     onCreateCollection,
+    onCreateAuthorDraftPackage,
     onCreateDraftVersion,
     onCreateExemption,
     onCreateInstallPlan,
@@ -2530,6 +2641,8 @@ function PageContent(props: PageContentProps): ReactElement {
     onDiscoverSourceUrlChange,
     onDraftChangeSummaryChange,
     onDraftSkillMarkdownChange,
+    onAuthorOutputDirectoryChange,
+    onAuthorSignerChange,
     onEnablePlugin,
     onExemptionReasonChange,
     onExportCollection,
@@ -2594,6 +2707,9 @@ function PageContent(props: PageContentProps): ReactElement {
     onPromoteReleaseChannelChange,
     onPromoteVersion,
     onPromoteVersionIdChange,
+    onOpenAuthorSourceFolder,
+    onPrepareAuthorPublishPackage,
+    onRunAuthorPreflight,
     onSetFavorite,
     onSignedExportSignerChange,
     onSparseGitSubpathChange,
@@ -2644,6 +2760,10 @@ function PageContent(props: PageContentProps): ReactElement {
         compareToVersionId={compareToVersionId}
         draftChangeSummary={draftChangeSummary}
         draftSkillMarkdown={draftSkillMarkdown}
+        authorOutputDirectory={authorOutputDirectory}
+        authorPackage={authorPackage}
+        authorPreflight={authorPreflight}
+        authorSigner={authorSigner}
         exportDirectory={exportDirectory}
         gitImportUrl={gitImportUrl}
         hasImportBridge={hasImportBridge}
@@ -2673,6 +2793,7 @@ function PageContent(props: PageContentProps): ReactElement {
         onCompareToVersionIdChange={onCompareToVersionIdChange}
         onCompareVersions={onCompareVersions}
         onCreateCollection={onCreateCollection}
+        onCreateAuthorDraftPackage={onCreateAuthorDraftPackage}
         onCreateDraftVersion={onCreateDraftVersion}
         onCreateInstallPlan={onCreateInstallPlan}
         onCreateMultiTargetPlans={onCreateMultiTargetPlans}
@@ -2683,6 +2804,8 @@ function PageContent(props: PageContentProps): ReactElement {
         onGitImportUrlChange={onGitImportUrlChange}
         onDraftChangeSummaryChange={onDraftChangeSummaryChange}
         onDraftSkillMarkdownChange={onDraftSkillMarkdownChange}
+        onAuthorOutputDirectoryChange={onAuthorOutputDirectoryChange}
+        onAuthorSignerChange={onAuthorSignerChange}
         onImportCollection={onImportCollection}
         onImportGit={onImportGit}
         onImportGitSparse={onImportGitSparse}
@@ -2705,6 +2828,9 @@ function PageContent(props: PageContentProps): ReactElement {
         onPromoteReleaseChannelChange={onPromoteReleaseChannelChange}
         onPromoteVersion={onPromoteVersion}
         onPromoteVersionIdChange={onPromoteVersionIdChange}
+        onOpenAuthorSourceFolder={onOpenAuthorSourceFolder}
+        onPrepareAuthorPublishPackage={onPrepareAuthorPublishPackage}
+        onRunAuthorPreflight={onRunAuthorPreflight}
         onScanAgentRoots={onScanAgentRoots}
         onSelectSkill={onSelectSkill}
         onSetFavorite={onSetFavorite}
@@ -2934,6 +3060,10 @@ type LibraryPageProps = Pick<
   | 'compareToVersionId'
   | 'draftChangeSummary'
   | 'draftSkillMarkdown'
+  | 'authorOutputDirectory'
+  | 'authorPackage'
+  | 'authorPreflight'
+  | 'authorSigner'
   | 'exportDirectory'
   | 'gitImportUrl'
   | 'hasImportBridge'
@@ -2963,6 +3093,7 @@ type LibraryPageProps = Pick<
   | 'onCompareToVersionIdChange'
   | 'onCompareVersions'
   | 'onCreateCollection'
+  | 'onCreateAuthorDraftPackage'
   | 'onCreateDraftVersion'
   | 'onCreateInstallPlan'
   | 'onCreateMultiTargetPlans'
@@ -2973,6 +3104,8 @@ type LibraryPageProps = Pick<
   | 'onGitImportUrlChange'
   | 'onDraftChangeSummaryChange'
   | 'onDraftSkillMarkdownChange'
+  | 'onAuthorOutputDirectoryChange'
+  | 'onAuthorSignerChange'
   | 'onImportCollection'
   | 'onImportGit'
   | 'onImportGitSparse'
@@ -2995,6 +3128,9 @@ type LibraryPageProps = Pick<
   | 'onPromoteReleaseChannelChange'
   | 'onPromoteVersion'
   | 'onPromoteVersionIdChange'
+  | 'onOpenAuthorSourceFolder'
+  | 'onPrepareAuthorPublishPackage'
+  | 'onRunAuthorPreflight'
   | 'onScanAgentRoots'
   | 'onSelectSkill'
   | 'onSetFavorite'
@@ -3028,6 +3164,10 @@ function LibraryPage({
   compareToVersionId,
   draftChangeSummary,
   draftSkillMarkdown,
+  authorOutputDirectory,
+  authorPackage,
+  authorPreflight,
+  authorSigner,
   exportDirectory,
   gitImportUrl,
   hasImportBridge,
@@ -3057,6 +3197,7 @@ function LibraryPage({
   onCompareToVersionIdChange,
   onCompareVersions,
   onCreateCollection,
+  onCreateAuthorDraftPackage,
   onCreateDraftVersion,
   onCreateInstallPlan,
   onCreateMultiTargetPlans,
@@ -3067,6 +3208,8 @@ function LibraryPage({
   onGitImportUrlChange,
   onDraftChangeSummaryChange,
   onDraftSkillMarkdownChange,
+  onAuthorOutputDirectoryChange,
+  onAuthorSignerChange,
   onImportCollection,
   onImportGit,
   onImportGitSparse,
@@ -3089,6 +3232,9 @@ function LibraryPage({
   onPromoteReleaseChannelChange,
   onPromoteVersion,
   onPromoteVersionIdChange,
+  onOpenAuthorSourceFolder,
+  onPrepareAuthorPublishPackage,
+  onRunAuthorPreflight,
   onScanAgentRoots,
   onSelectSkill,
   onSetFavorite,
@@ -3181,19 +3327,29 @@ function LibraryPage({
             />
           </div>
           <VersionAuthorWorkflow
+            authorOutputDirectory={authorOutputDirectory}
+            authorPackage={authorPackage}
+            authorPreflight={authorPreflight}
+            authorSigner={authorSigner}
             compareFromVersionId={compareFromVersionId}
             compareToVersionId={compareToVersionId}
             draftChangeSummary={draftChangeSummary}
             draftSkillMarkdown={draftSkillMarkdown}
+            onAuthorOutputDirectoryChange={onAuthorOutputDirectoryChange}
+            onAuthorSignerChange={onAuthorSignerChange}
             onCompareFromVersionIdChange={onCompareFromVersionIdChange}
             onCompareToVersionIdChange={onCompareToVersionIdChange}
             onCompareVersions={onCompareVersions}
+            onCreateAuthorDraftPackage={onCreateAuthorDraftPackage}
             onCreateDraftVersion={onCreateDraftVersion}
             onDraftChangeSummaryChange={onDraftChangeSummaryChange}
             onDraftSkillMarkdownChange={onDraftSkillMarkdownChange}
+            onOpenAuthorSourceFolder={onOpenAuthorSourceFolder}
+            onPrepareAuthorPublishPackage={onPrepareAuthorPublishPackage}
             onPromoteReleaseChannelChange={onPromoteReleaseChannelChange}
             onPromoteVersion={onPromoteVersion}
             onPromoteVersionIdChange={onPromoteVersionIdChange}
+            onRunAuthorPreflight={onRunAuthorPreflight}
             promoteReleaseChannel={promoteReleaseChannel}
             promoteVersionId={promoteVersionId}
             selectedSkillDetail={selectedSkillDetail}
@@ -5279,37 +5435,57 @@ function LibrarySkillList({
 }
 
 function VersionAuthorWorkflow({
+  authorOutputDirectory,
+  authorPackage,
+  authorPreflight,
+  authorSigner,
   compareFromVersionId,
   compareToVersionId,
   draftChangeSummary,
   draftSkillMarkdown,
+  onAuthorOutputDirectoryChange,
+  onAuthorSignerChange,
   onCompareFromVersionIdChange,
   onCompareToVersionIdChange,
   onCompareVersions,
+  onCreateAuthorDraftPackage,
   onCreateDraftVersion,
   onDraftChangeSummaryChange,
   onDraftSkillMarkdownChange,
+  onOpenAuthorSourceFolder,
+  onPrepareAuthorPublishPackage,
   onPromoteReleaseChannelChange,
   onPromoteVersion,
   onPromoteVersionIdChange,
+  onRunAuthorPreflight,
   promoteReleaseChannel,
   promoteVersionId,
   selectedSkillDetail,
   versionComparison
 }: {
+  authorOutputDirectory: string;
+  authorPackage: AuthorPackageResult | null;
+  authorPreflight: AuthorPreflightResult | null;
+  authorSigner: string;
   compareFromVersionId: string;
   compareToVersionId: string;
   draftChangeSummary: string;
   draftSkillMarkdown: string;
+  onAuthorOutputDirectoryChange: (value: string) => void;
+  onAuthorSignerChange: (value: string) => void;
   onCompareFromVersionIdChange: (value: string) => void;
   onCompareToVersionIdChange: (value: string) => void;
   onCompareVersions: () => void;
+  onCreateAuthorDraftPackage: () => void;
   onCreateDraftVersion: () => void;
   onDraftChangeSummaryChange: (value: string) => void;
   onDraftSkillMarkdownChange: (value: string) => void;
+  onOpenAuthorSourceFolder: () => void;
+  onPrepareAuthorPublishPackage: () => void;
   onPromoteReleaseChannelChange: (value: 'beta' | 'stable') => void;
   onPromoteVersion: () => void;
   onPromoteVersionIdChange: (value: string) => void;
+  onRunAuthorPreflight: () => void;
   promoteReleaseChannel: 'beta' | 'stable';
   promoteVersionId: string;
   selectedSkillDetail: SkillDetail | null;
@@ -5342,6 +5518,46 @@ function VersionAuthorWorkflow({
         </label>
         <button disabled={!hasSkill || draftSkillMarkdown.trim().length === 0} onClick={onCreateDraftVersion} type="button">
           Create draft version
+        </button>
+        <label htmlFor="author-output-directory">
+          Author output directory
+          <input
+            aria-label="Author output directory"
+            id="author-output-directory"
+            onChange={(event) => onAuthorOutputDirectoryChange(event.target.value)}
+            placeholder="/tmp/author-package"
+            value={authorOutputDirectory}
+          />
+        </label>
+        <label htmlFor="author-signer">
+          Author signer
+          <input
+            aria-label="Author signer"
+            id="author-signer"
+            onChange={(event) => onAuthorSignerChange(event.target.value)}
+            placeholder="OpenHub Maintainer"
+            value={authorSigner}
+          />
+        </label>
+        <button disabled={!hasSkill || !selectedSkillDetail?.source.url} onClick={onOpenAuthorSourceFolder} type="button">
+          Open source folder
+        </button>
+        <button disabled={!hasSkill || !selectedSkillDetail?.source.url} onClick={onRunAuthorPreflight} type="button">
+          Run author preflight
+        </button>
+        <button
+          disabled={!hasSkill || authorOutputDirectory.trim().length === 0}
+          onClick={onCreateAuthorDraftPackage}
+          type="button"
+        >
+          Create draft package
+        </button>
+        <button
+          disabled={!hasSkill || authorOutputDirectory.trim().length === 0 || authorSigner.trim().length === 0}
+          onClick={onPrepareAuthorPublishPackage}
+          type="button"
+        >
+          Prepare publish package
         </button>
         <label htmlFor="promote-version-id">
           Promote version ID
@@ -5404,6 +5620,23 @@ function VersionAuthorWorkflow({
               label: file.relativePath,
               value: file.changeType
             }))
+          ]}
+        />
+      ) : null}
+      {authorPreflight ? (
+        <KeyValueList
+          rows={[
+            { label: 'Author preflight', value: authorPreflight.ok ? 'passed' : 'blocked' },
+            ...authorPreflight.checks.map((check) => ({ label: check.label, value: check.message }))
+          ]}
+        />
+      ) : null}
+      {authorPackage ? (
+        <KeyValueList
+          rows={[
+            { label: 'Author package', value: authorPackage.outputDirectory },
+            { label: 'Signature', value: authorPackage.signatureStatus },
+            { label: 'Network upload', value: authorPackage.networkUpload ? 'requested' : 'not requested' }
           ]}
         />
       ) : null}

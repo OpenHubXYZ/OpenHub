@@ -48,6 +48,8 @@ import type {
   SyncOutboxRecord,
   SyncProfile,
   SyncStartupPlan,
+  AuthorPackageResult,
+  AuthorPreflightResult,
   VersionComparisonReport
 } from '@theopenhub/shared';
 
@@ -343,6 +345,36 @@ const api = {
       targetVersionId
     });
     return parseIpcResponse(desktopShellContract.versionRollback.channel, payload);
+  },
+
+  async openAuthorSourceFolder(sourcePath: string): Promise<{ status: 'opened'; sourcePath: string }> {
+    const payload = await ipcRenderer.invoke(desktopShellContract.authorOpenSourceFolder.channel, { sourcePath });
+    return parseIpcResponse(desktopShellContract.authorOpenSourceFolder.channel, payload);
+  },
+
+  async preflightAuthorSource(sourcePath: string, signer?: string): Promise<AuthorPreflightResult> {
+    const payload = await ipcRenderer.invoke(desktopShellContract.authorPreflight.channel, { sourcePath, signer });
+    return parseIpcResponse(desktopShellContract.authorPreflight.channel, payload);
+  },
+
+  async createAuthorDraftPackage(input: {
+    skillId: string;
+    sourcePath: string;
+    outputDirectory: string;
+    changeSummary: string;
+  }): Promise<AuthorPackageResult> {
+    const payload = await ipcRenderer.invoke(desktopShellContract.authorCreateDraftPackage.channel, input);
+    return parseIpcResponse(desktopShellContract.authorCreateDraftPackage.channel, payload);
+  },
+
+  async prepareAuthorPublishPackage(input: {
+    skillId: string;
+    sourcePath: string;
+    outputDirectory: string;
+    signer: string;
+  }): Promise<AuthorPackageResult> {
+    const payload = await ipcRenderer.invoke(desktopShellContract.authorPreparePublishPackage.channel, input);
+    return parseIpcResponse(desktopShellContract.authorPreparePublishPackage.channel, payload);
   },
 
   async scanSkill(skillId: string): Promise<SecurityScanResult> {

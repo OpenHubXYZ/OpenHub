@@ -3,6 +3,8 @@ export {
   PRODUCT_NAME,
   appInfo,
   appInfoResponseSchema,
+  authorPackageResultSchema,
+  authorPreflightResultSchema,
   baselineExportResultSchema,
   baselinePreviewSchema,
   desktopWorkspaceStateSchema,
@@ -38,6 +40,8 @@ export {
 
 export type {
   AppInfo,
+  AuthorPackageResult,
+  AuthorPreflightResult,
   BaselineExportResult,
   BaselinePreview,
   CollectionExportResult,

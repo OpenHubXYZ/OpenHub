@@ -553,6 +553,51 @@ describe('desktop runtime IPC dispatch', () => {
     });
   });
 
+  it('dispatches author preflight, source open, draft package, and signed publish package workflows', async () => {
+    const workspace = await tempDir();
+    const openedSources: string[] = [];
+    const runtime = createDesktopRuntime({
+      dataDirectory: path.join(workspace, 'app-data'),
+      homeDirectory: path.join(workspace, 'home'),
+      sourceFolderOpener(sourcePath) {
+        openedSources.push(sourcePath);
+      }
+    });
+    const sourcePath = await createSkillFixture(path.join(workspace, 'author-tool-source'), 'author-tool-helper');
+    const imported = await runtime.dispatch('import.localFolder', { folderPath: sourcePath });
+    const dispatch = runtime.dispatch as unknown as (channel: string, payload: unknown) => Promise<unknown>;
+
+    await expect(dispatch('author.openSourceFolder', { sourcePath })).resolves.toEqual({
+      status: 'opened',
+      sourcePath
+    });
+    expect(openedSources).toEqual([sourcePath]);
+    await expect(dispatch('author.preflight', { sourcePath, signer: 'OpenHub Runtime' })).resolves.toMatchObject({
+      ok: true,
+      signatureReady: true
+    });
+    await writeFile(
+      path.join(sourcePath, 'SKILL.md'),
+      ['---', 'name: author-tool-helper', 'description: Edited', '---', '# Edited Author Tool'].join('\n')
+    );
+    await expect(
+      dispatch('author.createDraftPackage', {
+        skillId: imported.skill.id,
+        sourcePath,
+        outputDirectory: path.join(workspace, 'author-draft-package'),
+        changeSummary: 'Author edits'
+      })
+    ).resolves.toMatchObject({ signatureStatus: 'unsigned', networkUpload: false });
+    await expect(
+      dispatch('author.preparePublishPackage', {
+        skillId: imported.skill.id,
+        sourcePath,
+        outputDirectory: path.join(workspace, 'author-publish-package'),
+        signer: 'OpenHub Runtime'
+      })
+    ).resolves.toMatchObject({ signatureStatus: 'signed', networkUpload: false });
+  });
+
   it('persists onboarding completion, imports explicit migration selections, and leaves preview read-only', async () => {
     const workspace = await tempDir();
     const sourcePath = path.join(workspace, 'openskills');

@@ -760,6 +760,47 @@ export const versionRollbackResultSchema = z
 
 export type VersionRollbackResult = z.infer<typeof versionRollbackResultSchema>;
 
+const authorPreflightCheckSchema = z
+  .object({
+    id: z.string().min(1),
+    label: z.string().min(1),
+    status: z.enum(['pass', 'warning', 'block']),
+    message: z.string().min(1)
+  })
+  .strict();
+
+export const authorPreflightResultSchema = z
+  .object({
+    sourcePath: z.string().min(1),
+    ok: z.boolean(),
+    manifest: z
+      .object({
+        name: z.string().min(1),
+        description: z.string(),
+        tags: z.array(z.string())
+      })
+      .strict()
+      .nullable(),
+    checks: z.array(authorPreflightCheckSchema),
+    findings: installResultSchema.shape.security.shape.warnings,
+    signatureReady: z.boolean()
+  })
+  .strict();
+
+export type AuthorPreflightResult = z.infer<typeof authorPreflightResultSchema>;
+
+export const authorPackageResultSchema = z
+  .object({
+    outputDirectory: z.string().min(1),
+    manifestPath: z.string().min(1),
+    versionId: z.string().min(1).optional(),
+    signatureStatus: z.enum(['unsigned', 'signed']),
+    networkUpload: z.literal(false)
+  })
+  .strict();
+
+export type AuthorPackageResult = z.infer<typeof authorPackageResultSchema>;
+
 const securityFindingDetailSchema = z
   .object({
     skillName: z.string().min(1),
@@ -1337,6 +1378,40 @@ export const desktopShellContract = {
     request: z.object({ installationId: z.string().min(1), targetVersionId: z.string().min(1) }).strict(),
     response: versionRollbackResultSchema
   },
+  authorOpenSourceFolder: {
+    channel: 'author.openSourceFolder',
+    request: z.object({ sourcePath: z.string().min(1) }).strict(),
+    response: z.object({ status: z.literal('opened'), sourcePath: z.string().min(1) }).strict()
+  },
+  authorPreflight: {
+    channel: 'author.preflight',
+    request: z.object({ sourcePath: z.string().min(1), signer: z.string().optional() }).strict(),
+    response: authorPreflightResultSchema
+  },
+  authorCreateDraftPackage: {
+    channel: 'author.createDraftPackage',
+    request: z
+      .object({
+        skillId: z.string().min(1),
+        sourcePath: z.string().min(1),
+        outputDirectory: z.string().min(1),
+        changeSummary: z.string()
+      })
+      .strict(),
+    response: authorPackageResultSchema
+  },
+  authorPreparePublishPackage: {
+    channel: 'author.preparePublishPackage',
+    request: z
+      .object({
+        skillId: z.string().min(1),
+        sourcePath: z.string().min(1),
+        outputDirectory: z.string().min(1),
+        signer: z.string().min(1)
+      })
+      .strict(),
+    response: authorPackageResultSchema
+  },
   securityScan: {
     channel: 'security.scan',
     request: skillIdRequestSchema,
@@ -1787,6 +1862,22 @@ export function parseIpcResponse(
   channel: typeof desktopShellContract.versionRollback.channel,
   payload: unknown
 ): VersionRollbackResult;
+export function parseIpcResponse(
+  channel: typeof desktopShellContract.authorOpenSourceFolder.channel,
+  payload: unknown
+): { status: 'opened'; sourcePath: string };
+export function parseIpcResponse(
+  channel: typeof desktopShellContract.authorPreflight.channel,
+  payload: unknown
+): AuthorPreflightResult;
+export function parseIpcResponse(
+  channel: typeof desktopShellContract.authorCreateDraftPackage.channel,
+  payload: unknown
+): AuthorPackageResult;
+export function parseIpcResponse(
+  channel: typeof desktopShellContract.authorPreparePublishPackage.channel,
+  payload: unknown
+): AuthorPackageResult;
 export function parseIpcResponse(
   channel: typeof desktopShellContract.securityScan.channel,
   payload: unknown

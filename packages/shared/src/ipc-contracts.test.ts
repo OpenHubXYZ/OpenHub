@@ -176,6 +176,10 @@ describe('desktop shell IPC contract', () => {
         'version.promote',
         'version.compare',
         'version.rollback',
+        'author.openSourceFolder',
+        'author.preflight',
+        'author.createDraftPackage',
+        'author.preparePublishPackage',
         'security.rescan',
         'security.findingDetail',
         'security.createExemption',
@@ -368,6 +372,27 @@ describe('desktop shell IPC contract', () => {
         plugins: []
       }).catalog[0]?.signatureStatus
     ).toBe('trusted');
+    expect(parseIpcRequest('author.openSourceFolder', {
+      sourcePath: '/tmp/source'
+    })).toMatchObject({ sourcePath: '/tmp/source' });
+    expect(parseIpcRequest('author.preflight', {
+      sourcePath: '/tmp/source',
+      signer: 'OpenHub Test'
+    })).toMatchObject({ signer: 'OpenHub Test' });
+    expect(parseIpcRequest('author.createDraftPackage', {
+      skillId: 'skill-1',
+      sourcePath: '/tmp/source',
+      outputDirectory: '/tmp/draft-package',
+      changeSummary: 'Draft edits'
+    })).toMatchObject({ changeSummary: 'Draft edits' });
+    expect(
+      desktopShellContract.authorPreparePublishPackage.response.parse({
+        outputDirectory: '/tmp/publish-package',
+        manifestPath: '/tmp/publish-package/author-package.json',
+        signatureStatus: 'signed',
+        networkUpload: false
+      }).networkUpload
+    ).toBe(false);
     expect(parseIpcRequest('discover.addSource', {
       name: 'Local curated',
       sourceType: 'local',

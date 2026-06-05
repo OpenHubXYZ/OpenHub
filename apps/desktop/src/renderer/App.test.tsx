@@ -312,6 +312,28 @@ describe('desktop app shell', () => {
         manifestHashChanged: true,
         files: [{ relativePath: 'SKILL.md', changeType: 'modified', fromHash: 'hash-1', toHash: 'hash-2' }]
       }),
+      openAuthorSourceFolder: vi.fn().mockResolvedValue({ status: 'opened', sourcePath: '/tmp/runtime-helper' }),
+      preflightAuthorSource: vi.fn().mockResolvedValue({
+        sourcePath: '/tmp/runtime-helper',
+        ok: true,
+        manifest: { name: 'Runtime Helper', description: 'Author workflow helper', tags: ['runtime'] },
+        checks: [{ id: 'manifest', label: 'SKILL.md', status: 'pass', message: 'Valid manifest' }],
+        findings: [],
+        signatureReady: true
+      }),
+      createAuthorDraftPackage: vi.fn().mockResolvedValue({
+        outputDirectory: '/tmp/author-draft',
+        manifestPath: '/tmp/author-draft/author-package.json',
+        versionId: 'version-2',
+        signatureStatus: 'unsigned',
+        networkUpload: false
+      }),
+      prepareAuthorPublishPackage: vi.fn().mockResolvedValue({
+        outputDirectory: '/tmp/author-publish',
+        manifestPath: '/tmp/author-publish/author-package.json',
+        signatureStatus: 'signed',
+        networkUpload: false
+      }),
       getPluginCenterState: vi.fn()
     };
     window.theOpenHub = api as unknown as NonNullable<typeof window.theOpenHub>;
@@ -344,6 +366,36 @@ describe('desktop app shell', () => {
     await waitFor(() => expect(api.compareVersions).toHaveBeenCalledWith('version-1', 'version-2'));
     expect(screen.getByText('manifest changed')).toBeInTheDocument();
     expect(screen.getByText('SKILL.md')).toBeInTheDocument();
+    fireEvent.change(screen.getByLabelText('Author output directory'), {
+      target: { value: '/tmp/author-draft' }
+    });
+    fireEvent.change(screen.getByLabelText('Author signer'), {
+      target: { value: 'OpenHub Test' }
+    });
+    fireEvent.click(screen.getByRole('button', { name: 'Open source folder' }));
+    await waitFor(() => expect(api.openAuthorSourceFolder).toHaveBeenCalledWith('/tmp/runtime-helper'));
+    fireEvent.click(screen.getByRole('button', { name: 'Run author preflight' }));
+    await waitFor(() => expect(api.preflightAuthorSource).toHaveBeenCalledWith('/tmp/runtime-helper', 'OpenHub Test'));
+    expect(screen.getByText('Valid manifest')).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'Create draft package' }));
+    await waitFor(() =>
+      expect(api.createAuthorDraftPackage).toHaveBeenCalledWith({
+        skillId: runtimeSkill.id,
+        sourcePath: '/tmp/runtime-helper',
+        outputDirectory: '/tmp/author-draft',
+        changeSummary: 'Draft update'
+      })
+    );
+    fireEvent.click(screen.getByRole('button', { name: 'Prepare publish package' }));
+    await waitFor(() =>
+      expect(api.prepareAuthorPublishPackage).toHaveBeenCalledWith({
+        skillId: runtimeSkill.id,
+        sourcePath: '/tmp/runtime-helper',
+        outputDirectory: '/tmp/author-draft',
+        signer: 'OpenHub Test'
+      })
+    );
+    expect(screen.getByText('signed')).toBeInTheDocument();
   });
 
   it('shows Sync Center profiles, outbox, inbox, and conflicts', () => {

@@ -47,6 +47,8 @@ import type {
   SyncOutboxRecord,
   SyncProfile,
   SyncStartupPlan,
+  AuthorPackageResult,
+  AuthorPreflightResult,
   VersionComparisonReport
 } from '@theopenhub/shared';
 
@@ -160,6 +162,20 @@ declare global {
         installationId: string;
         versionId: string;
       }>;
+      openAuthorSourceFolder(sourcePath: string): Promise<{ status: 'opened'; sourcePath: string }>;
+      preflightAuthorSource(sourcePath: string, signer?: string): Promise<AuthorPreflightResult>;
+      createAuthorDraftPackage(input: {
+        skillId: string;
+        sourcePath: string;
+        outputDirectory: string;
+        changeSummary: string;
+      }): Promise<AuthorPackageResult>;
+      prepareAuthorPublishPackage(input: {
+        skillId: string;
+        sourcePath: string;
+        outputDirectory: string;
+        signer: string;
+      }): Promise<AuthorPackageResult>;
       scanSkill(skillId: string): Promise<SecurityScanResult>;
       rescanSecurity(skillIds?: string[]): Promise<SecurityScanResult[]>;
       getSecurityFindingDetail(input: {
