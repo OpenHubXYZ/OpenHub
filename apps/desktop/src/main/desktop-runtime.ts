@@ -65,6 +65,9 @@ import {
   type ExportSkillResult,
   type FileDiff,
   type ImportedSkillResult,
+  type InstallCompatibility,
+  type InstallLifecycleResult,
+  type InstallLockResult,
   type InstallPlan,
   type InstallResult,
   type InstallTarget,
@@ -163,16 +166,24 @@ type RuntimeDispatchResult<C extends IpcChannel> = C extends typeof desktopShell
                                   ? SkillDetail
                                   : C extends typeof desktopShellContract.installCreatePlan.channel
                                     ? InstallPlan
-                                    : C extends typeof desktopShellContract.installCreateMultiTargetPlan.channel
-                                      ? InstallPlan[]
-                                      : C extends typeof desktopShellContract.installApplyPlan.channel
-                                        ? InstallResult
-                                        : C extends typeof desktopShellContract.installApplyMultiTargetPlan.channel
-                                          ? MultiTargetInstallResult
-                                          : C extends typeof desktopShellContract.installListTargets.channel
-                                            ? InstallTarget[]
-                                            : C extends typeof desktopShellContract.installUninstall.channel
-                                              ? InstallUninstallResult
+                                    : C extends typeof desktopShellContract.installCheckCompatibility.channel
+                                      ? InstallCompatibility
+                                      : C extends typeof desktopShellContract.installCreateMultiTargetPlan.channel
+                                        ? InstallPlan[]
+                                        : C extends typeof desktopShellContract.installApplyPlan.channel
+                                          ? InstallResult
+                                          : C extends typeof desktopShellContract.installApplyMultiTargetPlan.channel
+                                            ? MultiTargetInstallResult
+                                            : C extends typeof desktopShellContract.installListTargets.channel
+                                              ? InstallTarget[]
+                                              : C extends typeof desktopShellContract.installUninstall.channel
+                                                ? InstallUninstallResult
+                                                : C extends typeof desktopShellContract.installReinstall.channel
+                                                  ? InstallLifecycleResult
+                                                  : C extends typeof desktopShellContract.installRelink.channel
+                                                    ? InstallLifecycleResult
+                                                    : C extends typeof desktopShellContract.installSetReadOnlyLock.channel
+                                                      ? InstallLockResult
                                             : C extends typeof desktopShellContract.versionList.channel
                                               ? SkillVersionSummary[]
                                               : C extends typeof desktopShellContract.versionDiff.channel
@@ -611,6 +622,23 @@ export function createDesktopRuntime(input: CreateDesktopRuntimeInput): DesktopR
         return parseIpcResponse(channel, result) as RuntimeDispatchResult<C>;
       }
 
+      if (channel === desktopShellContract.installCheckCompatibility.channel) {
+        const result = await installer.checkCompatibility(
+          request as {
+            skillId: string;
+            targetRoot: string;
+            agentCode: string;
+            agentDisplayName: string;
+            adapterVersion: string;
+            scope: string;
+            rootKind?: 'user' | 'project';
+            projectionMode?: 'copy' | 'symlink' | 'hardlink' | 'mirror-export';
+            versionId?: string;
+          }
+        );
+        return parseIpcResponse(channel, result) as RuntimeDispatchResult<C>;
+      }
+
       if (channel === desktopShellContract.installCreateMultiTargetPlan.channel) {
         const multiTargetRequest = request as {
           skillId: string;
@@ -697,6 +725,67 @@ export function createDesktopRuntime(input: CreateDesktopRuntimeInput): DesktopR
           eventType: 'install.uninstall',
           subject: `Uninstalled ${installationId}`,
           metadata: { installationId }
+        });
+        return parseIpcResponse(channel, result) as RuntimeDispatchResult<C>;
+      }
+
+      if (channel === desktopShellContract.installReinstall.channel) {
+        const { installationId } = request as { installationId: string };
+        const result = await installer.reinstall({ installationId });
+        memory.installResult = {
+          status: result.status,
+          message: `Reinstalled app-owned files for ${installationId}.`
+        };
+        createUsageRepository(database).recordEvent({
+          eventType: 'install.reinstall',
+          subject: `Reinstalled ${installationId}`,
+          metadata: { installationId, projectionMode: result.projectionMode }
+        });
+        return parseIpcResponse(channel, result) as RuntimeDispatchResult<C>;
+      }
+
+      if (channel === desktopShellContract.installRelink.channel) {
+        const result = await installer.relink(
+          request as {
+            installationId: string;
+            targetRoot: string;
+            agentCode: string;
+            agentDisplayName: string;
+            adapterVersion: string;
+            scope: string;
+            rootKind?: 'user' | 'project';
+            projectionMode?: 'copy' | 'symlink' | 'hardlink' | 'mirror-export';
+          }
+        );
+        memory.installResult = {
+          status: result.status,
+          message: `Relinked ${result.installationId} to ${result.targetRoot}.`
+        };
+        createUsageRepository(database).recordEvent({
+          eventType: 'install.relink',
+          subject: `Relinked ${result.installationId}`,
+          metadata: {
+            installationId: result.installationId,
+            targetRoot: result.targetRoot,
+            projectionMode: result.projectionMode
+          }
+        });
+        return parseIpcResponse(channel, result) as RuntimeDispatchResult<C>;
+      }
+
+      if (channel === desktopShellContract.installSetReadOnlyLock.channel) {
+        const result = await installer.setReadOnlyLock(request as { installationId: string; locked: boolean });
+        memory.installResult = {
+          status: result.status,
+          message: `${result.status === 'locked' ? 'Locked' : 'Unlocked'} ${result.installationId}.`
+        };
+        createUsageRepository(database).recordEvent({
+          eventType: 'install.lock',
+          subject: `${result.status === 'locked' ? 'Locked' : 'Unlocked'} ${result.installationId}`,
+          metadata: {
+            installationId: result.installationId,
+            readOnlyLocked: result.readOnlyLocked
+          }
         });
         return parseIpcResponse(channel, result) as RuntimeDispatchResult<C>;
       }
@@ -1763,6 +1852,8 @@ function installationSummaries(
           ar.scope,
           i.install_path as installPath,
           i.status,
+          i.projection_mode as projectionMode,
+          i.read_only_locked as readOnlyLocked,
           sv.version_no as versionNo
         from installations i
         join agent_roots ar on ar.id = i.agent_root_id
@@ -1772,7 +1863,16 @@ function installationSummaries(
         order by i.installed_at desc
       `
     )
-    .all(skillId) as SkillDetail['installations'];
+    .all(skillId)
+    .map((row) => {
+      const installation = row as Omit<SkillDetail['installations'][number], 'readOnlyLocked'> & {
+        readOnlyLocked: number;
+      };
+      return {
+        ...installation,
+        readOnlyLocked: installation.readOnlyLocked === 1
+      };
+    });
 }
 
 function securityFindingDetail(

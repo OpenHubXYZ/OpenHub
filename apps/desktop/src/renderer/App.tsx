@@ -193,6 +193,7 @@ export function App({
   const [activeInstallPlan, setActiveInstallPlan] = useState<InstallPlan | null>(null);
   const [activeMultiTargetPlans, setActiveMultiTargetPlans] = useState<InstallPlan[]>([]);
   const [lastInstallationId, setLastInstallationId] = useState('');
+  const [relinkTargetRoot, setRelinkTargetRoot] = useState('');
   const [rollbackVersionId, setRollbackVersionId] = useState('');
   const [exemptionReason, setExemptionReason] = useState('');
   const [lastExemptionId, setLastExemptionId] = useState('');
@@ -535,6 +536,7 @@ export function App({
     setSelectedSkillDetail(detail);
     setRollbackVersionId(detail.versions.at(-1)?.versionId ?? '');
     setLastInstallationId(detail.installations[0]?.installationId ?? lastInstallationId);
+    setRelinkTargetRoot(detail.installations[0]?.rootPath ?? '');
   }
 
   async function handleExportSkill(): Promise<void> {
@@ -772,6 +774,82 @@ export function App({
       }
     }));
     setOperationMessage(`Uninstalled ${result.installationId}`);
+  }
+
+  async function handleReinstall(): Promise<void> {
+    if (!window.theOpenHub?.reinstall || lastInstallationId.trim().length === 0) {
+      return;
+    }
+
+    const result = await window.theOpenHub.reinstall(lastInstallationId.trim());
+    setWorkspaceState((current) => ({
+      ...current,
+      managementFlow: {
+        ...current.managementFlow,
+        installResult: {
+          status: result.status,
+          message: `Reinstalled app-owned files for ${result.installationId}.`
+        }
+      }
+    }));
+    setOperationMessage(`Reinstalled ${result.installationId}`);
+  }
+
+  async function handleRelink(): Promise<void> {
+    const installation = currentInstallation(selectedSkillDetail, lastInstallationId);
+    if (!window.theOpenHub?.relink || !installation || relinkTargetRoot.trim().length === 0) {
+      return;
+    }
+
+    const result = await window.theOpenHub.relink({
+      installationId: installation.installationId,
+      targetRoot: relinkTargetRoot.trim(),
+      agentCode: agentCodeForDisplay(installation.agent),
+      agentDisplayName: installation.agent,
+      adapterVersion: 'builtin',
+      scope: installation.scope,
+      projectionMode: installation.projectionMode ?? 'copy'
+    });
+    setSelectedSkillDetail((current) =>
+      current
+        ? {
+            ...current,
+            installations: current.installations.map((item) =>
+              item.installationId === result.installationId
+                ? {
+                    ...item,
+                    rootPath: result.targetRoot,
+                    installPath: `${result.targetRoot}/${current.skill.name.toLowerCase().replace(/\s+/g, '-')}`,
+                    projectionMode: result.projectionMode,
+                    readOnlyLocked: false
+                  }
+                : item
+            )
+          }
+        : current
+    );
+    setOperationMessage(`Relinked ${result.installationId}`);
+  }
+
+  async function handleSetReadOnlyLock(locked: boolean): Promise<void> {
+    if (!window.theOpenHub?.setReadOnlyLock || lastInstallationId.trim().length === 0) {
+      return;
+    }
+
+    const result = await window.theOpenHub.setReadOnlyLock(lastInstallationId.trim(), locked);
+    setSelectedSkillDetail((current) =>
+      current
+        ? {
+            ...current,
+            installations: current.installations.map((item) =>
+              item.installationId === result.installationId
+                ? { ...item, readOnlyLocked: result.readOnlyLocked }
+                : item
+            )
+          }
+        : current
+    );
+    setOperationMessage(`${result.status === 'locked' ? 'Locked' : 'Unlocked'} ${result.installationId}`);
   }
 
   async function handleRollback(): Promise<void> {
@@ -1473,6 +1551,13 @@ export function App({
                   onRevokeExemption={() => {
                     void handleRevokeExemption();
                   }}
+                  onRelink={() => {
+                    void handleRelink();
+                  }}
+                  onRelinkTargetRootChange={setRelinkTargetRoot}
+                  onReinstall={() => {
+                    void handleReinstall();
+                  }}
                   onRollback={() => {
                     void handleRollback();
                   }}
@@ -1485,6 +1570,9 @@ export function App({
                   }}
                   onSecurityRescanAll={() => {
                     void handleSecurityRescanAll();
+                  }}
+                  onSetReadOnlyLock={(locked) => {
+                    void handleSetReadOnlyLock(locked);
                   }}
                   onSelectSkill={(skillId) => {
                     void handleSelectSkill(skillId);
@@ -1532,6 +1620,7 @@ export function App({
                   projectRootAgentCode={projectRootAgentCode}
                   projectRootPath={projectRootPath}
                   rollbackVersionId={rollbackVersionId}
+                  relinkTargetRoot={relinkTargetRoot}
                   selectedSkillDetail={selectedSkillDetail}
                   signedExportSigner={signedExportSigner}
                   sparseGitSubpath={sparseGitSubpath}
@@ -2040,6 +2129,9 @@ type PageContentProps = {
   onPreviewDiscoverSource: () => void;
   onPreviewBaseline: () => void;
   onPreviewMigration: () => void;
+  onRelink: () => void;
+  onRelinkTargetRootChange: (value: string) => void;
+  onReinstall: () => void;
   onRevokeExemption: () => void;
   onResetLibraryFilters: () => void;
   onRollback: () => void;
@@ -2047,6 +2139,7 @@ type PageContentProps = {
   onScanAgentRoots: () => void;
   onSecurityRescanAll: () => void;
   onSecurityScan: () => void;
+  onSetReadOnlyLock: (locked: boolean) => void;
   onSelectSkill: (skillId: string) => void;
   onApplyBaseline: () => void;
   onBaselineNameChange: (value: string) => void;
@@ -2078,6 +2171,7 @@ type PageContentProps = {
   projectRootAgentCode: 'codex' | 'claude' | 'gemini' | 'opencode';
   projectRootPath: string;
   rollbackVersionId: string;
+  relinkTargetRoot: string;
   selectedSkillDetail: SkillDetail | null;
   signedExportSigner: string;
   sparseGitSubpath: string;
@@ -2196,6 +2290,9 @@ function PageContent(props: PageContentProps): ReactElement {
     onPreviewDiscoverSource,
     onPreviewBaseline,
     onPreviewMigration,
+    onRelink,
+    onRelinkTargetRootChange,
+    onReinstall,
     onRevokeExemption,
     onResetLibraryFilters,
     onRollback,
@@ -2203,6 +2300,7 @@ function PageContent(props: PageContentProps): ReactElement {
     onScanAgentRoots,
     onSecurityRescanAll,
     onSecurityScan,
+    onSetReadOnlyLock,
     onSelectSkill,
     onApplyBaseline,
     onBaselineNameChange,
@@ -2234,6 +2332,7 @@ function PageContent(props: PageContentProps): ReactElement {
     projectRootAgentCode,
     projectRootPath,
     rollbackVersionId,
+    relinkTargetRoot,
     selectedSkillDetail,
     signedExportSigner,
     sparseGitSubpath,
@@ -2357,11 +2456,16 @@ function PageContent(props: PageContentProps): ReactElement {
       <InstallsPage
         activeTab={activeTab}
         lastInstallationId={lastInstallationId}
+        onRelink={onRelink}
+        onRelinkTargetRootChange={onRelinkTargetRootChange}
+        onReinstall={onReinstall}
         onRollback={onRollback}
         onRollbackVersionIdChange={onRollbackVersionIdChange}
+        onSetReadOnlyLock={onSetReadOnlyLock}
         onUninstall={onUninstall}
         operationMessage={operationMessage}
         rollbackVersionId={rollbackVersionId}
+        relinkTargetRoot={relinkTargetRoot}
         selectedSkillDetail={selectedSkillDetail}
         viewModel={viewModel}
       />
@@ -2872,21 +2976,31 @@ function DiscoverPage({
 function InstallsPage({
   activeTab,
   lastInstallationId,
+  onRelink,
+  onRelinkTargetRootChange,
+  onReinstall,
   onRollback,
   onRollbackVersionIdChange,
+  onSetReadOnlyLock,
   onUninstall,
   operationMessage,
   rollbackVersionId,
+  relinkTargetRoot,
   selectedSkillDetail,
   viewModel
 }: {
   activeTab: string;
   lastInstallationId: string;
+  onRelink: () => void;
+  onRelinkTargetRootChange: (value: string) => void;
+  onReinstall: () => void;
   onRollback: () => void;
   onRollbackVersionIdChange: (value: string) => void;
+  onSetReadOnlyLock: (locked: boolean) => void;
   onUninstall: () => void;
   operationMessage: string;
   rollbackVersionId: string;
+  relinkTargetRoot: string;
   selectedSkillDetail: SkillDetail | null;
   viewModel: ReturnType<typeof createWorkspaceViewModel>;
 }): ReactElement {
@@ -2914,11 +3028,17 @@ function InstallsPage({
       ) : activeTab === 'Uninstalls' ? (
         <InstallLifecycleActions
           lastInstallationId={lastInstallationId}
+          onRelink={onRelink}
+          onRelinkTargetRootChange={onRelinkTargetRootChange}
+          onReinstall={onReinstall}
           onRollback={onRollback}
           onRollbackVersionIdChange={onRollbackVersionIdChange}
+          onSetReadOnlyLock={onSetReadOnlyLock}
           onUninstall={onUninstall}
           operationMessage={operationMessage}
           rollbackVersionId={rollbackVersionId}
+          relinkTargetRoot={relinkTargetRoot}
+          selectedSkillDetail={selectedSkillDetail}
         />
       ) : (
         <>
@@ -2935,19 +3055,34 @@ function InstallsPage({
 
 function InstallLifecycleActions({
   lastInstallationId,
+  onRelink,
+  onRelinkTargetRootChange,
+  onReinstall,
   onRollback,
   onRollbackVersionIdChange,
+  onSetReadOnlyLock,
   onUninstall,
   operationMessage,
-  rollbackVersionId
+  rollbackVersionId,
+  relinkTargetRoot,
+  selectedSkillDetail
 }: {
   lastInstallationId: string;
+  onRelink: () => void;
+  onRelinkTargetRootChange: (value: string) => void;
+  onReinstall: () => void;
   onRollback: () => void;
   onRollbackVersionIdChange: (value: string) => void;
+  onSetReadOnlyLock: (locked: boolean) => void;
   onUninstall: () => void;
   operationMessage: string;
   rollbackVersionId: string;
+  relinkTargetRoot: string;
+  selectedSkillDetail: SkillDetail | null;
 }): ReactElement {
+  const installation = currentInstallation(selectedSkillDetail, lastInstallationId);
+  const locked = installation?.readOnlyLocked ?? false;
+
   return (
     <section className="panel" aria-label="Install lifecycle actions">
       <PanelHeader tag={operationMessage || 'app-owned'} title="Install lifecycle" />
@@ -2966,7 +3101,30 @@ function InstallLifecycleActions({
         <button disabled={lastInstallationId.length === 0 || rollbackVersionId.trim().length === 0} onClick={onRollback} type="button">
           Roll back install
         </button>
-        <button disabled={lastInstallationId.length === 0} onClick={onUninstall} type="button">
+        <button disabled={lastInstallationId.length === 0 || locked} onClick={onReinstall} type="button">
+          Reinstall app-owned files
+        </button>
+        <label htmlFor="relink-target-root">
+          Relink target root
+          <input
+            aria-label="Relink target root"
+            id="relink-target-root"
+            name="relinkTargetRoot"
+            onChange={(event) => onRelinkTargetRootChange(event.target.value)}
+            placeholder="/path/to/agent/skills"
+            value={relinkTargetRoot}
+          />
+        </label>
+        <button disabled={lastInstallationId.length === 0 || relinkTargetRoot.trim().length === 0 || locked} onClick={onRelink} type="button">
+          Relink install
+        </button>
+        <button disabled={lastInstallationId.length === 0 || locked} onClick={() => onSetReadOnlyLock(true)} type="button">
+          Lock read-only
+        </button>
+        <button disabled={lastInstallationId.length === 0 || !locked} onClick={() => onSetReadOnlyLock(false)} type="button">
+          Unlock read-only
+        </button>
+        <button disabled={lastInstallationId.length === 0 || locked} onClick={onUninstall} type="button">
           Uninstall app-owned files
         </button>
       </div>
@@ -4564,6 +4722,24 @@ function filterValues(input: string): string[] {
 
 function safeDomId(input: string): string {
   return input.replace(/[^a-zA-Z0-9_-]+/g, '-');
+}
+
+function currentInstallation(
+  detail: SkillDetail | null,
+  installationId: string
+): SkillDetail['installations'][number] | null {
+  if (!detail || installationId.trim().length === 0) {
+    return null;
+  }
+  return detail.installations.find((installation) => installation.installationId === installationId) ?? null;
+}
+
+function agentCodeForDisplay(agent: string): string {
+  const normalized = agent.trim().toLowerCase();
+  if (normalized === 'open code') {
+    return 'opencode';
+  }
+  return normalized.replace(/\s+/g, '-');
 }
 
 function CollectionActions({

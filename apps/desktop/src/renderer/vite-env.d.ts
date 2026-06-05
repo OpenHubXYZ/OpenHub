@@ -11,6 +11,9 @@ import type {
   ExportSkillResult,
   FileDiff,
   ImportedSkillResult,
+  InstallCompatibility,
+  InstallLifecycleResult,
+  InstallLockResult,
   InstallPlan,
   InstallResult,
   InstallTarget,
@@ -101,6 +104,17 @@ declare global {
         rootKind?: 'user' | 'project';
         projectionMode?: 'copy' | 'symlink' | 'hardlink' | 'mirror-export';
       }): Promise<InstallPlan>;
+      checkInstallCompatibility(input: {
+        skillId: string;
+        targetRoot: string;
+        agentCode: string;
+        agentDisplayName: string;
+        adapterVersion: string;
+        scope: string;
+        rootKind?: 'user' | 'project';
+        projectionMode?: 'copy' | 'symlink' | 'hardlink' | 'mirror-export';
+        versionId?: string;
+      }): Promise<InstallCompatibility>;
       createMultiTargetInstallPlan(input: {
         skillId: string;
         projectionMode?: 'copy' | 'symlink' | 'hardlink' | 'mirror-export';
@@ -117,6 +131,18 @@ declare global {
       applyInstallPlan(plan: InstallPlan): Promise<InstallResult>;
       applyMultiTargetInstallPlan(plans: InstallPlan[]): Promise<MultiTargetInstallResult>;
       uninstall(installationId: string): Promise<InstallUninstallResult>;
+      reinstall(installationId: string): Promise<InstallLifecycleResult>;
+      relink(input: {
+        installationId: string;
+        targetRoot: string;
+        agentCode: string;
+        agentDisplayName: string;
+        adapterVersion: string;
+        scope: string;
+        rootKind?: 'user' | 'project';
+        projectionMode?: 'copy' | 'symlink' | 'hardlink' | 'mirror-export';
+      }): Promise<InstallLifecycleResult>;
+      setReadOnlyLock(installationId: string, locked: boolean): Promise<InstallLockResult>;
       listVersions(skillId: string): Promise<SkillVersionSummary[]>;
       diffVersions(fromVersionId: string, toVersionId: string): Promise<FileDiff[]>;
       rollbackVersion(installationId: string, targetVersionId: string): Promise<{

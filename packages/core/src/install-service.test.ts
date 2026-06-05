@@ -191,6 +191,157 @@ describe('install service', () => {
       'Project Helper'
     );
   });
+
+  it('checks compatibility, reinstalls, relinks, and locks app-owned installations', async () => {
+    const workspace = await tempDir();
+    const source = path.join(workspace, 'source');
+    const codexRoot = path.join(workspace, 'codex-root');
+    const claudeRoot = path.join(workspace, 'claude-root');
+    const relinkRoot = path.join(workspace, 'codex-relinked');
+    await mkdir(path.join(source, 'references'), { recursive: true });
+    await writeFile(
+      path.join(source, 'SKILL.md'),
+      [
+        '---',
+        'name: compat-helper',
+        'description: Compatibility helper',
+        'supported_agents:',
+        '  - codex',
+        '---',
+        '# Compat Helper'
+      ].join('\n')
+    );
+    await writeFile(path.join(source, 'references/guide.md'), 'codex guide');
+
+    const database = createMemoryDatabase();
+    runMigrations(database);
+    const contentStore = createContentStore(path.join(workspace, 'blobs'));
+    const imported = await createImportService({
+      database,
+      contentStore,
+      stagingDirectory: path.join(workspace, 'staging')
+    }).importLocalFolder({ folderPath: source });
+    const installer = createInstallService({ database, contentStore });
+
+    await expect(
+      installer.checkCompatibility({
+        skillId: imported.skill.id,
+        targetRoot: codexRoot,
+        agentCode: 'codex',
+        agentDisplayName: 'Codex',
+        adapterVersion: 'test',
+        scope: 'user'
+      })
+    ).resolves.toMatchObject({
+      status: 'compatible',
+      supportedAgents: ['codex']
+    });
+
+    const incompatiblePlan = await installer.createInstallPlan({
+      skillId: imported.skill.id,
+      targetRoot: claudeRoot,
+      agentCode: 'claude',
+      agentDisplayName: 'Claude',
+      adapterVersion: 'test',
+      scope: 'user'
+    });
+    await expect(installer.applyInstallPlan(incompatiblePlan)).rejects.toThrow(/incompatible/i);
+    await expect(readFile(path.join(claudeRoot, 'compat-helper/SKILL.md'), 'utf8')).rejects.toMatchObject({
+      code: 'ENOENT'
+    });
+
+    const compatiblePlan = await installer.createInstallPlan({
+      skillId: imported.skill.id,
+      targetRoot: codexRoot,
+      agentCode: 'codex',
+      agentDisplayName: 'Codex',
+      adapterVersion: 'test',
+      scope: 'user'
+    });
+    const installed = await installer.applyInstallPlan(compatiblePlan);
+    const installationId = installed.installationId!;
+    const installedManifest = path.join(codexRoot, 'compat-helper/SKILL.md');
+    const userNote = path.join(codexRoot, 'compat-helper/user-note.md');
+    await writeFile(installedManifest, 'corrupted app-owned file');
+    await writeFile(userNote, 'keep user note');
+
+    await expect(installer.reinstall({ installationId })).resolves.toMatchObject({
+      status: 'reinstalled',
+      installationId
+    });
+    await expect(readFile(installedManifest, 'utf8')).resolves.toContain('Compat Helper');
+    await expect(readFile(userNote, 'utf8')).resolves.toBe('keep user note');
+
+    await expect(installer.setReadOnlyLock({ installationId, locked: true })).resolves.toEqual({
+      status: 'locked',
+      installationId,
+      readOnlyLocked: true
+    });
+    await expect(installer.reinstall({ installationId })).rejects.toThrow(/read-only locked/);
+    await expect(
+      installer.relink({
+        installationId,
+        targetRoot: relinkRoot,
+        agentCode: 'codex',
+        agentDisplayName: 'Codex',
+        adapterVersion: 'test',
+        scope: 'user',
+        projectionMode: 'copy'
+      })
+    ).rejects.toThrow(/read-only locked/);
+    await expect(installer.uninstall({ installationId })).rejects.toThrow(/read-only locked/);
+
+    await expect(installer.setReadOnlyLock({ installationId, locked: false })).resolves.toEqual({
+      status: 'unlocked',
+      installationId,
+      readOnlyLocked: false
+    });
+    await expect(
+      installer.relink({
+        installationId,
+        targetRoot: relinkRoot,
+        agentCode: 'codex',
+        agentDisplayName: 'Codex',
+        adapterVersion: 'test',
+        scope: 'user',
+        projectionMode: 'copy'
+      })
+    ).resolves.toMatchObject({
+      status: 'relinked',
+      installationId,
+      targetRoot: relinkRoot,
+      projectionMode: 'copy'
+    });
+    await expect(readFile(installedManifest, 'utf8')).rejects.toMatchObject({ code: 'ENOENT' });
+    await expect(readFile(userNote, 'utf8')).resolves.toBe('keep user note');
+    await expect(readFile(path.join(relinkRoot, 'compat-helper/SKILL.md'), 'utf8')).resolves.toContain(
+      'Compat Helper'
+    );
+    expect(
+      database
+        .prepare(
+          `
+            select ar.root_path as rootPath,
+                   i.projection_mode as projectionMode,
+                   i.read_only_locked as readOnlyLocked
+            from installations i
+            join agent_roots ar on ar.id = i.agent_root_id
+            where i.id = ?
+          `
+        )
+        .get(installationId)
+    ).toEqual({
+      rootPath: relinkRoot,
+      projectionMode: 'copy',
+      readOnlyLocked: 0
+    });
+
+    await installer.uninstall({ installationId });
+    await expect(readFile(path.join(relinkRoot, 'compat-helper/SKILL.md'), 'utf8')).rejects.toMatchObject({
+      code: 'ENOENT'
+    });
+    await expect(readFile(userNote, 'utf8')).resolves.toBe('keep user note');
+  });
 });
 
 async function tempDir(): Promise<string> {

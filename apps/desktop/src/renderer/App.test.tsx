@@ -888,6 +888,48 @@ describe('desktop app shell', () => {
         removedFiles: ['SKILL.md'],
         preservedFiles: []
       }),
+      reinstall: vi.fn().mockResolvedValue({
+        status: 'reinstalled',
+        installationId: 'installation-runtime',
+        targetRoot: '/tmp/.codex/skills',
+        projectionMode: 'copy',
+        compatibility: {
+          status: 'compatible',
+          skillId: runtimeSkill.id,
+          versionId: runtimeSkill.versionId,
+          agentCode: 'codex',
+          targetRoot: '/tmp/.codex/skills',
+          supportedAgents: ['codex'],
+          reasons: []
+        }
+      }),
+      relink: vi.fn().mockResolvedValue({
+        status: 'relinked',
+        installationId: 'installation-runtime',
+        targetRoot: '/tmp/.codex-relinked/skills',
+        projectionMode: 'copy',
+        compatibility: {
+          status: 'compatible',
+          skillId: runtimeSkill.id,
+          versionId: runtimeSkill.versionId,
+          agentCode: 'codex',
+          targetRoot: '/tmp/.codex-relinked/skills',
+          supportedAgents: ['codex'],
+          reasons: []
+        }
+      }),
+      setReadOnlyLock: vi
+        .fn()
+        .mockResolvedValueOnce({
+          status: 'locked',
+          installationId: 'installation-runtime',
+          readOnlyLocked: true
+        })
+        .mockResolvedValueOnce({
+          status: 'unlocked',
+          installationId: 'installation-runtime',
+          readOnlyLocked: false
+        }),
       createSecurityExemption: vi.fn().mockResolvedValue({
         id: 'exemption-runtime',
         skillId: runtimeSkill.id,
@@ -921,6 +963,27 @@ describe('desktop app shell', () => {
     fireEvent.click(screen.getByRole('tab', { name: 'Uninstalls' }));
     fireEvent.click(screen.getByRole('button', { name: 'Roll back install' }));
     await waitFor(() => expect(api.rollbackVersion).toHaveBeenCalledWith('installation-runtime', 'version-1'));
+    fireEvent.click(screen.getByRole('button', { name: 'Reinstall app-owned files' }));
+    await waitFor(() => expect(api.reinstall).toHaveBeenCalledWith('installation-runtime'));
+    fireEvent.change(screen.getByLabelText('Relink target root'), {
+      target: { value: '/tmp/.codex-relinked/skills' }
+    });
+    fireEvent.click(screen.getByRole('button', { name: 'Relink install' }));
+    await waitFor(() =>
+      expect(api.relink).toHaveBeenCalledWith({
+        installationId: 'installation-runtime',
+        targetRoot: '/tmp/.codex-relinked/skills',
+        agentCode: 'codex',
+        agentDisplayName: 'Codex',
+        adapterVersion: 'builtin',
+        scope: 'user',
+        projectionMode: 'copy'
+      })
+    );
+    fireEvent.click(screen.getByRole('button', { name: 'Lock read-only' }));
+    await waitFor(() => expect(api.setReadOnlyLock).toHaveBeenCalledWith('installation-runtime', true));
+    fireEvent.click(screen.getByRole('button', { name: 'Unlock read-only' }));
+    await waitFor(() => expect(api.setReadOnlyLock).toHaveBeenCalledWith('installation-runtime', false));
     fireEvent.click(screen.getByRole('button', { name: 'Uninstall app-owned files' }));
     await waitFor(() => expect(api.uninstall).toHaveBeenCalledWith('installation-runtime'));
     expect(screen.getByText('Uninstalled app-owned files for installation-runtime.')).toBeInTheDocument();
@@ -2044,6 +2107,8 @@ function skillDetail(skill: {
         scope: 'user',
         installPath: '/tmp/.codex/skills/runtime-helper',
         status: 'installed',
+        projectionMode: 'copy',
+        readOnlyLocked: false,
         versionNo: skill.versionNo
       }
     ],

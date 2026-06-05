@@ -12,6 +12,9 @@ import type {
   ExportSkillResult,
   FileDiff,
   ImportedSkillResult,
+  InstallCompatibility,
+  InstallLifecycleResult,
+  InstallLockResult,
   InstallPlan,
   InstallResult,
   InstallTarget,
@@ -210,6 +213,21 @@ const api = {
     return parseIpcResponse(desktopShellContract.installCreatePlan.channel, payload);
   },
 
+  async checkInstallCompatibility(input: {
+    skillId: string;
+    targetRoot: string;
+    agentCode: string;
+    agentDisplayName: string;
+    adapterVersion: string;
+    scope: string;
+    rootKind?: 'user' | 'project';
+    projectionMode?: 'copy' | 'symlink' | 'hardlink' | 'mirror-export';
+    versionId?: string;
+  }): Promise<InstallCompatibility> {
+    const payload = await ipcRenderer.invoke(desktopShellContract.installCheckCompatibility.channel, input);
+    return parseIpcResponse(desktopShellContract.installCheckCompatibility.channel, payload);
+  },
+
   async createMultiTargetInstallPlan(input: {
     skillId: string;
     projectionMode?: 'copy' | 'symlink' | 'hardlink' | 'mirror-export';
@@ -245,6 +263,33 @@ const api = {
   async uninstall(installationId: string): Promise<InstallUninstallResult> {
     const payload = await ipcRenderer.invoke(desktopShellContract.installUninstall.channel, { installationId });
     return parseIpcResponse(desktopShellContract.installUninstall.channel, payload);
+  },
+
+  async reinstall(installationId: string): Promise<InstallLifecycleResult> {
+    const payload = await ipcRenderer.invoke(desktopShellContract.installReinstall.channel, { installationId });
+    return parseIpcResponse(desktopShellContract.installReinstall.channel, payload);
+  },
+
+  async relink(input: {
+    installationId: string;
+    targetRoot: string;
+    agentCode: string;
+    agentDisplayName: string;
+    adapterVersion: string;
+    scope: string;
+    rootKind?: 'user' | 'project';
+    projectionMode?: 'copy' | 'symlink' | 'hardlink' | 'mirror-export';
+  }): Promise<InstallLifecycleResult> {
+    const payload = await ipcRenderer.invoke(desktopShellContract.installRelink.channel, input);
+    return parseIpcResponse(desktopShellContract.installRelink.channel, payload);
+  },
+
+  async setReadOnlyLock(installationId: string, locked: boolean): Promise<InstallLockResult> {
+    const payload = await ipcRenderer.invoke(desktopShellContract.installSetReadOnlyLock.channel, {
+      installationId,
+      locked
+    });
+    return parseIpcResponse(desktopShellContract.installSetReadOnlyLock.channel, payload);
   },
 
   async listVersions(skillId: string): Promise<SkillVersionSummary[]> {

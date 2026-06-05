@@ -164,6 +164,20 @@ export const installResultSchema = z
 
 export type InstallResult = z.infer<typeof installResultSchema>;
 
+export const installCompatibilitySchema = z
+  .object({
+    status: z.enum(['compatible', 'incompatible']),
+    skillId: z.string().min(1),
+    versionId: z.string().min(1),
+    agentCode: z.string().min(1),
+    targetRoot: z.string().min(1),
+    supportedAgents: z.array(z.string().min(1)),
+    reasons: z.array(z.string().min(1))
+  })
+  .strict();
+
+export type InstallCompatibility = z.infer<typeof installCompatibilitySchema>;
+
 export const multiTargetInstallResultSchema = z
   .object({
     installed: z.array(installResultSchema),
@@ -180,6 +194,18 @@ export const multiTargetInstallResultSchema = z
   .strict();
 
 export type MultiTargetInstallResult = z.infer<typeof multiTargetInstallResultSchema>;
+
+export const installLifecycleResultSchema = z
+  .object({
+    status: z.enum(['reinstalled', 'relinked']),
+    installationId: z.string().min(1),
+    targetRoot: z.string().min(1),
+    projectionMode: z.enum(['copy', 'symlink', 'hardlink', 'mirror-export']),
+    compatibility: installCompatibilitySchema
+  })
+  .strict();
+
+export type InstallLifecycleResult = z.infer<typeof installLifecycleResultSchema>;
 
 export const importedSkillResultSchema = z
   .object({
@@ -619,6 +645,8 @@ export const skillDetailSchema = z
           scope: z.string().min(1),
           installPath: z.string().min(1),
           status: z.string().min(1),
+          projectionMode: z.enum(['copy', 'symlink', 'hardlink', 'mirror-export']).optional(),
+          readOnlyLocked: z.boolean().optional(),
           versionNo: z.number().int().positive()
         })
         .strict()
@@ -652,6 +680,16 @@ export const installUninstallResultSchema = z
   .strict();
 
 export type InstallUninstallResult = z.infer<typeof installUninstallResultSchema>;
+
+export const installLockResultSchema = z
+  .object({
+    status: z.enum(['locked', 'unlocked']),
+    installationId: z.string().min(1),
+    readOnlyLocked: z.boolean()
+  })
+  .strict();
+
+export type InstallLockResult = z.infer<typeof installLockResultSchema>;
 
 export const versionRollbackResultSchema = z
   .object({
@@ -1108,6 +1146,23 @@ export const desktopShellContract = {
       .strict(),
     response: installPlanSchema
   },
+  installCheckCompatibility: {
+    channel: 'install.checkCompatibility',
+    request: z
+      .object({
+        skillId: z.string().min(1),
+        targetRoot: z.string().min(1),
+        agentCode: z.string().min(1),
+        agentDisplayName: z.string().min(1),
+        adapterVersion: z.string().min(1),
+        scope: z.string().min(1),
+        rootKind: z.enum(['user', 'project']).optional(),
+        projectionMode: z.enum(['copy', 'symlink', 'hardlink', 'mirror-export']).optional(),
+        versionId: z.string().min(1).optional()
+      })
+      .strict(),
+    response: installCompatibilitySchema
+  },
   installCreateMultiTargetPlan: {
     channel: 'install.createMultiTargetPlan',
     request: z
@@ -1155,6 +1210,32 @@ export const desktopShellContract = {
     channel: 'install.uninstall',
     request: z.object({ installationId: z.string().min(1) }).strict(),
     response: installUninstallResultSchema
+  },
+  installReinstall: {
+    channel: 'install.reinstall',
+    request: z.object({ installationId: z.string().min(1) }).strict(),
+    response: installLifecycleResultSchema
+  },
+  installRelink: {
+    channel: 'install.relink',
+    request: z
+      .object({
+        installationId: z.string().min(1),
+        targetRoot: z.string().min(1),
+        agentCode: z.string().min(1),
+        agentDisplayName: z.string().min(1),
+        adapterVersion: z.string().min(1),
+        scope: z.string().min(1),
+        rootKind: z.enum(['user', 'project']).optional(),
+        projectionMode: z.enum(['copy', 'symlink', 'hardlink', 'mirror-export']).optional()
+      })
+      .strict(),
+    response: installLifecycleResultSchema
+  },
+  installSetReadOnlyLock: {
+    channel: 'install.setReadOnlyLock',
+    request: z.object({ installationId: z.string().min(1), locked: z.boolean() }).strict(),
+    response: installLockResultSchema
   },
   versionList: {
     channel: 'version.list',
@@ -1542,6 +1623,10 @@ export function parseIpcResponse(
   payload: unknown
 ): InstallPlan;
 export function parseIpcResponse(
+  channel: typeof desktopShellContract.installCheckCompatibility.channel,
+  payload: unknown
+): InstallCompatibility;
+export function parseIpcResponse(
   channel: typeof desktopShellContract.installCreateMultiTargetPlan.channel,
   payload: unknown
 ): InstallPlan[];
@@ -1561,6 +1646,18 @@ export function parseIpcResponse(
   channel: typeof desktopShellContract.installUninstall.channel,
   payload: unknown
 ): InstallUninstallResult;
+export function parseIpcResponse(
+  channel: typeof desktopShellContract.installReinstall.channel,
+  payload: unknown
+): InstallLifecycleResult;
+export function parseIpcResponse(
+  channel: typeof desktopShellContract.installRelink.channel,
+  payload: unknown
+): InstallLifecycleResult;
+export function parseIpcResponse(
+  channel: typeof desktopShellContract.installSetReadOnlyLock.channel,
+  payload: unknown
+): InstallLockResult;
 export function parseIpcResponse(
   channel: typeof desktopShellContract.versionList.channel,
   payload: unknown

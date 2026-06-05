@@ -368,6 +368,139 @@ describe('desktop runtime IPC dispatch', () => {
     expect(exemption).toMatchObject({ skillId: highRisk.skill.id, scope: 'user' });
   });
 
+  it('dispatches install compatibility, reinstall, relink, and read-only lock workflows', async () => {
+    const workspace = await tempDir();
+    const source = path.join(workspace, 'compat-source');
+    const codexRoot = path.join(workspace, 'codex-root');
+    const claudeRoot = path.join(workspace, 'claude-root');
+    const relinkRoot = path.join(workspace, 'codex-relinked');
+    await mkdir(source, { recursive: true });
+    await writeFile(
+      path.join(source, 'SKILL.md'),
+      [
+        '---',
+        'name: lifecycle-helper',
+        'description: Lifecycle helper',
+        'tags: [runtime, local]',
+        'supported_agents: [codex]',
+        '---',
+        '# Lifecycle Helper'
+      ].join('\n')
+    );
+    const runtime = createDesktopRuntime({
+      dataDirectory: path.join(workspace, 'app-data'),
+      homeDirectory: path.join(workspace, 'home')
+    });
+    const imported = await runtime.dispatch('import.localFolder', { folderPath: source });
+
+    await expect(
+      runtime.dispatch('install.checkCompatibility', {
+        skillId: imported.skill.id,
+        targetRoot: codexRoot,
+        agentCode: 'codex',
+        agentDisplayName: 'Codex',
+        adapterVersion: 'test',
+        scope: 'user'
+      })
+    ).resolves.toMatchObject({ status: 'compatible', supportedAgents: ['codex'] });
+    const incompatiblePlan = await runtime.dispatch('install.createPlan', {
+      skillId: imported.skill.id,
+      targetRoot: claudeRoot,
+      agentCode: 'claude',
+      agentDisplayName: 'Claude',
+      adapterVersion: 'test',
+      scope: 'user'
+    });
+    await expect(runtime.dispatch('install.applyPlan', { plan: incompatiblePlan })).rejects.toThrow(/incompatible/i);
+
+    const plan = await runtime.dispatch('install.createPlan', {
+      skillId: imported.skill.id,
+      targetRoot: codexRoot,
+      agentCode: 'codex',
+      agentDisplayName: 'Codex',
+      adapterVersion: 'test',
+      scope: 'user'
+    });
+    const installed = await runtime.dispatch('install.applyPlan', { plan });
+    await writeFile(path.join(codexRoot, 'lifecycle-helper/SKILL.md'), 'corrupted app-owned file');
+    await writeFile(path.join(codexRoot, 'lifecycle-helper/user-note.md'), 'keep user note');
+
+    await expect(
+      runtime.dispatch('install.setReadOnlyLock', {
+        installationId: installed.installationId,
+        locked: true
+      })
+    ).resolves.toEqual({
+      status: 'locked',
+      installationId: installed.installationId,
+      readOnlyLocked: true
+    });
+    await expect(runtime.dispatch('install.reinstall', { installationId: installed.installationId })).rejects.toThrow(
+      /read-only locked/
+    );
+    await expect(
+      runtime.dispatch('install.relink', {
+        installationId: installed.installationId,
+        targetRoot: relinkRoot,
+        agentCode: 'codex',
+        agentDisplayName: 'Codex',
+        adapterVersion: 'test',
+        scope: 'user',
+        projectionMode: 'copy'
+      })
+    ).rejects.toThrow(/read-only locked/);
+    await expect(runtime.dispatch('install.uninstall', { installationId: installed.installationId })).rejects.toThrow(
+      /read-only locked/
+    );
+
+    await runtime.dispatch('install.setReadOnlyLock', {
+      installationId: installed.installationId,
+      locked: false
+    });
+    await expect(runtime.dispatch('install.reinstall', { installationId: installed.installationId })).resolves.toMatchObject({
+      status: 'reinstalled',
+      installationId: installed.installationId
+    });
+    await expect(readFile(path.join(codexRoot, 'lifecycle-helper/SKILL.md'), 'utf8')).resolves.toContain(
+      'Lifecycle Helper'
+    );
+    await expect(
+      runtime.dispatch('install.relink', {
+        installationId: installed.installationId,
+        targetRoot: relinkRoot,
+        agentCode: 'codex',
+        agentDisplayName: 'Codex',
+        adapterVersion: 'test',
+        scope: 'user',
+        projectionMode: 'copy'
+      })
+    ).resolves.toMatchObject({
+      status: 'relinked',
+      installationId: installed.installationId,
+      targetRoot: relinkRoot,
+      projectionMode: 'copy'
+    });
+    const detail = await runtime.dispatch('library.detail', { skillId: imported.skill.id });
+
+    await expect(readFile(path.join(codexRoot, 'lifecycle-helper/SKILL.md'), 'utf8')).rejects.toMatchObject({
+      code: 'ENOENT'
+    });
+    await expect(readFile(path.join(codexRoot, 'lifecycle-helper/user-note.md'), 'utf8')).resolves.toBe(
+      'keep user note'
+    );
+    await expect(readFile(path.join(relinkRoot, 'lifecycle-helper/SKILL.md'), 'utf8')).resolves.toContain(
+      'Lifecycle Helper'
+    );
+    expect(detail.installations).toEqual([
+      expect.objectContaining({
+        installationId: installed.installationId,
+        rootPath: relinkRoot,
+        projectionMode: 'copy',
+        readOnlyLocked: false
+      })
+    ]);
+  });
+
   it('persists onboarding completion, imports explicit migration selections, and leaves preview read-only', async () => {
     const workspace = await tempDir();
     const sourcePath = path.join(workspace, 'openskills');

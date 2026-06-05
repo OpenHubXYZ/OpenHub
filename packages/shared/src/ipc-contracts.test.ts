@@ -164,7 +164,11 @@ describe('desktop shell IPC contract', () => {
         'library.search',
         'library.facets',
         'library.detail',
+        'install.checkCompatibility',
         'install.listTargets',
+        'install.reinstall',
+        'install.relink',
+        'install.setReadOnlyLock',
         'install.uninstall',
         'version.list',
         'version.diff',
@@ -235,6 +239,48 @@ describe('desktop shell IPC contract', () => {
     expect(parseIpcRequest('install.uninstall', { installationId: 'installation-1' })).toEqual({
       installationId: 'installation-1'
     });
+    expect(parseIpcRequest('install.checkCompatibility', {
+      skillId: 'skill-1',
+      targetRoot: '/tmp/.codex/skills',
+      agentCode: 'codex',
+      agentDisplayName: 'Codex',
+      adapterVersion: 'test',
+      scope: 'user'
+    })).toMatchObject({ skillId: 'skill-1', agentCode: 'codex' });
+    expect(
+      desktopShellContract.installCheckCompatibility.response.parse({
+        status: 'compatible',
+        skillId: 'skill-1',
+        versionId: 'version-1',
+        agentCode: 'codex',
+        targetRoot: '/tmp/.codex/skills',
+        supportedAgents: ['codex'],
+        reasons: []
+      }).status
+    ).toBe('compatible');
+    expect(parseIpcRequest('install.reinstall', { installationId: 'installation-1' })).toEqual({
+      installationId: 'installation-1'
+    });
+    expect(parseIpcRequest('install.relink', {
+      installationId: 'installation-1',
+      targetRoot: '/tmp/.claude/skills',
+      agentCode: 'claude',
+      agentDisplayName: 'Claude',
+      adapterVersion: 'test',
+      scope: 'user',
+      projectionMode: 'copy'
+    })).toMatchObject({ installationId: 'installation-1', agentCode: 'claude' });
+    expect(parseIpcRequest('install.setReadOnlyLock', { installationId: 'installation-1', locked: true })).toEqual({
+      installationId: 'installation-1',
+      locked: true
+    });
+    expect(
+      desktopShellContract.installSetReadOnlyLock.response.parse({
+        status: 'locked',
+        installationId: 'installation-1',
+        readOnlyLocked: true
+      }).readOnlyLocked
+    ).toBe(true);
     expect(parseIpcRequest('security.createExemption', {
       skillId: 'skill-1',
       scope: 'user',

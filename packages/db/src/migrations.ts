@@ -489,6 +489,15 @@ const migrations: Migration[] = [
         );
       `);
     }
+  },
+  {
+    version: 12,
+    name: '012_installation_lifecycle_lock',
+    up(database) {
+      database.exec(`
+        alter table installations add column read_only_locked integer not null default 0;
+      `);
+    }
   }
 ];
 
