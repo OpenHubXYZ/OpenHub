@@ -17,11 +17,13 @@ import/install flow state, and Security Center state for queue, risk, findings,
 history, exemptions, version history, diffs, collections, Sync Center state, and
 Plugins state.
 The Electron main process wires typed runtime IPC to the local app data SQLite
-database and content store for agent-root scanning, local/Git/ZIP import,
-FTS-backed library search, skill detail, skill and collection export/import,
-install target discovery, install, uninstall, rollback, security rescans and
-exemptions, opt-in sync operations, plugin installation and registry state, and
-Discover source previews.
+database and content store for first-launch onboarding, migration preview,
+agent-root scanning, local/Git/ZIP/TAR/sparse-Git/mirror import, FTS-backed
+library search, favorites, skill detail, signed skill and collection
+export/import, project roots, multi-target install, uninstall, rollback,
+security rescans and exemptions, policy packs, team baselines, opt-in sync
+operations, sync conflict resolution, plugin installation and registry state,
+plugin provider workflows, and Discover source previews.
 `packages/db` has idempotent SQLite migrations, required domain tables, FTS5
 skill search, app data directory resolution, installation file ownership
 records, security scan records, active exemption records, sync profiles,
@@ -38,12 +40,14 @@ findings, blocks high-risk installs by default, and allows scoped exemptions
 that can be revoked. It now creates new skill versions for content-changing
 operations, diffs version files, rolls installed projections back to older
 versions, and batch-exports/imports collections. Sync is disabled unless a user
-creates an enabled profile, stores local writes before outbox enqueue, supports
-shared-folder, Git, and mock REST package drivers, and records conflicts for
-explicit resolution. Plugins are disabled by default, validate manifest fields
-and entry integrity, require declared permissions to be explicitly authorized,
-register capabilities through a restricted host API, and remove capabilities
-from the registry when disabled. Discover sources can be configured from local
+creates an enabled profile, stores REST credential material through OS-backed
+credential storage, supports shared-folder, Git, REST, and mock REST package
+drivers, and records conflicts for explicit resolution. Plugins are disabled by
+default, validate manifest fields and entry integrity, require declared
+permissions to be explicitly authorized, register capabilities through a
+restricted host API, contribute adapter/importer/security/sync providers only
+while enabled, and remove capabilities from the registry when disabled.
+Discover sources can be configured from local
 paths or Git URLs and previewed before import; migration previews cover
 OpenSkills, Skills-Manager, SkillHub, and skills-manager-client layouts without
 writing to agent roots. The repository now includes current-platform desktop
@@ -82,6 +86,7 @@ For release-readiness checks on the current platform:
 ```sh
 pnpm package:desktop
 pnpm release:smoke
+pnpm release:checksums
 pnpm release:inventory
 ```
 
@@ -130,6 +135,8 @@ pnpm test
 pnpm build
 pnpm package:desktop
 pnpm release:smoke
+pnpm release:checksums
+pnpm release:inventory
 ```
 
 The CI workflow runs the same install, lint, typecheck, test, and build

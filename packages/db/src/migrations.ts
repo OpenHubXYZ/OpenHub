@@ -463,6 +463,19 @@ const migrations: Migration[] = [
         );
       `);
     }
+  },
+  {
+    version: 10,
+    name: '010_app_settings',
+    up(database) {
+      database.exec(`
+        create table app_settings (
+          key text primary key,
+          value_json text not null,
+          updated_at text not null default current_timestamp
+        );
+      `);
+    }
   }
 ];
 

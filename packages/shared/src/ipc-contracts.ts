@@ -19,7 +19,8 @@ export const librarySkillSummarySchema = z
     name: z.string().min(1),
     sourceAgent: z.string().min(1),
     path: z.string().min(1),
-    installStatus: z.string().min(1)
+    installStatus: z.string().min(1),
+    favorite: z.boolean().optional()
   })
   .strict();
 
@@ -31,7 +32,8 @@ export const skillSummarySchema = z
     versionId: z.string().min(1),
     name: z.string().min(1),
     description: z.string(),
-    versionNo: z.number().int().positive()
+    versionNo: z.number().int().positive(),
+    favorite: z.boolean().optional()
   })
   .strict();
 
@@ -130,6 +132,23 @@ export const installResultSchema = z
   .strict();
 
 export type InstallResult = z.infer<typeof installResultSchema>;
+
+export const multiTargetInstallResultSchema = z
+  .object({
+    installed: z.array(installResultSchema),
+    blocked: z.array(
+      z
+        .object({
+          targetRoot: z.string().min(1),
+          conflictState: z.enum(['clean', 'conflict']),
+          reason: z.string().min(1)
+        })
+        .strict()
+    )
+  })
+  .strict();
+
+export type MultiTargetInstallResult = z.infer<typeof multiTargetInstallResultSchema>;
 
 export const importedSkillResultSchema = z
   .object({
@@ -536,7 +555,8 @@ export const skillDetailSchema = z
         name: z.string().min(1),
         description: z.string(),
         tags: z.array(z.string()),
-        versionNo: z.number().int().positive()
+        versionNo: z.number().int().positive(),
+        favorite: z.boolean().optional()
       })
       .strict(),
     source: z
@@ -707,6 +727,56 @@ const syncConflictRecordSchema = z
 
 export type SyncConflictRecord = z.infer<typeof syncConflictRecordSchema>;
 
+const policyScanLevelSchema = z.enum(['safe', 'warning', 'critical']);
+
+export const policyPackSchema = z
+  .object({
+    id: z.string().min(1),
+    name: z.string().min(1),
+    allowedSources: z.array(z.string().min(1)),
+    blockedRules: z.array(z.string().min(1)),
+    requiredScanLevel: policyScanLevelSchema,
+    approvedPlugins: z.array(z.string().min(1))
+  })
+  .strict();
+
+export type PolicyPack = z.infer<typeof policyPackSchema>;
+
+export const policyEvaluationSchema = z
+  .object({
+    allowed: z.boolean(),
+    reasons: z.array(z.string().min(1))
+  })
+  .strict();
+
+export type PolicyEvaluation = z.infer<typeof policyEvaluationSchema>;
+
+const baselineRootTemplateSchema = z
+  .object({
+    agentCode: z.string().min(1),
+    scope: z.string().min(1),
+    rootPathTemplate: z.string().min(1)
+  })
+  .strict();
+
+export const baselinePreviewSchema = z
+  .object({
+    name: z.string().min(1),
+    changes: z.array(z.string().min(1)),
+    writesAgentRoots: z.literal(false)
+  })
+  .strict();
+
+export type BaselinePreview = z.infer<typeof baselinePreviewSchema>;
+
+export const baselineExportResultSchema = z
+  .object({
+    outputDirectory: z.string().min(1)
+  })
+  .strict();
+
+export type BaselineExportResult = z.infer<typeof baselineExportResultSchema>;
+
 const statusOnlyResultSchema = z
   .object({
     status: z.string().min(1)
@@ -722,6 +792,8 @@ const pluginPermissionSchema = z.enum([
   'import:local',
   'sync-driver'
 ]);
+
+const pluginCapabilityTypeSchema = z.enum(['agent-adapter', 'importer', 'security-rule', 'sync-driver']);
 
 const pluginRegistrySchema = z
   .object({
@@ -802,6 +874,16 @@ const migrationPreviewResultSchema = z
 
 export type MigrationPreviewResult = z.infer<typeof migrationPreviewResultSchema>;
 
+const onboardingStateSchema = z
+  .object({
+    completed: z.boolean(),
+    detectedRoots: z.array(installTargetSchema),
+    migrationPreviews: z.array(migrationPreviewResultSchema)
+  })
+  .strict();
+
+export type OnboardingState = z.infer<typeof onboardingStateSchema>;
+
 export const appInfo: AppInfo = {
   productName: PRODUCT_NAME,
   phase: CURRENT_PHASE,
@@ -811,12 +893,49 @@ export const appInfo: AppInfo = {
 const emptyRequestSchema = z.object({}).strict();
 const skillIdRequestSchema = z.object({ skillId: z.string().min(1) }).strict();
 const collectionIdRequestSchema = z.object({ collectionId: z.string().min(1) }).strict();
+const installTargetRequestSchema = z
+  .object({
+    agentCode: z.enum(['codex', 'claude', 'gemini', 'opencode']),
+    rootPath: z.string().min(1)
+  })
+  .strict();
 
 export const desktopShellContract = {
   appInfo: {
     channel: 'app.info',
     request: emptyRequestSchema,
     response: appInfoResponseSchema
+  },
+  onboardingState: {
+    channel: 'onboarding.state',
+    request: emptyRequestSchema,
+    response: onboardingStateSchema
+  },
+  onboardingComplete: {
+    channel: 'onboarding.complete',
+    request: z.object({ completed: z.boolean().default(true) }).strict(),
+    response: onboardingStateSchema
+  },
+  onboardingImportMigration: {
+    channel: 'onboarding.importMigration',
+    request: z
+      .object({
+        adapter: z.enum(['openskills', 'skills-manager', 'skillhub', 'skills-manager-client']),
+        sourcePath: z.string().min(1),
+        paths: z.array(z.string().min(1)).min(1)
+      })
+      .strict(),
+    response: z.array(importedSkillResultSchema)
+  },
+  agentRootsAddProject: {
+    channel: 'agentRoots.addProject',
+    request: installTargetRequestSchema,
+    response: installTargetSchema
+  },
+  agentRootsList: {
+    channel: 'agentRoots.list',
+    request: emptyRequestSchema,
+    response: z.array(installTargetSchema)
   },
   libraryList: {
     channel: 'library.list',
@@ -905,6 +1024,11 @@ export const desktopShellContract = {
     request: z.object({ query: z.string(), favoritesOnly: z.boolean().optional() }).strict(),
     response: z.array(skillSummarySchema)
   },
+  librarySetFavorite: {
+    channel: 'library.setFavorite',
+    request: z.object({ skillId: z.string().min(1), favorite: z.boolean() }).strict(),
+    response: skillSummarySchema
+  },
   libraryDetail: {
     channel: 'library.detail',
     request: skillIdRequestSchema,
@@ -935,14 +1059,20 @@ export const desktopShellContract = {
         targets: z.array(
           z
             .object({
-              targetRoot: z.string().min(1),
+              targetRoot: z.string().min(1).optional(),
+              rootPath: z.string().min(1).optional(),
               agentCode: z.string().min(1),
               agentDisplayName: z.string().min(1),
               adapterVersion: z.string().min(1),
               scope: z.string().min(1),
-              rootKind: z.enum(['user', 'project']).optional()
+              rootKind: z.enum(['user', 'project']).optional(),
+              writable: z.boolean().optional(),
+              isDefault: z.boolean().optional()
             })
             .strict()
+            .refine((target) => target.targetRoot || target.rootPath, {
+              message: 'Either targetRoot or rootPath is required'
+            })
         )
       })
       .strict(),
@@ -952,6 +1082,11 @@ export const desktopShellContract = {
     channel: 'install.applyPlan',
     request: z.object({ plan: installPlanSchema }).strict(),
     response: installResultSchema
+  },
+  installApplyMultiTargetPlan: {
+    channel: 'install.applyMultiTargetPlan',
+    request: z.object({ plans: z.array(installPlanSchema).min(1) }).strict(),
+    response: multiTargetInstallResultSchema
   },
   installListTargets: {
     channel: 'install.listTargets',
@@ -1135,6 +1270,77 @@ export const desktopShellContract = {
     request: emptyRequestSchema,
     response: pluginRegistrySchema
   },
+  pluginsInvokeProvider: {
+    channel: 'plugins.invokeProvider',
+    request: z
+      .object({
+        pluginId: z.string().min(1),
+        capabilityType: pluginCapabilityTypeSchema,
+        capabilityId: z.string().min(1),
+        input: z.unknown()
+      })
+      .strict(),
+    response: z.unknown()
+  },
+  policyCreate: {
+    channel: 'policy.create',
+    request: z
+      .object({
+        name: z.string().min(1),
+        allowedSources: z.array(z.string().min(1)),
+        blockedRules: z.array(z.string().min(1)),
+        requiredScanLevel: policyScanLevelSchema,
+        approvedPlugins: z.array(z.string().min(1))
+      })
+      .strict(),
+    response: policyPackSchema
+  },
+  policyList: {
+    channel: 'policy.list',
+    request: emptyRequestSchema,
+    response: z.array(policyPackSchema)
+  },
+  policySetActive: {
+    channel: 'policy.setActive',
+    request: z.object({ policyPackId: z.string().min(1) }).strict(),
+    response: statusOnlyResultSchema
+  },
+  policyEvaluate: {
+    channel: 'policy.evaluate',
+    request: z
+      .object({
+        policyPackId: z.string().min(1),
+        sourceType: z.string().min(1),
+        findingRuleIds: z.array(z.string().min(1)),
+        scanLevel: policyScanLevelSchema,
+        pluginIds: z.array(z.string().min(1))
+      })
+      .strict(),
+    response: policyEvaluationSchema
+  },
+  baselineExport: {
+    channel: 'baseline.export',
+    request: z
+      .object({
+        outputDirectory: z.string().min(1),
+        name: z.string().min(1),
+        collectionIds: z.array(z.string().min(1)),
+        policyPackId: z.string().min(1),
+        rootTemplates: z.array(baselineRootTemplateSchema)
+      })
+      .strict(),
+    response: baselineExportResultSchema
+  },
+  baselinePreview: {
+    channel: 'baseline.preview',
+    request: z.object({ packageDirectory: z.string().min(1) }).strict(),
+    response: baselinePreviewSchema
+  },
+  baselineApply: {
+    channel: 'baseline.apply',
+    request: z.object({ packageDirectory: z.string().min(1), confirm: z.boolean() }).strict(),
+    response: baselinePreviewSchema
+  },
   discoverAddSource: {
     channel: 'discover.addSource',
     request: z
@@ -1181,6 +1387,26 @@ export function parseIpcResponse(
   channel: typeof desktopShellContract.appInfo.channel,
   payload: unknown
 ): AppInfo;
+export function parseIpcResponse(
+  channel: typeof desktopShellContract.onboardingState.channel,
+  payload: unknown
+): OnboardingState;
+export function parseIpcResponse(
+  channel: typeof desktopShellContract.onboardingComplete.channel,
+  payload: unknown
+): OnboardingState;
+export function parseIpcResponse(
+  channel: typeof desktopShellContract.onboardingImportMigration.channel,
+  payload: unknown
+): ImportedSkillResult[];
+export function parseIpcResponse(
+  channel: typeof desktopShellContract.agentRootsAddProject.channel,
+  payload: unknown
+): InstallTarget;
+export function parseIpcResponse(
+  channel: typeof desktopShellContract.agentRootsList.channel,
+  payload: unknown
+): InstallTarget[];
 export function parseIpcResponse(
   channel: typeof desktopShellContract.libraryList.channel,
   payload: unknown
@@ -1242,6 +1468,10 @@ export function parseIpcResponse(
   payload: unknown
 ): SkillSummary[];
 export function parseIpcResponse(
+  channel: typeof desktopShellContract.librarySetFavorite.channel,
+  payload: unknown
+): SkillSummary;
+export function parseIpcResponse(
   channel: typeof desktopShellContract.libraryDetail.channel,
   payload: unknown
 ): SkillDetail;
@@ -1257,6 +1487,10 @@ export function parseIpcResponse(
   channel: typeof desktopShellContract.installApplyPlan.channel,
   payload: unknown
 ): InstallResult;
+export function parseIpcResponse(
+  channel: typeof desktopShellContract.installApplyMultiTargetPlan.channel,
+  payload: unknown
+): MultiTargetInstallResult;
 export function parseIpcResponse(
   channel: typeof desktopShellContract.installListTargets.channel,
   payload: unknown
@@ -1361,6 +1595,38 @@ export function parseIpcResponse(
   channel: typeof desktopShellContract.pluginsRegistry.channel,
   payload: unknown
 ): PluginRegistry;
+export function parseIpcResponse(
+  channel: typeof desktopShellContract.pluginsInvokeProvider.channel,
+  payload: unknown
+): unknown;
+export function parseIpcResponse(
+  channel: typeof desktopShellContract.policyCreate.channel,
+  payload: unknown
+): PolicyPack;
+export function parseIpcResponse(
+  channel: typeof desktopShellContract.policyList.channel,
+  payload: unknown
+): PolicyPack[];
+export function parseIpcResponse(
+  channel: typeof desktopShellContract.policySetActive.channel,
+  payload: unknown
+): StatusOnlyResult;
+export function parseIpcResponse(
+  channel: typeof desktopShellContract.policyEvaluate.channel,
+  payload: unknown
+): PolicyEvaluation;
+export function parseIpcResponse(
+  channel: typeof desktopShellContract.baselineExport.channel,
+  payload: unknown
+): BaselineExportResult;
+export function parseIpcResponse(
+  channel: typeof desktopShellContract.baselinePreview.channel,
+  payload: unknown
+): BaselinePreview;
+export function parseIpcResponse(
+  channel: typeof desktopShellContract.baselineApply.channel,
+  payload: unknown
+): BaselinePreview;
 export function parseIpcResponse(
   channel: typeof desktopShellContract.discoverAddSource.channel,
   payload: unknown

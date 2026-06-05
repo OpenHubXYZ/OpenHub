@@ -1033,6 +1033,17 @@ td {
   font-weight: 700;
 }
 
+.flow-actions .inline-check {
+  grid-template-columns: auto minmax(0, 1fr);
+  align-items: center;
+}
+
+.flow-actions .inline-check input {
+  width: 16px;
+  height: 16px;
+  padding: 0;
+}
+
 .flow-actions input,
 .flow-actions select {
   width: 100%;
@@ -1074,6 +1085,37 @@ td {
 .flow-actions button:disabled {
   color: #7a8799;
   background: #e8ecf3;
+}
+
+.button-pair {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  min-width: 0;
+}
+
+.mini-card {
+  display: grid;
+  gap: 10px;
+  min-width: 0;
+  padding: 10px;
+  border: 1px solid #dfe5ee;
+  border-radius: 6px;
+  background: #f8fafc;
+}
+
+.mini-card header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.mini-card h3 {
+  margin: 0;
+  color: #17202f;
+  font-size: 13px;
+  line-height: 1.2;
 }
 
 .flow-details div {

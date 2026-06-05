@@ -26,6 +26,7 @@ export interface SkillRecord {
   description: string;
   tags: string[];
   versionNo: number;
+  favorite: boolean;
 }
 
 export interface UpdateSkillMetadataInput {
@@ -162,9 +163,11 @@ export function createSkillRepository(database: SqliteDatabase): SkillRepository
               s.description,
               s.tags_json as tagsJson,
               sv.id as versionId,
-              max(sv.version_no) as versionNo
+              max(sv.version_no) as versionNo,
+              case when sfav.skill_id is null then 0 else 1 end as favorite
             from skills s
             join skill_versions sv on sv.skill_id = s.id
+            left join skill_favorites sfav on sfav.skill_id = s.id
             group by s.id
             order by s.name collate nocase
           `
@@ -218,12 +221,14 @@ export function createSkillRepository(database: SqliteDatabase): SkillRepository
               s.description,
               s.tags_json as tagsJson,
               sv.id as versionId,
-              max(sv.version_no) as versionNo
+              max(sv.version_no) as versionNo,
+              case when sfav.skill_id is null then 0 else 1 end as favorite
             from skill_search ss
             join skills s on s.id = ss.skill_id
             join skill_versions sv on sv.skill_id = s.id
-            ${options.favoritesOnly ? 'join skill_favorites sfav on sfav.skill_id = s.id' : ''}
+            left join skill_favorites sfav on sfav.skill_id = s.id
             where skill_search match @query
+              ${options.favoritesOnly ? 'and sfav.skill_id is not null' : ''}
             group by s.id
             order by rank
           `
@@ -254,7 +259,8 @@ export function createSkillRepository(database: SqliteDatabase): SkillRepository
               s.description,
               s.tags_json as tagsJson,
               sv.id as versionId,
-              max(sv.version_no) as versionNo
+              max(sv.version_no) as versionNo,
+              1 as favorite
             from skill_favorites fav
             join skills s on s.id = fav.skill_id
             join skill_versions sv on sv.skill_id = s.id
@@ -288,9 +294,11 @@ function getSkillRecord(database: SqliteDatabase, skillId: string): SkillRecord 
           s.description,
           s.tags_json as tagsJson,
           sv.id as versionId,
-          max(sv.version_no) as versionNo
+          max(sv.version_no) as versionNo,
+          case when sfav.skill_id is null then 0 else 1 end as favorite
         from skills s
         join skill_versions sv on sv.skill_id = s.id
+        left join skill_favorites sfav on sfav.skill_id = s.id
         where s.id = ?
         group by s.id
       `
@@ -354,6 +362,7 @@ function skillRow(row: unknown): SkillRecord {
     tagsJson: string;
     versionId: string;
     versionNo: number;
+    favorite: number;
   };
 
   return {
@@ -363,7 +372,8 @@ function skillRow(row: unknown): SkillRecord {
     name: typed.name,
     description: typed.description,
     tags: JSON.parse(typed.tagsJson),
-    versionNo: typed.versionNo
+    versionNo: typed.versionNo,
+    favorite: typed.favorite === 1
   };
 }
 

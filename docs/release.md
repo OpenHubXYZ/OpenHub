@@ -19,10 +19,20 @@ Before a release:
 - Run `pnpm package:desktop` and `pnpm release:smoke` on the current platform.
 - Verify packaged main startup under the Electron runtime.
 - Verify database migrations from empty and previous supported versions.
-- Verify first launch and Phase 4 import/install/uninstall smoke flow.
+- Verify first launch wizard, skip, migration preview, and explicit migration
+  import paths.
+- Verify Phase 4 import/install/uninstall smoke flow plus TAR, sparse Git,
+  mirror import, and signed export controls.
 - Verify optional sync remains disabled until a profile is enabled.
+- Verify sync credentials use OS-backed credential storage and release logs do
+  not contain credential material.
+- Verify sync conflicts remain explicit and require confirmation before apply.
 - Verify plugins remain disabled until permissions are authorized and the plugin
   is enabled.
+- Verify enabled plugin providers appear only in the workflows they are
+  authorized for, and disabling a plugin removes those capabilities.
+- Verify policy packs and team baselines apply records without writing agent
+  roots.
 - Review `out/release/*.log` for tokens, full skill contents, and sensitive
   paths.
 - Update `CHANGELOG.md`.
@@ -50,6 +60,11 @@ dependencies and installs the Electron ABI native SQLite runtime before writing
 checksums. Public native installers still require signing/notarization
 credentials and platform-specific CI before a published release.
 
+The release manifest records runtime boundaries for SQLite source-of-truth,
+renderer privilege isolation, OS-backed credential storage, sync-disabled
+default, and plugin-disabled default. Release smoke rejects packages that
+weaken those boundaries.
+
 ## Signing Status
 
 Unsigned local package: `pnpm package:desktop` produces a current-platform
@@ -73,6 +88,7 @@ Release validation must confirm:
 - no skill contents are uploaded
 - crash or diagnostic logs are redacted
 - credentials use OS keychain storage
+- renderer code has no direct Node, filesystem, SQLite, or `ipcRenderer` access
 
 ## Rollback
 
@@ -93,7 +109,7 @@ Before a public release, maintainers should also review:
 - `docs/roadmap-workflow.md`
 - accepted ADRs under `docs/adr/`
 
-## Phase 9 Commands
+## Release Commands
 
 ```sh
 pnpm package:desktop

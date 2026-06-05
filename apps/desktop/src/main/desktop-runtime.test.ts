@@ -8,7 +8,7 @@ import { promisify } from 'node:util';
 
 import { afterEach, describe, expect, it } from 'vitest';
 import { createMemoryDatabase } from '@theopenhub/db';
-import { createContentStore, createSyncService, createVersionService } from '@theopenhub/core';
+import { createContentStore, createInMemorySecretStore, createSyncService, createVersionService } from '@theopenhub/core';
 
 import { createDesktopRuntime } from './desktop-runtime';
 
@@ -368,6 +368,338 @@ describe('desktop runtime IPC dispatch', () => {
     expect(exemption).toMatchObject({ skillId: highRisk.skill.id, scope: 'user' });
   });
 
+  it('persists onboarding completion, imports explicit migration selections, and leaves preview read-only', async () => {
+    const workspace = await tempDir();
+    const sourcePath = path.join(workspace, 'openskills');
+    await createSkillFixture(path.join(sourcePath, 'migration-helper'), 'Migration Helper');
+    const runtime = createDesktopRuntime({
+      dataDirectory: path.join(workspace, 'app-data'),
+      homeDirectory: path.join(workspace, 'home')
+    });
+
+    await expect(runtime.dispatch('onboarding.state', {})).resolves.toMatchObject({
+      completed: false,
+      migrationPreviews: []
+    });
+
+    const preview = await runtime.dispatch('discover.migrationPreview', {
+      adapter: 'openskills',
+      sourcePath
+    });
+    await expect(runtime.dispatch('workspace.state', {})).resolves.toMatchObject({ skills: [] });
+
+    const imported = await runtime.dispatch('onboarding.importMigration', {
+      adapter: 'openskills',
+      sourcePath,
+      paths: preview.skills.map((skill) => skill.path)
+    });
+    expect(imported.map((item) => item.skill.name)).toEqual(['Migration Helper']);
+
+    await runtime.dispatch('onboarding.complete', { completed: true });
+    await expect(runtime.dispatch('onboarding.state', {})).resolves.toMatchObject({
+      completed: true
+    });
+    await expect(runtime.dispatch('workspace.state', {})).resolves.toMatchObject({
+      skills: [expect.objectContaining({ name: 'Migration Helper' })]
+    });
+  });
+
+  it('persists project roots, lists them as install targets, applies clean multi-target plans, and reports conflicts', async () => {
+    const workspace = await tempDir();
+    const dataDirectory = path.join(workspace, 'app-data');
+    const projectCodexRoot = path.join(workspace, 'project/.codex/skills');
+    const projectClaudeRoot = path.join(workspace, 'project/.claude/skills');
+    const runtime = createDesktopRuntime({
+      dataDirectory,
+      homeDirectory: path.join(workspace, 'home')
+    });
+    const imported = await runtime.dispatch('import.localFolder', {
+      folderPath: await createSkillFixture(path.join(workspace, 'project-root-source'), 'Project Root Helper')
+    });
+
+    const codexRoot = await runtime.dispatch('agentRoots.addProject', {
+      agentCode: 'codex',
+      rootPath: projectCodexRoot
+    });
+    const claudeRoot = await runtime.dispatch('agentRoots.addProject', {
+      agentCode: 'claude',
+      rootPath: projectClaudeRoot
+    });
+    const targets = await runtime.dispatch('install.listTargets', {});
+    const plans = await runtime.dispatch('install.createMultiTargetPlan', {
+      skillId: imported.skill.id,
+      targets: [codexRoot, claudeRoot]
+    });
+
+    await mkdir(path.join(projectClaudeRoot, 'project-root-helper'), { recursive: true });
+    await writeFile(path.join(projectClaudeRoot, 'project-root-helper/SKILL.md'), 'conflicting user file');
+    const mixedPlans = await runtime.dispatch('install.createMultiTargetPlan', {
+      skillId: imported.skill.id,
+      targets: [codexRoot, claudeRoot]
+    });
+    const applied = await runtime.dispatch('install.applyMultiTargetPlan', { plans: mixedPlans });
+
+    expect(targets).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ agentCode: 'codex', rootPath: projectCodexRoot, rootKind: 'project' }),
+        expect.objectContaining({ agentCode: 'claude', rootPath: projectClaudeRoot, rootKind: 'project' })
+      ])
+    );
+    expect(plans.map((plan) => plan.targetRoot).sort()).toEqual([projectClaudeRoot, projectCodexRoot].sort());
+    expect(applied.installed).toHaveLength(1);
+    expect(applied.blocked).toEqual([
+      expect.objectContaining({ targetRoot: projectClaudeRoot, conflictState: 'conflict' })
+    ]);
+    await expect(readFile(path.join(projectCodexRoot, 'project-root-helper/SKILL.md'), 'utf8')).resolves.toContain(
+      'Project Root Helper'
+    );
+  });
+
+  it('exposes favorite state through library summaries and library.setFavorite IPC', async () => {
+    const workspace = await tempDir();
+    const runtime = createDesktopRuntime({
+      dataDirectory: path.join(workspace, 'app-data'),
+      homeDirectory: path.join(workspace, 'home')
+    });
+    const imported = await runtime.dispatch('import.localFolder', {
+      folderPath: await createSkillFixture(path.join(workspace, 'favorite-source'), 'Favorite Helper')
+    });
+
+    await expect(runtime.dispatch('library.search', { query: 'favorite', favoritesOnly: true })).resolves.toEqual([]);
+    const favorited = await runtime.dispatch('library.setFavorite', {
+      skillId: imported.skill.id,
+      favorite: true
+    });
+
+    expect(favorited).toEqual(expect.objectContaining({ id: imported.skill.id, favorite: true }));
+    await expect(runtime.dispatch('library.search', { query: 'favorite', favoritesOnly: true })).resolves.toEqual([
+      expect.objectContaining({ id: imported.skill.id, favorite: true })
+    ]);
+    await expect(runtime.dispatch('library.detail', { skillId: imported.skill.id })).resolves.toMatchObject({
+      skill: { favorite: true }
+    });
+
+    await runtime.dispatch('library.setFavorite', { skillId: imported.skill.id, favorite: false });
+    await expect(runtime.dispatch('library.search', { query: 'favorite', favoritesOnly: true })).resolves.toEqual([]);
+  });
+
+  it('stores REST sync credentials through the injected secret store without leaking raw tokens', async () => {
+    const workspace = await tempDir();
+    const database = createMemoryDatabase();
+    const secretStore = createInMemorySecretStore();
+    const runtime = createDesktopRuntime({
+      dataDirectory: path.join(workspace, 'app-data'),
+      homeDirectory: path.join(workspace, 'home'),
+      database,
+      secretStore
+    });
+
+    const profile = await runtime.dispatch('sync.createProfile', {
+      mode: 'rest',
+      remoteUrl: 'https://sync.example.test',
+      enabled: true,
+      auth: {
+        label: 'Production sync token',
+        token: 'super-secret-token'
+      }
+    });
+    const profileRows = database.prepare('select auth_ref as authRef from sync_profiles').all();
+    const workspaceState = await runtime.dispatch('workspace.state', {});
+    const inspected = await runtime.dispatch('sync.inspectCredential', {
+      authRef: profile.authRef
+    });
+    const deleted = await runtime.dispatch('sync.deleteCredential', {
+      authRef: profile.authRef
+    });
+
+    expect(profile).toMatchObject({
+      mode: 'rest',
+      remoteUrl: 'https://sync.example.test',
+      enabled: true
+    });
+    expect(profile.authRef).toMatch(/^keychain:\/\/sync\//);
+    expect(JSON.stringify(profileRows)).toContain(profile.authRef);
+    expect(JSON.stringify(profileRows)).not.toContain('super-secret-token');
+    expect(JSON.stringify(workspaceState)).not.toContain('super-secret-token');
+    expect(inspected).toMatchObject({
+      authRef: profile.authRef,
+      label: 'Production sync token'
+    });
+    expect(inspected?.masked).not.toContain('super-secret-token');
+    expect(deleted).toEqual({ status: 'deleted' });
+    await expect(runtime.dispatch('sync.inspectCredential', { authRef: profile.authRef })).resolves.toBeNull();
+  });
+
+  it('creates active policy packs, blocks disallowed installs, and applies baselines without agent-root writes', async () => {
+    const workspace = await tempDir();
+    const database = createMemoryDatabase();
+    const runtime = createDesktopRuntime({
+      dataDirectory: path.join(workspace, 'app-data'),
+      homeDirectory: path.join(workspace, 'home'),
+      database
+    });
+    const dispatch = runtime.dispatch as unknown as (channel: string, payload: unknown) => Promise<unknown>;
+    const policy = (await dispatch('policy.create', {
+      name: 'Safe Local Policy',
+      allowedSources: ['local'],
+      blockedRules: ['dangerous-shell-command'],
+      requiredScanLevel: 'safe',
+      approvedPlugins: ['approved-plugin']
+    })) as { id: string };
+    await dispatch('policy.setActive', { policyPackId: policy.id });
+
+    await expect(dispatch('policy.list', {})).resolves.toEqual([
+      expect.objectContaining({ id: policy.id, name: 'Safe Local Policy' })
+    ]);
+    await expect(
+      dispatch('policy.evaluate', {
+        policyPackId: policy.id,
+        sourceType: 'git',
+        findingRuleIds: [],
+        scanLevel: 'safe',
+        pluginIds: ['approved-plugin']
+      })
+    ).resolves.toMatchObject({ allowed: false, reasons: ['source-blocked:git'] });
+
+    const highRisk = await runtime.dispatch('import.localFolder', {
+      folderPath: await createSkillFixture(
+        path.join(workspace, 'policy-high-risk-source'),
+        'policy-high-risk-helper',
+        'Run `rm -rf "$HOME/.codex"`.'
+      )
+    });
+    await runtime.dispatch('security.scan', { skillId: highRisk.skill.id });
+    const targetRoot = path.join(workspace, 'codex-skills');
+    const plan = await runtime.dispatch('install.createPlan', {
+      skillId: highRisk.skill.id,
+      targetRoot,
+      agentCode: 'codex',
+      agentDisplayName: 'Codex',
+      adapterVersion: 'test',
+      scope: 'user'
+    });
+
+    await expect(runtime.dispatch('install.applyPlan', { plan })).rejects.toThrow(/Policy blocked install/);
+    await expect(readFile(path.join(targetRoot, 'policy-high-risk-helper/SKILL.md'), 'utf8')).rejects.toMatchObject({
+      code: 'ENOENT'
+    });
+
+    const baselineDirectory = path.join(workspace, 'baseline-export');
+    await dispatch('baseline.export', {
+      outputDirectory: baselineDirectory,
+      name: 'Frontend Team',
+      collectionIds: [],
+      policyPackId: policy.id,
+      rootTemplates: [{ agentCode: 'codex', scope: 'project', rootPathTemplate: '.codex/skills' }]
+    });
+    await expect(dispatch('baseline.preview', { packageDirectory: baselineDirectory })).resolves.toMatchObject({
+      name: 'Frontend Team',
+      writesAgentRoots: false
+    });
+    const beforeAgentRoots = countRows(database, 'agent_roots');
+    await expect(dispatch('baseline.apply', { packageDirectory: baselineDirectory, confirm: true })).resolves.toMatchObject({
+      name: 'Frontend Team',
+      writesAgentRoots: false
+    });
+    expect(countRows(database, 'agent_roots')).toBe(beforeAgentRoots);
+  });
+
+  it('wires enabled plugin providers into targets, importer IPC, security scans, and sync driver registry', async () => {
+    const workspace = await tempDir();
+    const runtime = createDesktopRuntime({
+      dataDirectory: path.join(workspace, 'app-data'),
+      homeDirectory: path.join(workspace, 'home')
+    });
+    const providerSource = `
+      exports.register = (host) => {
+        host.registerAgentAdapter({ code: 'local-agent', displayName: 'Local Agent' });
+        host.registerImporter({
+          id: 'frontmatter-importer',
+          name: 'Frontmatter Importer',
+          invoke(input) {
+            return { accepted: input.path === 'SKILL.md', normalizedPath: input.path };
+          }
+        });
+        host.registerSecurityRule({
+          id: 'extra-risk',
+          name: 'Extra Risk',
+          invoke() {
+            return [{
+              ruleId: 'plugin-extra-risk',
+              ruleName: 'Plugin Extra Risk',
+              severity: 'warning',
+              category: 'plugin',
+              relativePath: 'SKILL.md',
+              lineNo: null,
+              excerpt: 'plugin finding'
+            }];
+          }
+        });
+        host.registerSyncDriver({
+          id: 'remote-sync',
+          name: 'Remote Sync',
+          invoke() {
+            return { status: 'ready' };
+          }
+        });
+      };
+    `;
+    const pluginRoot = await createPluginFixture({
+      directory: path.join(workspace, 'provider-plugin'),
+      id: 'provider-plugin',
+      name: 'Provider Plugin',
+      source: providerSource,
+      capabilities: [
+        { type: 'agent-adapter', id: 'local-agent' },
+        { type: 'importer', id: 'frontmatter-importer' },
+        { type: 'security-rule', id: 'extra-risk' },
+        { type: 'sync-driver', id: 'remote-sync' }
+      ],
+      permissions: ['import:local', 'sync-driver']
+    });
+    const installed = await runtime.dispatch('plugins.install', { rootPath: pluginRoot });
+    await runtime.dispatch('plugins.authorizePermission', {
+      pluginId: installed.id,
+      permission: 'import:local',
+      reason: 'Provider import'
+    });
+    await runtime.dispatch('plugins.authorizePermission', {
+      pluginId: installed.id,
+      permission: 'sync-driver',
+      reason: 'Provider sync'
+    });
+    await runtime.dispatch('plugins.enable', { pluginId: installed.id });
+
+    await expect(runtime.dispatch('install.listTargets', {})).resolves.toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          agentCode: 'local-agent',
+          agentDisplayName: 'Local Agent',
+          rootPath: `plugin://${installed.id}/local-agent`,
+          writable: false
+        })
+      ])
+    );
+    await expect(
+      (runtime.dispatch as unknown as (channel: string, payload: unknown) => Promise<unknown>)('plugins.invokeProvider', {
+        pluginId: installed.id,
+        capabilityType: 'importer',
+        capabilityId: 'frontmatter-importer',
+        input: { path: 'SKILL.md' }
+      })
+    ).resolves.toEqual({ accepted: true, normalizedPath: 'SKILL.md' });
+
+    const imported = await runtime.dispatch('import.localFolder', {
+      folderPath: await createSkillFixture(path.join(workspace, 'plugin-scan-source'), 'plugin-scan-helper')
+    });
+    await expect(runtime.dispatch('security.scan', { skillId: imported.skill.id })).resolves.toMatchObject({
+      findings: [expect.objectContaining({ ruleId: 'plugin-extra-risk', ruleName: 'Plugin Extra Risk' })]
+    });
+    await expect(runtime.dispatch('plugins.registry', {})).resolves.toMatchObject({
+      syncDrivers: [{ pluginId: installed.id, id: 'remote-sync', name: 'Remote Sync' }]
+    });
+  });
+
   it('dispatches sync, plugin runtime, and discover source workflows', async () => {
     const workspace = await tempDir();
     const database = createMemoryDatabase();
@@ -636,15 +968,22 @@ async function createPluginFixture(input: {
   directory: string;
   id: string;
   name: string;
-  permission: 'network:fetch';
+  permission?: 'network:fetch';
+  source?: string;
+  capabilities?: Array<{
+    type: 'agent-adapter' | 'importer' | 'security-rule' | 'sync-driver';
+    id: string;
+  }>;
+  permissions?: Array<'agent-root:read' | 'agent-root:write' | 'network:fetch' | 'import:local' | 'sync-driver'>;
 }): Promise<string> {
   await mkdir(input.directory, { recursive: true });
-  const source = `
+  const source = input.source ?? `
     exports.register = (host) => {
       host.registerAgentAdapter({ code: 'local-agent', displayName: 'Local Agent' });
     };
   `;
   await writeFile(path.join(input.directory, 'plugin.js'), source);
+  const permissions = input.permissions ?? (input.permission ? [input.permission] : []);
   await writeFile(
     path.join(input.directory, 'plugin.json'),
     JSON.stringify(
@@ -654,8 +993,8 @@ async function createPluginFixture(input: {
         version: '1.0.0',
         apiVersion: 1,
         entry: 'plugin.js',
-        capabilities: [{ type: 'agent-adapter', id: 'local-agent' }],
-        permissions: [input.permission],
+        capabilities: input.capabilities ?? [{ type: 'agent-adapter', id: 'local-agent' }],
+        permissions,
         integrity: {
           algorithm: 'sha256',
           hash: createHash('sha256').update(source).digest('hex')

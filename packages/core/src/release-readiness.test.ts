@@ -46,6 +46,8 @@ describe('release readiness', () => {
     expect(packageScript).toContain('better-sqlite3');
     expect(packageScript).toContain('copyRuntimeExternalDependencies');
     expect(packageScript).toContain('installElectronNativeRuntime');
+    expect(packageScript).toContain('credentialStorage');
+    expect(packageScript).toContain('os-keychain-required');
     expect(nativeRuntimeScript).toContain('prebuild-install');
     expect(packageScript).toContain('createDarwinAppBundle');
     expect(packageScript).toContain('CFBundleDisplayName');
@@ -65,7 +67,15 @@ describe('release readiness', () => {
     const smokeScript = await readFile(path.join(rootDirectory, 'scripts/release-smoke.mjs'), 'utf8');
 
     expect(smokeScript).toContain('apps/desktop/src/main/desktop-runtime.test.ts');
+    expect(smokeScript).toContain('apps/desktop/src/renderer/App.test.tsx');
     expect(smokeScript).toContain('desktop_runtime=verified');
+    expect(smokeScript).toContain('first_launch_wizard=verified');
+    expect(smokeScript).toContain('credential_store_boundary=verified');
+    expect(smokeScript).toContain('sync_disabled_default=verified');
+    expect(smokeScript).toContain('plugin_disabled_default=verified');
+    expect(smokeScript).toContain('advanced_import=verified');
+    expect(smokeScript).toContain('policy_baseline=verified');
+    expect(smokeScript).toContain('plugin_provider_workflows=verified');
     expect(smokeScript).toContain('runPackagedStartupSmoke');
     expect(smokeScript).toContain('runPackagedWindowSmoke');
     expect(smokeScript).toContain('--release-smoke');
@@ -123,5 +133,6 @@ describe('release readiness', () => {
     expect(readme).toContain('pnpm dev');
     expect(readme).toContain('pnpm test');
     expect(readme).toContain('pnpm package:desktop');
+    expect(readme).toContain('pnpm release:checksums');
   });
 });

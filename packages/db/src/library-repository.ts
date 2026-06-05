@@ -23,6 +23,7 @@ export interface LibrarySkillSummary {
   sourceAgent: string;
   path: string;
   installStatus: string;
+  favorite: boolean;
 }
 
 export interface LibraryRepository {
@@ -120,11 +121,13 @@ export function createLibraryRepository(database: SqliteDatabase): LibraryReposi
               s.name,
               a.display_name as sourceAgent,
               i.install_path as path,
-              i.status as installStatus
+              i.status as installStatus,
+              case when sfav.skill_id is null then 0 else 1 end as favorite
             from installations i
             join skills s on s.id = i.skill_id
             join agent_roots ar on ar.id = i.agent_root_id
             join agents a on a.id = ar.agent_id
+            left join skill_favorites sfav on sfav.skill_id = s.id
             order by s.name collate nocase, a.display_name collate nocase
           `
         )
@@ -139,5 +142,6 @@ function stableId(prefix: string, value: string): string {
 }
 
 function librarySkillRow(row: unknown): LibrarySkillSummary {
-  return row as LibrarySkillSummary;
+  const typed = row as Omit<LibrarySkillSummary, 'favorite'> & { favorite: number };
+  return { ...typed, favorite: typed.favorite === 1 };
 }

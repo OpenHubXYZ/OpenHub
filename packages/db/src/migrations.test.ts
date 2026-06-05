@@ -18,10 +18,11 @@ describe('SQLite migrations', () => {
       '006_plugin_runtime',
       '007_review_usage_events',
       '008_discover_sources',
-      '009_research_gap_closure'
+      '009_research_gap_closure',
+      '010_app_settings'
     ]);
     expect(secondRun.applied).toEqual([]);
-    expect(getCurrentSchemaVersion(db)).toBe(9);
+    expect(getCurrentSchemaVersion(db)).toBe(10);
   });
 
   it('creates the required Phase 2 domain tables and FTS table', () => {
@@ -39,6 +40,7 @@ describe('SQLite migrations', () => {
       expect.arrayContaining([
         'agents',
         'agent_roots',
+        'app_settings',
         'blob_objects',
         'collections',
         'collection_items',

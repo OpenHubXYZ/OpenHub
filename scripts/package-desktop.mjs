@@ -82,6 +82,14 @@ const manifest = {
     telemetry: false,
     syncProfileCreated: false,
     pluginEnabled: false
+  },
+  runtimeBoundaries: {
+    sqliteSourceOfTruth: true,
+    rendererNodeAccess: false,
+    rendererFilesystemAccess: false,
+    credentialStorage: 'os-keychain-required',
+    syncDefaultEnabled: false,
+    pluginDefaultEnabled: false
   }
 };
 

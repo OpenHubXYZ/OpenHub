@@ -19,6 +19,12 @@ import type {
   LibraryScanResult,
   LibrarySkillSummary,
   MigrationPreviewResult,
+  MultiTargetInstallResult,
+  OnboardingState,
+  BaselineExportResult,
+  BaselinePreview,
+  PolicyEvaluation,
+  PolicyPack,
   PluginInstallResult,
   PluginRegistry,
   PluginsState,
@@ -41,6 +47,38 @@ const api = {
   async getAppInfo(): Promise<AppInfo> {
     const payload = await ipcRenderer.invoke(desktopShellContract.appInfo.channel, {});
     return parseIpcResponse(desktopShellContract.appInfo.channel, payload);
+  },
+
+  async getOnboardingState(): Promise<OnboardingState> {
+    const payload = await ipcRenderer.invoke(desktopShellContract.onboardingState.channel, {});
+    return parseIpcResponse(desktopShellContract.onboardingState.channel, payload);
+  },
+
+  async completeOnboarding(completed = true): Promise<OnboardingState> {
+    const payload = await ipcRenderer.invoke(desktopShellContract.onboardingComplete.channel, { completed });
+    return parseIpcResponse(desktopShellContract.onboardingComplete.channel, payload);
+  },
+
+  async importMigration(input: {
+    adapter: 'openskills' | 'skills-manager' | 'skillhub' | 'skills-manager-client';
+    sourcePath: string;
+    paths: string[];
+  }): Promise<ImportedSkillResult[]> {
+    const payload = await ipcRenderer.invoke(desktopShellContract.onboardingImportMigration.channel, input);
+    return parseIpcResponse(desktopShellContract.onboardingImportMigration.channel, payload);
+  },
+
+  async addProjectRoot(input: {
+    agentCode: 'codex' | 'claude' | 'gemini' | 'opencode';
+    rootPath: string;
+  }): Promise<InstallTarget> {
+    const payload = await ipcRenderer.invoke(desktopShellContract.agentRootsAddProject.channel, input);
+    return parseIpcResponse(desktopShellContract.agentRootsAddProject.channel, payload);
+  },
+
+  async listAgentRoots(): Promise<InstallTarget[]> {
+    const payload = await ipcRenderer.invoke(desktopShellContract.agentRootsList.channel, {});
+    return parseIpcResponse(desktopShellContract.agentRootsList.channel, payload);
   },
 
   async listLibrarySkills(): Promise<LibrarySkillSummary[]> {
@@ -131,6 +169,14 @@ const api = {
     return parseIpcResponse(desktopShellContract.librarySearch.channel, payload);
   },
 
+  async setFavorite(skillId: string, favorite: boolean): Promise<SkillSummary> {
+    const payload = await ipcRenderer.invoke(desktopShellContract.librarySetFavorite.channel, {
+      skillId,
+      favorite
+    });
+    return parseIpcResponse(desktopShellContract.librarySetFavorite.channel, payload);
+  },
+
   async getSkillDetail(skillId: string): Promise<SkillDetail> {
     const payload = await ipcRenderer.invoke(desktopShellContract.libraryDetail.channel, { skillId });
     return parseIpcResponse(desktopShellContract.libraryDetail.channel, payload);
@@ -154,7 +200,8 @@ const api = {
     skillId: string;
     projectionMode?: 'copy' | 'symlink' | 'hardlink' | 'mirror-export';
     targets: Array<{
-      targetRoot: string;
+      targetRoot?: string;
+      rootPath?: string;
       agentCode: string;
       agentDisplayName: string;
       adapterVersion: string;
@@ -174,6 +221,11 @@ const api = {
   async applyInstallPlan(plan: InstallPlan): Promise<InstallResult> {
     const payload = await ipcRenderer.invoke(desktopShellContract.installApplyPlan.channel, { plan });
     return parseIpcResponse(desktopShellContract.installApplyPlan.channel, payload);
+  },
+
+  async applyMultiTargetInstallPlan(plans: InstallPlan[]): Promise<MultiTargetInstallResult> {
+    const payload = await ipcRenderer.invoke(desktopShellContract.installApplyMultiTargetPlan.channel, { plans });
+    return parseIpcResponse(desktopShellContract.installApplyMultiTargetPlan.channel, payload);
   },
 
   async uninstall(installationId: string): Promise<InstallUninstallResult> {
@@ -339,6 +391,69 @@ const api = {
   async getPluginRegistry(): Promise<PluginRegistry> {
     const payload = await ipcRenderer.invoke(desktopShellContract.pluginsRegistry.channel, {});
     return parseIpcResponse(desktopShellContract.pluginsRegistry.channel, payload);
+  },
+
+  async invokePluginProvider(input: {
+    pluginId: string;
+    capabilityType: 'agent-adapter' | 'importer' | 'security-rule' | 'sync-driver';
+    capabilityId: string;
+    input: unknown;
+  }): Promise<unknown> {
+    const payload = await ipcRenderer.invoke(desktopShellContract.pluginsInvokeProvider.channel, input);
+    return parseIpcResponse(desktopShellContract.pluginsInvokeProvider.channel, payload);
+  },
+
+  async createPolicyPack(input: {
+    name: string;
+    allowedSources: string[];
+    blockedRules: string[];
+    requiredScanLevel: 'safe' | 'warning' | 'critical';
+    approvedPlugins: string[];
+  }): Promise<PolicyPack> {
+    const payload = await ipcRenderer.invoke(desktopShellContract.policyCreate.channel, input);
+    return parseIpcResponse(desktopShellContract.policyCreate.channel, payload);
+  },
+
+  async listPolicyPacks(): Promise<PolicyPack[]> {
+    const payload = await ipcRenderer.invoke(desktopShellContract.policyList.channel, {});
+    return parseIpcResponse(desktopShellContract.policyList.channel, payload);
+  },
+
+  async setActivePolicyPack(policyPackId: string): Promise<StatusOnlyResult> {
+    const payload = await ipcRenderer.invoke(desktopShellContract.policySetActive.channel, { policyPackId });
+    return parseIpcResponse(desktopShellContract.policySetActive.channel, payload);
+  },
+
+  async evaluatePolicy(input: {
+    policyPackId: string;
+    sourceType: string;
+    findingRuleIds: string[];
+    scanLevel: 'safe' | 'warning' | 'critical';
+    pluginIds: string[];
+  }): Promise<PolicyEvaluation> {
+    const payload = await ipcRenderer.invoke(desktopShellContract.policyEvaluate.channel, input);
+    return parseIpcResponse(desktopShellContract.policyEvaluate.channel, payload);
+  },
+
+  async exportBaseline(input: {
+    outputDirectory: string;
+    name: string;
+    collectionIds: string[];
+    policyPackId: string;
+    rootTemplates: Array<{ agentCode: string; scope: string; rootPathTemplate: string }>;
+  }): Promise<BaselineExportResult> {
+    const payload = await ipcRenderer.invoke(desktopShellContract.baselineExport.channel, input);
+    return parseIpcResponse(desktopShellContract.baselineExport.channel, payload);
+  },
+
+  async previewBaseline(packageDirectory: string): Promise<BaselinePreview> {
+    const payload = await ipcRenderer.invoke(desktopShellContract.baselinePreview.channel, { packageDirectory });
+    return parseIpcResponse(desktopShellContract.baselinePreview.channel, payload);
+  },
+
+  async applyBaseline(packageDirectory: string, confirm: boolean): Promise<BaselinePreview> {
+    const payload = await ipcRenderer.invoke(desktopShellContract.baselineApply.channel, { packageDirectory, confirm });
+    return parseIpcResponse(desktopShellContract.baselineApply.channel, payload);
   },
 
   async addDiscoverSource(input: {

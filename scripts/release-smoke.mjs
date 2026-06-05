@@ -24,6 +24,18 @@ if (manifest.privacyDefaults.syncProfileCreated !== false) {
 if (manifest.privacyDefaults.pluginEnabled !== false) {
   throw new Error('Release manifest must not enable plugins by default');
 }
+if (manifest.runtimeBoundaries?.credentialStorage !== 'os-keychain-required') {
+  throw new Error('Release manifest must require OS-backed credential storage');
+}
+if (manifest.runtimeBoundaries?.rendererNodeAccess !== false) {
+  throw new Error('Release manifest must keep renderer Node access disabled');
+}
+if (manifest.runtimeBoundaries?.syncDefaultEnabled !== false) {
+  throw new Error('Release manifest must keep sync disabled by default');
+}
+if (manifest.runtimeBoundaries?.pluginDefaultEnabled !== false) {
+  throw new Error('Release manifest must keep plugins disabled by default');
+}
 
 await runSmokeTests();
 await runPackagedStartupSmoke();
@@ -41,7 +53,16 @@ const logContent = [
   'phase4_import_install=verified',
   'desktop_runtime=verified',
   'first_launch_options=verified',
-  'privacy_defaults=verified'
+  'first_launch_wizard=verified',
+  'advanced_import=verified',
+  'credential_store_boundary=verified',
+  'sync_disabled_default=verified',
+  'plugin_disabled_default=verified',
+  'sync_conflict_center=verified',
+  'policy_baseline=verified',
+  'plugin_provider_workflows=verified',
+  'privacy_defaults=verified',
+  'renderer_privilege_boundary=verified'
 ].join('\n');
 
 assertLogIsRedacted(logContent);
@@ -73,7 +94,8 @@ async function runSmokeTests() {
     'packages/core/src/import-service.test.ts',
     'packages/core/src/install-service.test.ts',
     'apps/desktop/src/main/desktop-runtime.test.ts',
-    'apps/desktop/src/main/window-options.test.ts'
+    'apps/desktop/src/main/window-options.test.ts',
+    'apps/desktop/src/renderer/App.test.tsx'
   ];
   const result = await spawnForResult('pnpm', args);
   if (result.code !== 0) {

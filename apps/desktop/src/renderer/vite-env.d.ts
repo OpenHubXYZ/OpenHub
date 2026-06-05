@@ -18,6 +18,12 @@ import type {
   LibraryScanResult,
   LibrarySkillSummary,
   MigrationPreviewResult,
+  MultiTargetInstallResult,
+  OnboardingState,
+  BaselineExportResult,
+  BaselinePreview,
+  PolicyEvaluation,
+  PolicyPack,
   PluginInstallResult,
   PluginRegistry,
   PluginsState,
@@ -40,6 +46,18 @@ declare global {
   interface Window {
     theOpenHub?: {
       getAppInfo(): Promise<AppInfo>;
+      getOnboardingState(): Promise<OnboardingState>;
+      completeOnboarding(completed?: boolean): Promise<OnboardingState>;
+      importMigration(input: {
+        adapter: 'openskills' | 'skills-manager' | 'skillhub' | 'skills-manager-client';
+        sourcePath: string;
+        paths: string[];
+      }): Promise<ImportedSkillResult[]>;
+      addProjectRoot(input: {
+        agentCode: 'codex' | 'claude' | 'gemini' | 'opencode';
+        rootPath: string;
+      }): Promise<InstallTarget>;
+      listAgentRoots(): Promise<InstallTarget[]>;
       listLibrarySkills(): Promise<LibrarySkillSummary[]>;
       scanAgentRoots(): Promise<LibraryScanResult>;
       getWorkspaceState(): Promise<DesktopWorkspaceState>;
@@ -63,6 +81,7 @@ declare global {
       exportCollection(collectionId: string, outputDirectory: string): Promise<CollectionExportResult>;
       importCollection(packageDirectory: string): Promise<CollectionImportResult>;
       searchLibrary(query: string, options?: { favoritesOnly?: boolean }): Promise<SkillSummary[]>;
+      setFavorite(skillId: string, favorite: boolean): Promise<SkillSummary>;
       getSkillDetail(skillId: string): Promise<SkillDetail>;
       listInstallTargets(): Promise<InstallTarget[]>;
       createInstallPlan(input: {
@@ -79,7 +98,8 @@ declare global {
         skillId: string;
         projectionMode?: 'copy' | 'symlink' | 'hardlink' | 'mirror-export';
         targets: Array<{
-          targetRoot: string;
+          targetRoot?: string;
+          rootPath?: string;
           agentCode: string;
           agentDisplayName: string;
           adapterVersion: string;
@@ -88,6 +108,7 @@ declare global {
         }>;
       }): Promise<InstallPlan[]>;
       applyInstallPlan(plan: InstallPlan): Promise<InstallResult>;
+      applyMultiTargetInstallPlan(plans: InstallPlan[]): Promise<MultiTargetInstallResult>;
       uninstall(installationId: string): Promise<InstallUninstallResult>;
       listVersions(skillId: string): Promise<SkillVersionSummary[]>;
       diffVersions(fromVersionId: string, toVersionId: string): Promise<FileDiff[]>;
@@ -144,6 +165,37 @@ declare global {
       enablePlugin(pluginId: string): Promise<PluginRegistry>;
       disablePlugin(pluginId: string): Promise<StatusOnlyResult>;
       getPluginRegistry(): Promise<PluginRegistry>;
+      invokePluginProvider(input: {
+        pluginId: string;
+        capabilityType: 'agent-adapter' | 'importer' | 'security-rule' | 'sync-driver';
+        capabilityId: string;
+        input: unknown;
+      }): Promise<unknown>;
+      createPolicyPack(input: {
+        name: string;
+        allowedSources: string[];
+        blockedRules: string[];
+        requiredScanLevel: 'safe' | 'warning' | 'critical';
+        approvedPlugins: string[];
+      }): Promise<PolicyPack>;
+      listPolicyPacks(): Promise<PolicyPack[]>;
+      setActivePolicyPack(policyPackId: string): Promise<StatusOnlyResult>;
+      evaluatePolicy(input: {
+        policyPackId: string;
+        sourceType: string;
+        findingRuleIds: string[];
+        scanLevel: 'safe' | 'warning' | 'critical';
+        pluginIds: string[];
+      }): Promise<PolicyEvaluation>;
+      exportBaseline(input: {
+        outputDirectory: string;
+        name: string;
+        collectionIds: string[];
+        policyPackId: string;
+        rootTemplates: Array<{ agentCode: string; scope: string; rootPathTemplate: string }>;
+      }): Promise<BaselineExportResult>;
+      previewBaseline(packageDirectory: string): Promise<BaselinePreview>;
+      applyBaseline(packageDirectory: string, confirm: boolean): Promise<BaselinePreview>;
       addDiscoverSource(input: {
         name: string;
         sourceType: 'local' | 'git';

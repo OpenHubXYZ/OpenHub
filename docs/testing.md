@@ -160,8 +160,11 @@ CI must run the same gates.
   package manifests.
 - `pnpm release:smoke` verifies package entrypoints, packaged main startup under
   the Electron runtime, privacy defaults, database migrations, local/Git/ZIP
-  import, FTS search, skill export, install, app-owned uninstall, first-launch
-  window options, desktop runtime IPC coverage, and redacted release logs.
+  import, advanced TAR/sparse-Git/mirror import UI, signed export UI, FTS
+  search, skill export, install, app-owned uninstall, first-launch wizard,
+  OS-backed credential-store boundary, sync-disabled default, plugin-disabled
+  default, sync conflict center, policy/baseline UI, plugin provider workflows,
+  desktop runtime IPC coverage, and redacted release logs.
 
 ## Phase 10 Maintainer Operations Coverage
 
@@ -244,6 +247,8 @@ CI must run the same gates.
 - Optional sync remains disabled until a profile is enabled.
 - Plugins remain disabled until permissions are authorized and the plugin is
   enabled.
+- Plugin adapter, importer, security rule, and sync driver providers appear only
+  after explicit permission grant and enablement.
 - Checksums and dependency inventory are generated for release artifacts.
 
 ## Security Fixtures

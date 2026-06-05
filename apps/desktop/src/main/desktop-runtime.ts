@@ -1,8 +1,9 @@
+import { createHash, randomUUID } from 'node:crypto';
 import { mkdirSync } from 'node:fs';
 import { mkdir } from 'node:fs/promises';
 import path from 'node:path';
 
-import { createBuiltInAgentAdapters } from '@theopenhub/adapters';
+import { createBuiltInAgentAdapters, type AgentAdapter } from '@theopenhub/adapters';
 import {
   createCollectionService,
   type ContentStore,
@@ -10,10 +11,11 @@ import {
   createDiscoverService,
   createExportService,
   createGitSyncDriver,
-  createInMemorySecretStore,
   createImportService,
   createInstallService,
   createMockRestSyncDriver,
+  createOsKeychainSecretStore,
+  createPolicyService,
   createPluginService,
   createRestSyncDriver,
   createSecurityService,
@@ -24,7 +26,11 @@ import {
   type DiscoverPreviewResult as CoreDiscoverPreviewResult,
   type InstallPlan as CoreInstallPlan,
   type InstallResult as CoreInstallResult,
+  type PluginCapabilityType,
   type PluginPermission,
+  type PluginService,
+  type PolicyPack as CorePolicyPack,
+  type PolicyService,
   type SecurityExemption as CoreSecurityExemption,
   type SecurityScanResult as CoreSecurityScanResult,
   type SecretStore,
@@ -67,6 +73,12 @@ import {
   type LibraryScanResult,
   type LibrarySkillSummary,
   type MigrationPreviewResult,
+  type MultiTargetInstallResult,
+  type OnboardingState,
+  type BaselineExportResult,
+  type BaselinePreview,
+  type PolicyEvaluation,
+  type PolicyPack,
   type PluginInstallResult,
   type PluginRegistry,
   type PluginsState,
@@ -92,6 +104,7 @@ export interface CreateDesktopRuntimeInput {
   dataDirectory: string;
   homeDirectory?: string;
   database?: SqliteDatabase;
+  secretStore?: SecretStore;
 }
 
 export interface DesktopRuntime {
@@ -100,6 +113,16 @@ export interface DesktopRuntime {
 
 type RuntimeDispatchResult<C extends IpcChannel> = C extends typeof desktopShellContract.appInfo.channel
   ? typeof appInfo
+  : C extends typeof desktopShellContract.onboardingState.channel
+    ? OnboardingState
+    : C extends typeof desktopShellContract.onboardingComplete.channel
+      ? OnboardingState
+      : C extends typeof desktopShellContract.onboardingImportMigration.channel
+        ? ImportedSkillResult[]
+        : C extends typeof desktopShellContract.agentRootsAddProject.channel
+          ? InstallTarget
+          : C extends typeof desktopShellContract.agentRootsList.channel
+            ? InstallTarget[]
   : C extends typeof desktopShellContract.libraryList.channel
     ? LibrarySkillSummary[]
     : C extends typeof desktopShellContract.libraryScan.channel
@@ -126,10 +149,12 @@ type RuntimeDispatchResult<C extends IpcChannel> = C extends typeof desktopShell
                           ? CollectionRecord
                           : C extends typeof desktopShellContract.collectionExport.channel
                             ? CollectionExportResult
-                            : C extends typeof desktopShellContract.collectionImport.channel
-                              ? CollectionImportResult
-                              : C extends typeof desktopShellContract.librarySearch.channel
-                                ? SkillSummary[]
+                          : C extends typeof desktopShellContract.collectionImport.channel
+                            ? CollectionImportResult
+                            : C extends typeof desktopShellContract.librarySearch.channel
+                              ? SkillSummary[]
+                              : C extends typeof desktopShellContract.librarySetFavorite.channel
+                                ? SkillSummary
                                 : C extends typeof desktopShellContract.libraryDetail.channel
                                   ? SkillDetail
                                   : C extends typeof desktopShellContract.installCreatePlan.channel
@@ -138,10 +163,12 @@ type RuntimeDispatchResult<C extends IpcChannel> = C extends typeof desktopShell
                                       ? InstallPlan[]
                                       : C extends typeof desktopShellContract.installApplyPlan.channel
                                         ? InstallResult
-                                        : C extends typeof desktopShellContract.installListTargets.channel
-                                          ? InstallTarget[]
-                                          : C extends typeof desktopShellContract.installUninstall.channel
-                                            ? InstallUninstallResult
+                                        : C extends typeof desktopShellContract.installApplyMultiTargetPlan.channel
+                                          ? MultiTargetInstallResult
+                                          : C extends typeof desktopShellContract.installListTargets.channel
+                                            ? InstallTarget[]
+                                            : C extends typeof desktopShellContract.installUninstall.channel
+                                              ? InstallUninstallResult
                                             : C extends typeof desktopShellContract.versionList.channel
                                               ? SkillVersionSummary[]
                                               : C extends typeof desktopShellContract.versionDiff.channel
@@ -190,13 +217,29 @@ type RuntimeDispatchResult<C extends IpcChannel> = C extends typeof desktopShell
                                                                           ? StatusOnlyResult
                                                                           : C extends typeof desktopShellContract.pluginsRegistry.channel
                                                                             ? PluginRegistry
-                                                                            : C extends typeof desktopShellContract.discoverAddSource.channel
-                                                                              ? DiscoverSource
-                                                                              : C extends typeof desktopShellContract.discoverPreviewSource.channel
-                                                                                ? DiscoverPreviewResult
-                                                                                : C extends typeof desktopShellContract.discoverMigrationPreview.channel
-                                                                                  ? MigrationPreviewResult
-                                                                                  : never;
+                                                                            : C extends typeof desktopShellContract.pluginsInvokeProvider.channel
+                                                                              ? unknown
+                                                                              : C extends typeof desktopShellContract.policyCreate.channel
+                                                                                ? PolicyPack
+                                                                                : C extends typeof desktopShellContract.policyList.channel
+                                                                                  ? PolicyPack[]
+                                                                                  : C extends typeof desktopShellContract.policySetActive.channel
+                                                                                    ? StatusOnlyResult
+                                                                                    : C extends typeof desktopShellContract.policyEvaluate.channel
+                                                                                      ? PolicyEvaluation
+                                                                                      : C extends typeof desktopShellContract.baselineExport.channel
+                                                                                        ? BaselineExportResult
+                                                                                        : C extends typeof desktopShellContract.baselinePreview.channel
+                                                                                          ? BaselinePreview
+                                                                                          : C extends typeof desktopShellContract.baselineApply.channel
+                                                                                            ? BaselinePreview
+                                                                                            : C extends typeof desktopShellContract.discoverAddSource.channel
+                                                                                              ? DiscoverSource
+                                                                                              : C extends typeof desktopShellContract.discoverPreviewSource.channel
+                                                                                                ? DiscoverPreviewResult
+                                                                                                : C extends typeof desktopShellContract.discoverMigrationPreview.channel
+                                                                                                  ? MigrationPreviewResult
+                                                                                                  : never;
 
 interface RuntimeMemory {
   importItems: Array<{ label: string; status: string }>;
@@ -220,7 +263,8 @@ export function createDesktopRuntime(input: CreateDesktopRuntimeInput): DesktopR
   const installer = createInstallService({ database, contentStore });
   const versions = createVersionService({ database, contentStore });
   const security = createSecurityService({ database, contentStore });
-  const secretStore = createInMemorySecretStore();
+  const policies = createPolicyService({ database });
+  const secretStore = input.secretStore ?? createOsKeychainSecretStore();
   const sync = createSyncService({
     database,
     contentStore,
@@ -250,6 +294,52 @@ export function createDesktopRuntime(input: CreateDesktopRuntimeInput): DesktopR
 
       if (channel === desktopShellContract.appInfo.channel) {
         return parseIpcResponse(channel, appInfo) as RuntimeDispatchResult<C>;
+      }
+
+      if (channel === desktopShellContract.onboardingState.channel) {
+        const result = await onboardingState({ database, adapters });
+        return parseIpcResponse(channel, result) as RuntimeDispatchResult<C>;
+      }
+
+      if (channel === desktopShellContract.onboardingComplete.channel) {
+        setAppSetting(database, 'onboarding.completed', (request as { completed: boolean }).completed);
+        const result = await onboardingState({ database, adapters });
+        return parseIpcResponse(channel, result) as RuntimeDispatchResult<C>;
+      }
+
+      if (channel === desktopShellContract.onboardingImportMigration.channel) {
+        const importRequest = request as {
+          adapter: 'openskills' | 'skills-manager' | 'skillhub' | 'skills-manager-client';
+          sourcePath: string;
+          paths: string[];
+        };
+        const preview = await discover.previewMigration({
+          adapter: importRequest.adapter,
+          sourcePath: importRequest.sourcePath
+        });
+        const selectedPaths = new Set(importRequest.paths);
+        const results: ImportedSkillResult[] = [];
+        for (const skill of preview.skills) {
+          if (!selectedPaths.has(skill.path)) {
+            continue;
+          }
+
+          const imported = await importer.importLocalFolder({ folderPath: skill.path });
+          const result = toImportedSkillResult(imported);
+          results.push(result);
+          memory.importItems = [{ label: result.skill.name, status: 'migration imported' }, ...memory.importItems].slice(0, 5);
+        }
+        return parseIpcResponse(channel, results) as RuntimeDispatchResult<C>;
+      }
+
+      if (channel === desktopShellContract.agentRootsAddProject.channel) {
+        const result = await addProjectRoot(database, request as { agentCode: string; rootPath: string });
+        return parseIpcResponse(channel, result) as RuntimeDispatchResult<C>;
+      }
+
+      if (channel === desktopShellContract.agentRootsList.channel) {
+        const result = await listInstallTargets(database, adapters, plugins.getRegistry());
+        return parseIpcResponse(channel, result) as RuntimeDispatchResult<C>;
       }
 
       if (channel === desktopShellContract.libraryList.channel) {
@@ -411,6 +501,17 @@ export function createDesktopRuntime(input: CreateDesktopRuntimeInput): DesktopR
         return parseIpcResponse(channel, result) as RuntimeDispatchResult<C>;
       }
 
+      if (channel === desktopShellContract.librarySetFavorite.channel) {
+        const favoriteRequest = request as { skillId: string; favorite: boolean };
+        const repository = createSkillRepository(database);
+        repository.setFavorite(favoriteRequest.skillId, favoriteRequest.favorite);
+        const result = repository.getSkill(favoriteRequest.skillId);
+        if (!result) {
+          throw new Error(`Skill not found: ${favoriteRequest.skillId}`);
+        }
+        return parseIpcResponse(channel, toSkillSummary(result)) as RuntimeDispatchResult<C>;
+      }
+
       if (channel === desktopShellContract.libraryDetail.channel) {
         const result = await skillDetail(database, contentStore, (request as { skillId: string }).skillId);
         return parseIpcResponse(channel, result) as RuntimeDispatchResult<C>;
@@ -472,18 +573,31 @@ export function createDesktopRuntime(input: CreateDesktopRuntimeInput): DesktopR
       }
 
       if (channel === desktopShellContract.installCreateMultiTargetPlan.channel) {
+        const multiTargetRequest = request as {
+          skillId: string;
+          projectionMode?: 'copy' | 'symlink' | 'hardlink' | 'mirror-export';
+          targets: Array<{
+            targetRoot?: string;
+            rootPath?: string;
+            agentCode: string;
+            agentDisplayName: string;
+            adapterVersion: string;
+            scope: string;
+            rootKind?: 'user' | 'project';
+          }>;
+        };
         const plans = await installer.createMultiTargetInstallPlan(
-          request as {
-            skillId: string;
-            projectionMode?: 'copy' | 'symlink' | 'hardlink' | 'mirror-export';
-            targets: Array<{
-              targetRoot: string;
-              agentCode: string;
-              agentDisplayName: string;
-              adapterVersion: string;
-              scope: string;
-              rootKind?: 'user' | 'project';
-            }>;
+          {
+            skillId: multiTargetRequest.skillId,
+            ...(multiTargetRequest.projectionMode ? { projectionMode: multiTargetRequest.projectionMode } : {}),
+            targets: multiTargetRequest.targets.map((target) => ({
+              targetRoot: target.targetRoot ?? target.rootPath ?? '',
+              agentCode: target.agentCode,
+              agentDisplayName: target.agentDisplayName,
+              adapterVersion: target.adapterVersion,
+              scope: target.scope,
+              ...(target.rootKind ? { rootKind: target.rootKind } : {})
+            }))
           }
         );
         return parseIpcResponse(channel, plans.map(toInstallPlan)) as RuntimeDispatchResult<C>;
@@ -491,6 +605,7 @@ export function createDesktopRuntime(input: CreateDesktopRuntimeInput): DesktopR
 
       if (channel === desktopShellContract.installApplyPlan.channel) {
         const { plan } = request as { plan: InstallPlan };
+        assertActivePolicyAllowsInstall(database, policies, plan);
         const result = toInstallResult(await installer.applyInstallPlan(plan as CoreInstallPlan));
         memory.installResult = {
           status: result.status,
@@ -511,21 +626,23 @@ export function createDesktopRuntime(input: CreateDesktopRuntimeInput): DesktopR
         return parseIpcResponse(channel, result) as RuntimeDispatchResult<C>;
       }
 
+      if (channel === desktopShellContract.installApplyMultiTargetPlan.channel) {
+        const { plans } = request as { plans: InstallPlan[] };
+        for (const plan of plans) {
+          assertActivePolicyAllowsInstall(database, policies, plan);
+        }
+        const result = await installer.applyMultiTargetInstallPlan({ plans: plans as CoreInstallPlan[] });
+        return parseIpcResponse(
+          channel,
+          {
+            installed: result.installed.map(toInstallResult),
+            blocked: result.blocked
+          }
+        ) as RuntimeDispatchResult<C>;
+      }
+
       if (channel === desktopShellContract.installListTargets.channel) {
-        const roots = (
-          await Promise.all(adapters.map((adapter) => adapter.detectRoots()))
-        )
-          .flat()
-          .map((root) => ({
-            agentCode: root.agentCode,
-            agentDisplayName: root.agentDisplayName,
-            adapterVersion: root.adapterVersion,
-            rootPath: root.rootPath,
-            scope: root.scope,
-            writable: root.writable,
-            isDefault: root.isDefault
-          }))
-          .sort((left, right) => `${left.agentCode}:${left.rootPath}`.localeCompare(`${right.agentCode}:${right.rootPath}`));
+        const roots = await listInstallTargets(database, adapters, plugins.getRegistry());
         return parseIpcResponse(channel, roots) as RuntimeDispatchResult<C>;
       }
 
@@ -580,7 +697,11 @@ export function createDesktopRuntime(input: CreateDesktopRuntimeInput): DesktopR
       }
 
       if (channel === desktopShellContract.securityScan.channel) {
-        const result = toSecurityScanResult(await security.scanSkill(request as { skillId: string }));
+        const result = await scanSkillWithPluginRules({
+          database,
+          plugins,
+          scan: toSecurityScanResult(await security.scanSkill(request as { skillId: string }))
+        });
         const skill = createSkillRepository(database).getSkill(result.skillId);
         const skillName = skill?.name ?? result.skillId;
         createUsageRepository(database).recordEvent({
@@ -602,7 +723,10 @@ export function createDesktopRuntime(input: CreateDesktopRuntimeInput): DesktopR
         const skillIds =
           (request as { skillIds?: string[] }).skillIds ??
           createSkillRepository(database).listSkills().map((skill) => skill.id);
-        const results = (await security.batchRescan({ skillIds })).map(toSecurityScanResult);
+        const results = [];
+        for (const result of (await security.batchRescan({ skillIds })).map(toSecurityScanResult)) {
+          results.push(await scanSkillWithPluginRules({ database, plugins, scan: result }));
+        }
         for (const result of results) {
           recordReviewForSecurityScan(database, result, createSkillRepository(database).getSkill(result.skillId));
         }
@@ -753,6 +877,76 @@ export function createDesktopRuntime(input: CreateDesktopRuntimeInput): DesktopR
         return parseIpcResponse(channel, plugins.getRegistry()) as RuntimeDispatchResult<C>;
       }
 
+      if (channel === desktopShellContract.pluginsInvokeProvider.channel) {
+        const result = await plugins.invokeProvider(
+          request as {
+            pluginId: string;
+            capabilityType: PluginCapabilityType;
+            capabilityId: string;
+            input: unknown;
+          }
+        );
+        return parseIpcResponse(channel, result) as RuntimeDispatchResult<C>;
+      }
+
+      if (channel === desktopShellContract.policyCreate.channel) {
+        const result = policies.createPolicyPack(
+          request as {
+            name: string;
+            allowedSources: string[];
+            blockedRules: string[];
+            requiredScanLevel: 'safe' | 'warning' | 'critical';
+            approvedPlugins: string[];
+          }
+        );
+        return parseIpcResponse(channel, toPolicyPack(result)) as RuntimeDispatchResult<C>;
+      }
+
+      if (channel === desktopShellContract.policyList.channel) {
+        return parseIpcResponse(channel, listPolicyPacks(database)) as RuntimeDispatchResult<C>;
+      }
+
+      if (channel === desktopShellContract.policySetActive.channel) {
+        setAppSetting(database, 'policy.activePolicyPackId', (request as { policyPackId: string }).policyPackId);
+        return parseIpcResponse(channel, { status: 'active' }) as RuntimeDispatchResult<C>;
+      }
+
+      if (channel === desktopShellContract.policyEvaluate.channel) {
+        const result = policies.evaluateInstall(
+          request as {
+            policyPackId: string;
+            sourceType: string;
+            findingRuleIds: string[];
+            scanLevel: 'safe' | 'warning' | 'critical';
+            pluginIds: string[];
+          }
+        );
+        return parseIpcResponse(channel, result) as RuntimeDispatchResult<C>;
+      }
+
+      if (channel === desktopShellContract.baselineExport.channel) {
+        const result = await policies.exportTeamBaseline(
+          request as {
+            outputDirectory: string;
+            name: string;
+            collectionIds: string[];
+            policyPackId: string;
+            rootTemplates: Array<{ agentCode: string; scope: string; rootPathTemplate: string }>;
+          }
+        );
+        return parseIpcResponse(channel, result) as RuntimeDispatchResult<C>;
+      }
+
+      if (channel === desktopShellContract.baselinePreview.channel) {
+        const result = await policies.previewTeamBaseline(request as { packageDirectory: string });
+        return parseIpcResponse(channel, result) as RuntimeDispatchResult<C>;
+      }
+
+      if (channel === desktopShellContract.baselineApply.channel) {
+        const result = await policies.applyTeamBaseline(request as { packageDirectory: string; confirm: boolean });
+        return parseIpcResponse(channel, result) as RuntimeDispatchResult<C>;
+      }
+
       if (channel === desktopShellContract.discoverAddSource.channel) {
         const result = discover.addSource(
           request as {
@@ -785,6 +979,318 @@ export function createDesktopRuntime(input: CreateDesktopRuntimeInput): DesktopR
       throw new Error(`Unhandled IPC channel: ${channel}`);
     }
   };
+}
+
+async function onboardingState(input: {
+  database: SqliteDatabase;
+  adapters: AgentAdapter[];
+}): Promise<OnboardingState> {
+  return {
+    completed: getBooleanAppSetting(input.database, 'onboarding.completed'),
+    detectedRoots: await listInstallTargets(input.database, input.adapters),
+    migrationPreviews: []
+  };
+}
+
+function setAppSetting(database: SqliteDatabase, key: string, value: unknown): void {
+  database
+    .prepare(
+      `
+        insert into app_settings (key, value_json, updated_at)
+        values (@key, @valueJson, current_timestamp)
+        on conflict(key) do update set
+          value_json = excluded.value_json,
+          updated_at = current_timestamp
+      `
+    )
+    .run({ key, valueJson: JSON.stringify(value) });
+}
+
+function getBooleanAppSetting(database: SqliteDatabase, key: string): boolean {
+  const row = database.prepare('select value_json as valueJson from app_settings where key = ?').get(key) as
+    | { valueJson: string }
+    | undefined;
+  return row ? Boolean(JSON.parse(row.valueJson)) : false;
+}
+
+function getStringAppSetting(database: SqliteDatabase, key: string): string | null {
+  const row = database.prepare('select value_json as valueJson from app_settings where key = ?').get(key) as
+    | { valueJson: string }
+    | undefined;
+  const value = row ? JSON.parse(row.valueJson) : null;
+  return typeof value === 'string' ? value : null;
+}
+
+function listPolicyPacks(database: SqliteDatabase): PolicyPack[] {
+  return database
+    .prepare(
+      `
+        select
+          id,
+          name,
+          allowed_sources_json as allowedSourcesJson,
+          blocked_rules_json as blockedRulesJson,
+          required_scan_level as requiredScanLevel,
+          approved_plugins_json as approvedPluginsJson
+        from policy_packs
+        order by created_at desc, name asc
+      `
+    )
+    .all()
+    .map((row) => policyPackRow(row));
+}
+
+function policyPackRow(row: unknown): PolicyPack {
+  const policy = row as {
+    id: string;
+    name: string;
+    allowedSourcesJson: string;
+    blockedRulesJson: string;
+    requiredScanLevel: 'safe' | 'warning' | 'critical';
+    approvedPluginsJson: string;
+  };
+  return {
+    id: policy.id,
+    name: policy.name,
+    allowedSources: JSON.parse(policy.allowedSourcesJson) as string[],
+    blockedRules: JSON.parse(policy.blockedRulesJson) as string[],
+    requiredScanLevel: policy.requiredScanLevel,
+    approvedPlugins: JSON.parse(policy.approvedPluginsJson) as string[]
+  };
+}
+
+function toPolicyPack(policy: CorePolicyPack): PolicyPack {
+  return {
+    id: policy.id,
+    name: policy.name,
+    allowedSources: policy.allowedSources,
+    blockedRules: policy.blockedRules,
+    requiredScanLevel: policy.requiredScanLevel,
+    approvedPlugins: policy.approvedPlugins
+  };
+}
+
+function assertActivePolicyAllowsInstall(
+  database: SqliteDatabase,
+  policies: PolicyService,
+  plan: InstallPlan
+): void {
+  const activePolicyId = getStringAppSetting(database, 'policy.activePolicyPackId');
+  if (!activePolicyId) {
+    return;
+  }
+
+  const evaluation = policies.evaluateInstall({
+    policyPackId: activePolicyId,
+    sourceType: sourceTypeForSkill(database, plan.skillId),
+    findingRuleIds: latestFindingRuleIds(database, plan.skillId),
+    scanLevel: latestScanLevel(database, plan.skillId),
+    pluginIds: []
+  });
+
+  if (!evaluation.allowed) {
+    throw new Error(`Policy blocked install: ${evaluation.reasons.join(', ')}`);
+  }
+}
+
+function sourceTypeForSkill(database: SqliteDatabase, skillId: string): string {
+  const row = database
+    .prepare(
+      `
+        select coalesce(src.source_type, 'local') as sourceType
+        from skills s
+        left join sources src on src.id = s.canonical_source_id
+        where s.id = ?
+      `
+    )
+    .get(skillId) as { sourceType: string } | undefined;
+  return row?.sourceType ?? 'local';
+}
+
+function latestFindingRuleIds(database: SqliteDatabase, skillId: string): string[] {
+  return database
+    .prepare(
+      `
+        select sf.rule_id as ruleId
+        from security_findings sf
+        join security_scans ss on ss.id = sf.scan_id
+        join skill_versions sv on sv.id = ss.skill_version_id
+        where sv.skill_id = ?
+        order by ss.scanned_at desc, sf.severity desc
+      `
+    )
+    .all(skillId)
+    .map((row) => (row as { ruleId: string }).ruleId);
+}
+
+function latestScanLevel(database: SqliteDatabase, skillId: string): 'safe' | 'warning' | 'critical' {
+  const row = database
+    .prepare(
+      `
+        select ss.level
+        from security_scans ss
+        join skill_versions sv on sv.id = ss.skill_version_id
+        where sv.skill_id = ?
+        order by ss.scanned_at desc
+        limit 1
+      `
+    )
+    .get(skillId) as { level: string } | undefined;
+  const level = row?.level ?? 'safe';
+  if (level === 'critical' || level === 'high') {
+    return 'critical';
+  }
+  if (level === 'medium' || level === 'low' || level === 'warning') {
+    return 'warning';
+  }
+  return 'safe';
+}
+
+async function addProjectRoot(
+  database: SqliteDatabase,
+  input: { agentCode: string; rootPath: string }
+): Promise<InstallTarget> {
+  const metadata = agentMetadata(input.agentCode);
+  await mkdir(input.rootPath, { recursive: true });
+  const agentId = stableId('agent', metadata.agentCode);
+  const rootId = stableId('agent-root', `${metadata.agentCode}:${input.rootPath}:project`);
+  database
+    .prepare(
+      `
+        insert into agents
+          (id, code, display_name, adapter_version, detected, os_scope, updated_at)
+        values
+          (@id, @code, @displayName, @adapterVersion, 1, 'project', current_timestamp)
+        on conflict(code) do update set
+          display_name = excluded.display_name,
+          adapter_version = excluded.adapter_version,
+          detected = 1,
+          os_scope = excluded.os_scope,
+          updated_at = current_timestamp
+      `
+    )
+    .run({
+      id: agentId,
+      code: metadata.agentCode,
+      displayName: metadata.agentDisplayName,
+      adapterVersion: metadata.adapterVersion
+    });
+  database
+    .prepare(
+      `
+        insert into agent_roots
+          (id, agent_id, root_path, scope, writable, is_default, root_kind)
+        values
+          (@id, @agentId, @rootPath, 'project', 1, 0, 'project')
+        on conflict(agent_id, root_path, scope) do update set
+          writable = 1,
+          is_default = 0,
+          root_kind = 'project'
+      `
+    )
+    .run({ id: rootId, agentId, rootPath: input.rootPath });
+
+  return {
+    ...metadata,
+    rootPath: input.rootPath,
+    scope: 'project',
+    rootKind: 'project',
+    writable: true,
+    isDefault: false
+  };
+}
+
+async function listInstallTargets(
+  database: SqliteDatabase,
+  adapters: AgentAdapter[],
+  pluginRegistry?: PluginRegistry
+): Promise<InstallTarget[]> {
+  const detected = (
+    await Promise.all(adapters.map((adapter) => adapter.detectRoots()))
+  )
+    .flat()
+    .map((root) => ({
+      agentCode: root.agentCode,
+      agentDisplayName: root.agentDisplayName,
+      adapterVersion: root.adapterVersion,
+      rootPath: root.rootPath,
+      scope: root.scope,
+      rootKind: root.scope === 'project' ? ('project' as const) : ('user' as const),
+      writable: root.writable,
+      isDefault: root.isDefault
+    }));
+  const persistedProjectRoots = database
+    .prepare(
+      `
+        select
+          a.code as agentCode,
+          a.display_name as agentDisplayName,
+          a.adapter_version as adapterVersion,
+          ar.root_path as rootPath,
+          ar.scope,
+          ar.root_kind as rootKind,
+          ar.writable,
+          ar.is_default as isDefault
+        from agent_roots ar
+        join agents a on a.id = ar.agent_id
+        where ar.root_kind = 'project'
+        order by a.code, ar.root_path collate nocase
+      `
+    )
+    .all()
+    .map(installTargetRow);
+  const pluginTargets =
+    pluginRegistry?.agentAdapters.map((adapter) => ({
+      agentCode: adapter.code,
+      agentDisplayName: adapter.displayName,
+      adapterVersion: `plugin:${adapter.pluginId}`,
+      rootPath: `plugin://${adapter.pluginId}/${adapter.code}`,
+      scope: 'plugin',
+      writable: false,
+      isDefault: false
+    })) ?? [];
+  const byKey = new Map<string, InstallTarget>();
+  for (const target of [...detected, ...persistedProjectRoots, ...pluginTargets]) {
+    byKey.set(`${target.agentCode}:${target.rootPath}:${target.scope}`, target);
+  }
+  return [...byKey.values()].sort((left, right) =>
+    `${left.agentCode}:${left.rootPath}`.localeCompare(`${right.agentCode}:${right.rootPath}`)
+  );
+}
+
+function installTargetRow(row: unknown): InstallTarget {
+  const typed = row as Omit<InstallTarget, 'writable' | 'isDefault'> & {
+    writable: number;
+    isDefault: number;
+  };
+  return {
+    ...typed,
+    rootKind: typed.rootKind ?? (typed.scope === 'project' ? 'project' : 'user'),
+    writable: typed.writable === 1,
+    isDefault: typed.isDefault === 1
+  };
+}
+
+function agentMetadata(agentCode: string): Pick<
+  InstallTarget,
+  'agentCode' | 'agentDisplayName' | 'adapterVersion'
+> {
+  const displayNames: Record<string, string> = {
+    codex: 'Codex',
+    claude: 'Claude',
+    gemini: 'Gemini',
+    opencode: 'OpenCode'
+  };
+  const agentDisplayName = displayNames[agentCode];
+  if (!agentDisplayName) {
+    throw new Error(`Unsupported agent code: ${agentCode}`);
+  }
+
+  return { agentCode, agentDisplayName, adapterVersion: 'builtin' };
+}
+
+function stableId(prefix: string, value: string): string {
+  return `${prefix}:${createHash('sha256').update(value).digest('hex')}`;
 }
 
 function listLibrarySkills(database: SqliteDatabase): LibrarySkillSummary[] {
@@ -990,10 +1496,12 @@ async function skillDetail(
           sv.version_no as versionNo,
           coalesce(src.source_type, 'unknown') as sourceType,
           src.url as sourceUrl,
-          coalesce(src.trust_level, 'unknown') as trustLevel
+          coalesce(src.trust_level, 'unknown') as trustLevel,
+          case when sfav.skill_id is null then 0 else 1 end as favorite
         from skills s
         join skill_versions sv on sv.skill_id = s.id
         left join sources src on src.id = s.canonical_source_id
+        left join skill_favorites sfav on sfav.skill_id = s.id
         where s.id = @skillId
           and sv.version_no = (
             select max(version_no)
@@ -1014,6 +1522,7 @@ async function skillDetail(
         sourceType: string;
         sourceUrl: string | null;
         trustLevel: string;
+        favorite: number;
       }
     | undefined;
 
@@ -1034,7 +1543,8 @@ async function skillDetail(
       name: row.name,
       description: row.description,
       tags: JSON.parse(row.tagsJson) as string[],
-      versionNo: row.versionNo
+      versionNo: row.versionNo,
+      favorite: row.favorite === 1
     },
     source: {
       type: row.sourceType,
@@ -1329,7 +1839,8 @@ function toSkillSummary(skill: SkillRecord): DesktopWorkspaceState['skills'][num
     versionId: skill.versionId,
     name: skill.name,
     description: skill.description,
-    versionNo: skill.versionNo
+    versionNo: skill.versionNo,
+    favorite: skill.favorite
   };
 }
 
@@ -1375,6 +1886,177 @@ function toSecurityScanResult(result: CoreSecurityScanResult): SecurityScanResul
     rulesetVersion: result.rulesetVersion,
     findings: result.findings
   };
+}
+
+async function scanSkillWithPluginRules(input: {
+  database: SqliteDatabase;
+  plugins: PluginService;
+  scan: SecurityScanResult;
+}): Promise<SecurityScanResult> {
+  const registry = input.plugins.getRegistry();
+  if (registry.securityRules.length === 0) {
+    return input.scan;
+  }
+
+  const pluginFindings: SecurityScanResult['findings'] = [];
+  for (const rule of registry.securityRules) {
+    const result = await input.plugins.invokeProvider({
+      pluginId: rule.pluginId,
+      capabilityType: 'security-rule',
+      capabilityId: rule.id,
+      input: {
+        skillId: input.scan.skillId,
+        versionId: input.scan.versionId,
+        scanId: input.scan.id
+      }
+    });
+    pluginFindings.push(...normalizePluginSecurityFindings(result, rule.name));
+  }
+
+  if (pluginFindings.length === 0) {
+    return input.scan;
+  }
+
+  const findings = [...input.scan.findings, ...pluginFindings];
+  const score = scoreSecurityFindings(findings);
+  const level = levelForSecurityScore(score);
+  const blocked = level === 'high' || level === 'critical';
+
+  input.database
+    .transaction(() => {
+      input.database
+        .prepare(
+          `
+            update security_scans
+            set score = @score,
+                level = @level,
+                blocked = @blocked,
+                scanned_at = current_timestamp
+            where id = @scanId
+          `
+        )
+        .run({ scanId: input.scan.id, score, level, blocked: blocked ? 1 : 0 });
+
+      const insertFinding = input.database.prepare(
+        `
+          insert into security_findings
+            (id, scan_id, rule_id, severity, category, relative_path, line_no, excerpt)
+          values
+            (@id, @scanId, @ruleId, @severity, @category, @relativePath, @lineNo, @excerpt)
+        `
+      );
+
+      for (const finding of pluginFindings) {
+        insertFinding.run({
+          id: randomUUID(),
+          scanId: input.scan.id,
+          ruleId: finding.ruleId,
+          severity: finding.severity,
+          category: finding.category,
+          relativePath: finding.relativePath,
+          lineNo: finding.lineNo,
+          excerpt: finding.excerpt
+        });
+      }
+    })();
+
+  return {
+    ...input.scan,
+    score,
+    level,
+    blocked,
+    findings
+  };
+}
+
+function normalizePluginSecurityFindings(
+  output: unknown,
+  fallbackRuleName: string
+): SecurityScanResult['findings'] {
+  const rawFindings = Array.isArray(output) ? output : output === undefined || output === null ? [] : [output];
+  return rawFindings.map((raw) => {
+    const finding = raw as Partial<SecurityScanResult['findings'][number]> | null;
+    if (!finding || typeof finding !== 'object') {
+      throw new Error('Plugin security rule returned an invalid finding');
+    }
+
+    const severity = normalizeSecuritySeverity(finding.severity);
+    if (
+      typeof finding.ruleId !== 'string' ||
+      finding.ruleId.trim() === '' ||
+      typeof finding.category !== 'string' ||
+      finding.category.trim() === '' ||
+      typeof finding.relativePath !== 'string' ||
+      finding.relativePath.trim() === '' ||
+      typeof finding.excerpt !== 'string'
+    ) {
+      throw new Error('Plugin security rule returned an invalid finding');
+    }
+
+    return {
+      ruleId: finding.ruleId,
+      ruleName:
+        typeof finding.ruleName === 'string' && finding.ruleName.trim() !== ''
+          ? finding.ruleName
+          : fallbackRuleName,
+      severity,
+      category: finding.category,
+      relativePath: finding.relativePath,
+      lineNo: typeof finding.lineNo === 'number' && Number.isInteger(finding.lineNo) ? finding.lineNo : null,
+      excerpt: finding.excerpt
+    };
+  });
+}
+
+function normalizeSecuritySeverity(input: unknown): 'low' | 'medium' | 'high' | 'critical' | 'warning' {
+  if (input === 'low' || input === 'medium' || input === 'high' || input === 'critical' || input === 'warning') {
+    return input;
+  }
+
+  throw new Error(`Plugin security rule returned an invalid severity: ${String(input)}`);
+}
+
+function scoreSecurityFindings(findings: SecurityScanResult['findings']): number {
+  return Math.min(
+    100,
+    findings.reduce((score, finding) => score + securityScoreForSeverity(finding.severity), 0)
+  );
+}
+
+function securityScoreForSeverity(severity: string): number {
+  if (severity === 'critical') {
+    return 95;
+  }
+
+  if (severity === 'high') {
+    return 75;
+  }
+
+  if (severity === 'medium') {
+    return 45;
+  }
+
+  return 15;
+}
+
+function levelForSecurityScore(score: number): string {
+  if (score >= 90) {
+    return 'critical';
+  }
+
+  if (score >= 70) {
+    return 'high';
+  }
+
+  if (score >= 40) {
+    return 'medium';
+  }
+
+  if (score > 0) {
+    return 'low';
+  }
+
+  return 'safe';
 }
 
 function recordReviewForSecurityScan(
