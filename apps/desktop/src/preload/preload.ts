@@ -45,7 +45,8 @@ import type {
   SyncInboxRecord,
   SyncOutboxRecord,
   SyncProfile,
-  SyncStartupPlan
+  SyncStartupPlan,
+  VersionComparisonReport
 } from '@theopenhub/shared';
 
 const api = {
@@ -303,6 +304,31 @@ const api = {
       toVersionId
     });
     return parseIpcResponse(desktopShellContract.versionDiff.channel, payload);
+  },
+
+  async createDraftVersion(input: {
+    skillId: string;
+    changeSummary: string;
+    files: Array<{ relativePath: string; content: string }>;
+  }): Promise<SkillVersionSummary> {
+    const payload = await ipcRenderer.invoke(desktopShellContract.versionCreateDraft.channel, input);
+    return parseIpcResponse(desktopShellContract.versionCreateDraft.channel, payload);
+  },
+
+  async promoteVersion(versionId: string, releaseChannel: 'beta' | 'stable'): Promise<SkillVersionSummary> {
+    const payload = await ipcRenderer.invoke(desktopShellContract.versionPromote.channel, {
+      versionId,
+      releaseChannel
+    });
+    return parseIpcResponse(desktopShellContract.versionPromote.channel, payload);
+  },
+
+  async compareVersions(fromVersionId: string, toVersionId: string): Promise<VersionComparisonReport> {
+    const payload = await ipcRenderer.invoke(desktopShellContract.versionCompare.channel, {
+      fromVersionId,
+      toVersionId
+    });
+    return parseIpcResponse(desktopShellContract.versionCompare.channel, payload);
   },
 
   async rollbackVersion(installationId: string, targetVersionId: string): Promise<{

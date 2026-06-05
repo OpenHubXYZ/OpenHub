@@ -261,6 +261,91 @@ describe('desktop app shell', () => {
     expect(screen.getByText('Starter Pack')).toBeInTheDocument();
   });
 
+  it('lets the user create draft versions, promote them, and compare versions through IPC', async () => {
+    const runtimeSkill = {
+      id: 'skill-runtime',
+      versionId: 'version-1',
+      name: 'Runtime Helper',
+      description: 'Author workflow helper',
+      versionNo: 1,
+      favorite: false
+    };
+    const draftVersion = {
+      versionId: 'version-2',
+      skillId: runtimeSkill.id,
+      versionNo: 2,
+      changeSummary: 'Draft update',
+      createdAt: '2026-06-05T00:00:00.000Z',
+      lifecycle: 'draft',
+      releaseChannel: 'local'
+    };
+    const api = {
+      getAppInfo: vi.fn(),
+      listLibrarySkills: vi.fn(),
+      getWorkspaceState: vi.fn().mockResolvedValue(
+        workspaceState({
+          librarySkills: [
+            {
+              id: runtimeSkill.id,
+              name: runtimeSkill.name,
+              sourceAgent: 'Codex',
+              path: '/tmp/runtime-helper',
+              installStatus: 'available'
+            }
+          ],
+          skills: [runtimeSkill]
+        })
+      ),
+      listInstallTargets: vi.fn().mockResolvedValue([]),
+      getSkillDetail: vi.fn().mockResolvedValue(skillDetail(runtimeSkill)),
+      createDraftVersion: vi.fn().mockResolvedValue(draftVersion),
+      promoteVersion: vi.fn().mockResolvedValue({
+        ...draftVersion,
+        lifecycle: 'released',
+        releaseChannel: 'beta'
+      }),
+      compareVersions: vi.fn().mockResolvedValue({
+        fromVersionId: 'version-1',
+        toVersionId: 'version-2',
+        fromManifestHash: 'hash-1',
+        toManifestHash: 'hash-2',
+        manifestHashChanged: true,
+        files: [{ relativePath: 'SKILL.md', changeType: 'modified', fromHash: 'hash-1', toHash: 'hash-2' }]
+      }),
+      getPluginCenterState: vi.fn()
+    };
+    window.theOpenHub = api as unknown as NonNullable<typeof window.theOpenHub>;
+
+    render(<App />);
+
+    await waitFor(() => expect(api.getWorkspaceState).toHaveBeenCalled());
+    fireEvent.click(screen.getByRole('button', { name: 'Library' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Details' }));
+    await waitFor(() => expect(api.getSkillDetail).toHaveBeenCalledWith(runtimeSkill.id));
+    fireEvent.click(screen.getByRole('tab', { name: 'Governance' }));
+    fireEvent.change(screen.getByLabelText('Draft change summary'), {
+      target: { value: 'Draft update' }
+    });
+    fireEvent.change(screen.getByLabelText('Draft SKILL.md content'), {
+      target: { value: '# Draft Runtime Helper' }
+    });
+    fireEvent.click(screen.getByRole('button', { name: 'Create draft version' }));
+    await waitFor(() =>
+      expect(api.createDraftVersion).toHaveBeenCalledWith({
+        skillId: runtimeSkill.id,
+        changeSummary: 'Draft update',
+        files: [{ relativePath: 'SKILL.md', content: '# Draft Runtime Helper' }]
+      })
+    );
+
+    fireEvent.click(screen.getByRole('button', { name: 'Promote version' }));
+    await waitFor(() => expect(api.promoteVersion).toHaveBeenCalledWith('version-2', 'beta'));
+    fireEvent.click(screen.getByRole('button', { name: 'Compare versions' }));
+    await waitFor(() => expect(api.compareVersions).toHaveBeenCalledWith('version-1', 'version-2'));
+    expect(screen.getByText('manifest changed')).toBeInTheDocument();
+    expect(screen.getByText('SKILL.md')).toBeInTheDocument();
+  });
+
   it('shows Sync Center profiles, outbox, inbox, and conflicts', () => {
     render(
       <App

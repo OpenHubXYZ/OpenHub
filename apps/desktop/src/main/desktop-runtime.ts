@@ -102,6 +102,7 @@ import {
   type SyncProfile,
   type SyncCenterState,
   type SyncStartupPlan,
+  type VersionComparisonReport,
   type VersionRollbackResult
 } from '@theopenhub/shared';
 
@@ -188,8 +189,14 @@ type RuntimeDispatchResult<C extends IpcChannel> = C extends typeof desktopShell
                                               ? SkillVersionSummary[]
                                               : C extends typeof desktopShellContract.versionDiff.channel
                                                 ? FileDiff[]
-                                                : C extends typeof desktopShellContract.versionRollback.channel
-                                                  ? VersionRollbackResult
+                                                : C extends typeof desktopShellContract.versionCreateDraft.channel
+                                                  ? SkillVersionSummary
+                                                  : C extends typeof desktopShellContract.versionPromote.channel
+                                                    ? SkillVersionSummary
+                                                    : C extends typeof desktopShellContract.versionCompare.channel
+                                                      ? VersionComparisonReport
+                                                      : C extends typeof desktopShellContract.versionRollback.channel
+                                                        ? VersionRollbackResult
                                                   : C extends typeof desktopShellContract.securityScan.channel
                                                     ? SecurityScanResult
                                                     : C extends typeof desktopShellContract.securityRescan.channel
@@ -799,6 +806,42 @@ export function createDesktopRuntime(input: CreateDesktopRuntimeInput): DesktopR
         const result = versions.diffVersions(
           request as { fromVersionId: string; toVersionId: string }
         );
+        return parseIpcResponse(channel, result) as RuntimeDispatchResult<C>;
+      }
+
+      if (channel === desktopShellContract.versionCreateDraft.channel) {
+        const draftRequest = request as {
+          skillId: string;
+          changeSummary: string;
+          files: Array<{ relativePath: string; content: string }>;
+        };
+        const result = await versions.createVersion({
+          ...draftRequest,
+          lifecycle: 'draft',
+          releaseChannel: 'local'
+        });
+        createUsageRepository(database).recordEvent({
+          eventType: 'version.createDraft',
+          skillId: result.skillId,
+          subject: `Created draft v${result.versionNo}`,
+          metadata: { versionId: result.versionId }
+        });
+        return parseIpcResponse(channel, result) as RuntimeDispatchResult<C>;
+      }
+
+      if (channel === desktopShellContract.versionPromote.channel) {
+        const result = versions.promoteVersion(request as { versionId: string; releaseChannel: 'beta' | 'stable' });
+        createUsageRepository(database).recordEvent({
+          eventType: 'version.promote',
+          skillId: result.skillId,
+          subject: `Promoted v${result.versionNo} to ${result.releaseChannel}`,
+          metadata: { versionId: result.versionId, releaseChannel: result.releaseChannel }
+        });
+        return parseIpcResponse(channel, result) as RuntimeDispatchResult<C>;
+      }
+
+      if (channel === desktopShellContract.versionCompare.channel) {
+        const result = versions.compareVersions(request as { fromVersionId: string; toVersionId: string });
         return parseIpcResponse(channel, result) as RuntimeDispatchResult<C>;
       }
 

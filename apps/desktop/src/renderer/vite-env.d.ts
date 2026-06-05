@@ -44,7 +44,8 @@ import type {
   SyncInboxRecord,
   SyncOutboxRecord,
   SyncProfile,
-  SyncStartupPlan
+  SyncStartupPlan,
+  VersionComparisonReport
 } from '@theopenhub/shared';
 
 declare global {
@@ -145,6 +146,13 @@ declare global {
       setReadOnlyLock(installationId: string, locked: boolean): Promise<InstallLockResult>;
       listVersions(skillId: string): Promise<SkillVersionSummary[]>;
       diffVersions(fromVersionId: string, toVersionId: string): Promise<FileDiff[]>;
+      createDraftVersion(input: {
+        skillId: string;
+        changeSummary: string;
+        files: Array<{ relativePath: string; content: string }>;
+      }): Promise<SkillVersionSummary>;
+      promoteVersion(versionId: string, releaseChannel: 'beta' | 'stable'): Promise<SkillVersionSummary>;
+      compareVersions(fromVersionId: string, toVersionId: string): Promise<VersionComparisonReport>;
       rollbackVersion(installationId: string, targetVersionId: string): Promise<{
         status: 'rolled_back';
         installationId: string;

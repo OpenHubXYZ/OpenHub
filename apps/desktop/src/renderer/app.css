@@ -1112,10 +1112,10 @@ td {
 }
 
 .flow-actions input,
-.flow-actions select {
+.flow-actions select,
+.flow-actions textarea {
   width: 100%;
   min-width: 0;
-  height: 34px;
   padding: 0 10px;
   border: 1px solid #cfd6e3;
   border-radius: 6px;
@@ -1123,6 +1123,18 @@ td {
   background: #f8fafc;
   font-size: 13px;
   font-weight: 600;
+}
+
+.flow-actions input,
+.flow-actions select {
+  height: 34px;
+}
+
+.flow-actions textarea {
+  min-height: 120px;
+  padding-top: 8px;
+  padding-bottom: 8px;
+  resize: vertical;
 }
 
 .skill-preview {

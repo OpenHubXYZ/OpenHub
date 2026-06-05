@@ -602,6 +602,26 @@ const fileDiffSchema = z
 
 export type FileDiff = z.infer<typeof fileDiffSchema>;
 
+const versionFileInputSchema = z
+  .object({
+    relativePath: z.string().min(1),
+    content: z.string()
+  })
+  .strict();
+
+export const versionComparisonReportSchema = z
+  .object({
+    fromVersionId: z.string().min(1),
+    toVersionId: z.string().min(1),
+    fromManifestHash: z.string().min(1).nullable(),
+    toManifestHash: z.string().min(1).nullable(),
+    manifestHashChanged: z.boolean(),
+    files: z.array(fileDiffSchema)
+  })
+  .strict();
+
+export type VersionComparisonReport = z.infer<typeof versionComparisonReportSchema>;
+
 export const skillDetailSchema = z
   .object({
     skill: z
@@ -1247,6 +1267,27 @@ export const desktopShellContract = {
     request: z.object({ fromVersionId: z.string().min(1), toVersionId: z.string().min(1) }).strict(),
     response: z.array(fileDiffSchema)
   },
+  versionCreateDraft: {
+    channel: 'version.createDraft',
+    request: z
+      .object({
+        skillId: z.string().min(1),
+        changeSummary: z.string(),
+        files: z.array(versionFileInputSchema).min(1)
+      })
+      .strict(),
+    response: skillVersionSummarySchema
+  },
+  versionPromote: {
+    channel: 'version.promote',
+    request: z.object({ versionId: z.string().min(1), releaseChannel: z.enum(['beta', 'stable']) }).strict(),
+    response: skillVersionSummarySchema
+  },
+  versionCompare: {
+    channel: 'version.compare',
+    request: z.object({ fromVersionId: z.string().min(1), toVersionId: z.string().min(1) }).strict(),
+    response: versionComparisonReportSchema
+  },
   versionRollback: {
     channel: 'version.rollback',
     request: z.object({ installationId: z.string().min(1), targetVersionId: z.string().min(1) }).strict(),
@@ -1666,6 +1707,18 @@ export function parseIpcResponse(
   channel: typeof desktopShellContract.versionDiff.channel,
   payload: unknown
 ): FileDiff[];
+export function parseIpcResponse(
+  channel: typeof desktopShellContract.versionCreateDraft.channel,
+  payload: unknown
+): SkillVersionSummary;
+export function parseIpcResponse(
+  channel: typeof desktopShellContract.versionPromote.channel,
+  payload: unknown
+): SkillVersionSummary;
+export function parseIpcResponse(
+  channel: typeof desktopShellContract.versionCompare.channel,
+  payload: unknown
+): VersionComparisonReport;
 export function parseIpcResponse(
   channel: typeof desktopShellContract.versionRollback.channel,
   payload: unknown

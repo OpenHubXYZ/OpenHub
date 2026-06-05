@@ -38,6 +38,15 @@ export interface FileDiff {
   toHash: string | null;
 }
 
+export interface VersionComparisonReport {
+  fromVersionId: string;
+  toVersionId: string;
+  fromManifestHash: string | null;
+  toManifestHash: string | null;
+  manifestHashChanged: boolean;
+  files: FileDiff[];
+}
+
 export interface VersionService {
   createVersion(input: {
     skillId: string;
@@ -49,6 +58,7 @@ export interface VersionService {
   promoteVersion(input: { versionId: string; releaseChannel: ReleaseChannel }): SkillVersionSummary;
   listVersions(input: { skillId: string }): SkillVersionSummary[];
   diffVersions(input: { fromVersionId: string; toVersionId: string }): FileDiff[];
+  compareVersions(input: { fromVersionId: string; toVersionId: string }): VersionComparisonReport;
   rollbackInstallation(input: { installationId: string; targetVersionId: string }): Promise<void>;
 }
 
@@ -238,6 +248,19 @@ export function createVersionService(input: CreateVersionServiceInput): VersionS
       return diffs;
     },
 
+    compareVersions({ fromVersionId, toVersionId }) {
+      const fromManifestHash = getVersionManifestHash(input.database, fromVersionId);
+      const toManifestHash = getVersionManifestHash(input.database, toVersionId);
+      return {
+        fromVersionId,
+        toVersionId,
+        fromManifestHash,
+        toManifestHash,
+        manifestHashChanged: fromManifestHash !== toManifestHash,
+        files: this.diffVersions({ fromVersionId, toVersionId })
+      };
+    },
+
     async rollbackInstallation({ installationId, targetVersionId }) {
       const installation = getInstallation(input.database, installationId);
       const targetFiles = getVersionFiles(input.database, targetVersionId);
@@ -296,6 +319,13 @@ function getVersionFiles(database: SqliteDatabase, versionId: string): VersionFi
       `
     )
     .all(versionId) as VersionFileRow[];
+}
+
+function getVersionManifestHash(database: SqliteDatabase, versionId: string): string | null {
+  const row = database
+    .prepare('select manifest_hash as manifestHash from skill_versions where id = ?')
+    .get(versionId) as { manifestHash: string } | undefined;
+  return row?.manifestHash ?? null;
 }
 
 function getInstallation(database: SqliteDatabase, installationId: string): InstallationRow {

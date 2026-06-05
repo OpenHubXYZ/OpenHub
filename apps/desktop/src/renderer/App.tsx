@@ -42,7 +42,8 @@ import type {
   SyncConflictRecord,
   SyncProfile,
   SyncCenterState,
-  UsageCenterState
+  UsageCenterState,
+  VersionComparisonReport
 } from '@theopenhub/shared';
 
 import {
@@ -195,6 +196,13 @@ export function App({
   const [lastInstallationId, setLastInstallationId] = useState('');
   const [relinkTargetRoot, setRelinkTargetRoot] = useState('');
   const [rollbackVersionId, setRollbackVersionId] = useState('');
+  const [draftChangeSummary, setDraftChangeSummary] = useState('');
+  const [draftSkillMarkdown, setDraftSkillMarkdown] = useState('');
+  const [promoteVersionId, setPromoteVersionId] = useState('');
+  const [promoteReleaseChannel, setPromoteReleaseChannel] = useState<'beta' | 'stable'>('beta');
+  const [compareFromVersionId, setCompareFromVersionId] = useState('');
+  const [compareToVersionId, setCompareToVersionId] = useState('');
+  const [versionComparison, setVersionComparison] = useState<VersionComparisonReport | null>(null);
   const [exemptionReason, setExemptionReason] = useState('');
   const [lastExemptionId, setLastExemptionId] = useState('');
   const [policyName, setPolicyName] = useState('');
@@ -537,6 +545,12 @@ export function App({
     setRollbackVersionId(detail.versions.at(-1)?.versionId ?? '');
     setLastInstallationId(detail.installations[0]?.installationId ?? lastInstallationId);
     setRelinkTargetRoot(detail.installations[0]?.rootPath ?? '');
+    setDraftSkillMarkdown(detail.skillMarkdown);
+    setDraftChangeSummary('');
+    setPromoteVersionId(detail.versions[0]?.versionId ?? '');
+    setCompareFromVersionId(detail.versions.at(-1)?.versionId ?? '');
+    setCompareToVersionId(detail.versions[0]?.versionId ?? '');
+    setVersionComparison(null);
   }
 
   async function handleExportSkill(): Promise<void> {
@@ -859,6 +873,66 @@ export function App({
 
     const result = await window.theOpenHub.rollbackVersion(lastInstallationId.trim(), rollbackVersionId.trim());
     setOperationMessage(`Rolled back ${result.installationId}`);
+  }
+
+  async function handleCreateDraftVersion(): Promise<void> {
+    const skill = selectedSkillDetail?.skill;
+    if (!skill || !window.theOpenHub?.createDraftVersion || draftSkillMarkdown.trim().length === 0) {
+      return;
+    }
+
+    const draft = await window.theOpenHub.createDraftVersion({
+      skillId: skill.id,
+      changeSummary: draftChangeSummary.trim(),
+      files: [{ relativePath: 'SKILL.md', content: draftSkillMarkdown }]
+    });
+    setSelectedSkillDetail((current) =>
+      current
+        ? {
+            ...current,
+            versions: [draft, ...current.versions.filter((version) => version.versionId !== draft.versionId)]
+          }
+        : current
+    );
+    setPromoteVersionId(draft.versionId);
+    setCompareToVersionId(draft.versionId);
+    setOperationMessage(`Created draft v${draft.versionNo}`);
+  }
+
+  async function handlePromoteVersion(): Promise<void> {
+    if (!window.theOpenHub?.promoteVersion || promoteVersionId.trim().length === 0) {
+      return;
+    }
+
+    const promoted = await window.theOpenHub.promoteVersion(promoteVersionId.trim(), promoteReleaseChannel);
+    setSelectedSkillDetail((current) =>
+      current
+        ? {
+            ...current,
+            versions: current.versions.map((version) =>
+              version.versionId === promoted.versionId ? promoted : version
+            )
+          }
+        : current
+    );
+    setOperationMessage(`Promoted v${promoted.versionNo} to ${promoted.releaseChannel}`);
+  }
+
+  async function handleCompareVersions(): Promise<void> {
+    if (
+      !window.theOpenHub?.compareVersions ||
+      compareFromVersionId.trim().length === 0 ||
+      compareToVersionId.trim().length === 0
+    ) {
+      return;
+    }
+
+    const comparison = await window.theOpenHub.compareVersions(
+      compareFromVersionId.trim(),
+      compareToVersionId.trim()
+    );
+    setVersionComparison(comparison);
+    setOperationMessage(`Compared ${comparison.files.length} files`);
   }
 
   async function handleSecurityScan(): Promise<void> {
@@ -1393,6 +1467,8 @@ export function App({
                   discoverSource={discoverSource}
                   discoverSourceName={discoverSourceName}
                   discoverSourceUrl={discoverSourceUrl}
+                  draftChangeSummary={draftChangeSummary}
+                  draftSkillMarkdown={draftSkillMarkdown}
                   exemptionReason={exemptionReason}
                   exportDirectory={exportDirectory}
                   gitImportUrl={gitImportUrl}
@@ -1429,7 +1505,12 @@ export function App({
                   policyEvaluation={policyEvaluation}
                   policyName={policyName}
                   policyRequiredScanLevel={policyRequiredScanLevel}
+                  compareFromVersionId={compareFromVersionId}
+                  compareToVersionId={compareToVersionId}
+                  promoteReleaseChannel={promoteReleaseChannel}
+                  promoteVersionId={promoteVersionId}
                   syncConflicts={syncConflicts}
+                  versionComparison={versionComparison}
                   onAddDiscoverSource={() => {
                     void handleAddDiscoverSource();
                   }}
@@ -1457,6 +1538,9 @@ export function App({
                   onCreateCollection={() => {
                     void handleCreateCollection();
                   }}
+                  onCreateDraftVersion={() => {
+                    void handleCreateDraftVersion();
+                  }}
                   onCreateExemption={() => {
                     void handleCreateExemption();
                   }}
@@ -1474,6 +1558,8 @@ export function App({
                   }}
                   onDiscoverSourceNameChange={setDiscoverSourceName}
                   onDiscoverSourceUrlChange={setDiscoverSourceUrl}
+                  onDraftChangeSummaryChange={setDraftChangeSummary}
+                  onDraftSkillMarkdownChange={setDraftSkillMarkdown}
                   onEnablePlugin={() => {
                     void handleEnablePlugin();
                   }}
@@ -1591,6 +1677,16 @@ export function App({
                   onPolicyBlockedRulesChange={setPolicyBlockedRules}
                   onPolicyNameChange={setPolicyName}
                   onPolicyRequiredScanLevelChange={setPolicyRequiredScanLevel}
+                  onCompareFromVersionIdChange={setCompareFromVersionId}
+                  onCompareToVersionIdChange={setCompareToVersionId}
+                  onCompareVersions={() => {
+                    void handleCompareVersions();
+                  }}
+                  onPromoteReleaseChannelChange={setPromoteReleaseChannel}
+                  onPromoteVersion={() => {
+                    void handlePromoteVersion();
+                  }}
+                  onPromoteVersionIdChange={setPromoteVersionId}
                   onSignedExportSignerChange={setSignedExportSigner}
                   onSparseGitSubpathChange={setSparseGitSubpath}
                   onSparseGitUrlChange={setSparseGitUrl}
@@ -2031,10 +2127,14 @@ type PageContentProps = {
   collectionDirectory: string;
   collectionName: string;
   collectionPackageDirectory: string;
+  compareFromVersionId: string;
+  compareToVersionId: string;
   discoverPreviewSkills: DiscoverSkillPreview[];
   discoverSource: DiscoverSource | null;
   discoverSourceName: string;
   discoverSourceUrl: string;
+  draftChangeSummary: string;
+  draftSkillMarkdown: string;
   exemptionReason: string;
   exportDirectory: string;
   gitImportUrl: string;
@@ -2066,6 +2166,8 @@ type PageContentProps = {
   policyEvaluation: PolicyEvaluation | null;
   policyName: string;
   policyRequiredScanLevel: 'safe' | 'warning' | 'critical';
+  promoteReleaseChannel: 'beta' | 'stable';
+  promoteVersionId: string;
   onAddDiscoverSource: () => void;
   onApplyInstallPlan: () => void;
   onApplyMultiTargetPlans: () => void;
@@ -2084,7 +2186,11 @@ type PageContentProps = {
   onCollectionDirectoryChange: (value: string) => void;
   onCollectionNameChange: (value: string) => void;
   onCollectionPackageDirectoryChange: (value: string) => void;
+  onCompareFromVersionIdChange: (value: string) => void;
+  onCompareToVersionIdChange: (value: string) => void;
+  onCompareVersions: () => void;
   onCreateCollection: () => void;
+  onCreateDraftVersion: () => void;
   onCreateExemption: () => void;
   onCreateInstallPlan: () => void;
   onCreateMultiTargetPlans: () => void;
@@ -2094,6 +2200,8 @@ type PageContentProps = {
   onDisablePlugin: () => void;
   onDiscoverSourceNameChange: (value: string) => void;
   onDiscoverSourceUrlChange: (value: string) => void;
+  onDraftChangeSummaryChange: (value: string) => void;
+  onDraftSkillMarkdownChange: (value: string) => void;
   onEnablePlugin: () => void;
   onExemptionReasonChange: (value: string) => void;
   onExportCollection: () => void;
@@ -2151,6 +2259,9 @@ type PageContentProps = {
   onPolicyBlockedRulesChange: (value: string) => void;
   onPolicyNameChange: (value: string) => void;
   onPolicyRequiredScanLevelChange: (value: 'safe' | 'warning' | 'critical') => void;
+  onPromoteReleaseChannelChange: (value: 'beta' | 'stable') => void;
+  onPromoteVersion: () => void;
+  onPromoteVersionIdChange: (value: string) => void;
   onSetFavorite: (skill: SkillSummary) => void;
   onSignedExportSignerChange: (value: string) => void;
   onSparseGitSubpathChange: (value: string) => void;
@@ -2182,6 +2293,7 @@ type PageContentProps = {
   syncMode: 'shared-folder' | 'git' | 'rest' | 'mock-rest';
   syncProfile: SyncProfile | null;
   syncRemoteUrl: string;
+  versionComparison: VersionComparisonReport | null;
   viewModel: ReturnType<typeof createWorkspaceViewModel>;
   workspaceState: DesktopWorkspaceState;
   tarImportPath: string;
@@ -2201,10 +2313,14 @@ function PageContent(props: PageContentProps): ReactElement {
     collectionDirectory,
     collectionName,
     collectionPackageDirectory,
+    compareFromVersionId,
+    compareToVersionId,
     discoverPreviewSkills,
     discoverSource,
     discoverSourceName,
     discoverSourceUrl,
+    draftChangeSummary,
+    draftSkillMarkdown,
     exemptionReason,
     exportDirectory,
     gitImportUrl,
@@ -2236,6 +2352,8 @@ function PageContent(props: PageContentProps): ReactElement {
     policyEvaluation,
     policyName,
     policyRequiredScanLevel,
+    promoteReleaseChannel,
+    promoteVersionId,
     onAddDiscoverSource,
     onApplyInstallPlan,
     onApplyMultiTargetPlans,
@@ -2245,7 +2363,11 @@ function PageContent(props: PageContentProps): ReactElement {
     onCollectionDirectoryChange,
     onCollectionNameChange,
     onCollectionPackageDirectoryChange,
+    onCompareFromVersionIdChange,
+    onCompareToVersionIdChange,
+    onCompareVersions,
     onCreateCollection,
+    onCreateDraftVersion,
     onCreateExemption,
     onCreateInstallPlan,
     onCreateMultiTargetPlans,
@@ -2255,6 +2377,8 @@ function PageContent(props: PageContentProps): ReactElement {
     onDisablePlugin,
     onDiscoverSourceNameChange,
     onDiscoverSourceUrlChange,
+    onDraftChangeSummaryChange,
+    onDraftSkillMarkdownChange,
     onEnablePlugin,
     onExemptionReasonChange,
     onExportCollection,
@@ -2312,6 +2436,9 @@ function PageContent(props: PageContentProps): ReactElement {
     onPolicyBlockedRulesChange,
     onPolicyNameChange,
     onPolicyRequiredScanLevelChange,
+    onPromoteReleaseChannelChange,
+    onPromoteVersion,
+    onPromoteVersionIdChange,
     onSetFavorite,
     onSignedExportSignerChange,
     onSparseGitSubpathChange,
@@ -2343,6 +2470,7 @@ function PageContent(props: PageContentProps): ReactElement {
     syncMode,
     syncProfile,
     syncRemoteUrl,
+    versionComparison,
     viewModel,
     workspaceState,
     tarImportPath,
@@ -2356,6 +2484,10 @@ function PageContent(props: PageContentProps): ReactElement {
         collectionDirectory={collectionDirectory}
         collectionName={collectionName}
         collectionPackageDirectory={collectionPackageDirectory}
+        compareFromVersionId={compareFromVersionId}
+        compareToVersionId={compareToVersionId}
+        draftChangeSummary={draftChangeSummary}
+        draftSkillMarkdown={draftSkillMarkdown}
         exportDirectory={exportDirectory}
         gitImportUrl={gitImportUrl}
         hasImportBridge={hasImportBridge}
@@ -2381,7 +2513,11 @@ function PageContent(props: PageContentProps): ReactElement {
         onCollectionDirectoryChange={onCollectionDirectoryChange}
         onCollectionNameChange={onCollectionNameChange}
         onCollectionPackageDirectoryChange={onCollectionPackageDirectoryChange}
+        onCompareFromVersionIdChange={onCompareFromVersionIdChange}
+        onCompareToVersionIdChange={onCompareToVersionIdChange}
+        onCompareVersions={onCompareVersions}
         onCreateCollection={onCreateCollection}
+        onCreateDraftVersion={onCreateDraftVersion}
         onCreateInstallPlan={onCreateInstallPlan}
         onCreateMultiTargetPlans={onCreateMultiTargetPlans}
         onExportCollection={onExportCollection}
@@ -2389,6 +2525,8 @@ function PageContent(props: PageContentProps): ReactElement {
         onExportSkill={onExportSkill}
         onExportSignedSkill={onExportSignedSkill}
         onGitImportUrlChange={onGitImportUrlChange}
+        onDraftChangeSummaryChange={onDraftChangeSummaryChange}
+        onDraftSkillMarkdownChange={onDraftSkillMarkdownChange}
         onImportCollection={onImportCollection}
         onImportGit={onImportGit}
         onImportGitSparse={onImportGitSparse}
@@ -2408,6 +2546,9 @@ function PageContent(props: PageContentProps): ReactElement {
         onLibrarySourceFilterChange={onLibrarySourceFilterChange}
         onLibraryTagFilterChange={onLibraryTagFilterChange}
         onMirrorImportDirectoryChange={onMirrorImportDirectoryChange}
+        onPromoteReleaseChannelChange={onPromoteReleaseChannelChange}
+        onPromoteVersion={onPromoteVersion}
+        onPromoteVersionIdChange={onPromoteVersionIdChange}
         onScanAgentRoots={onScanAgentRoots}
         onSelectSkill={onSelectSkill}
         onSetFavorite={onSetFavorite}
@@ -2418,11 +2559,14 @@ function PageContent(props: PageContentProps): ReactElement {
         onTarImportPathChange={onTarImportPathChange}
         onZipImportPathChange={onZipImportPathChange}
         operationMessage={operationMessage}
+        promoteReleaseChannel={promoteReleaseChannel}
+        promoteVersionId={promoteVersionId}
         selectedSkillDetail={selectedSkillDetail}
         signedExportSigner={signedExportSigner}
         sparseGitSubpath={sparseGitSubpath}
         sparseGitUrl={sparseGitUrl}
         tarImportPath={tarImportPath}
+        versionComparison={versionComparison}
         viewModel={viewModel}
         workspaceState={workspaceState}
         zipImportPath={zipImportPath}
@@ -2624,6 +2768,10 @@ type LibraryPageProps = Pick<
   | 'collectionDirectory'
   | 'collectionName'
   | 'collectionPackageDirectory'
+  | 'compareFromVersionId'
+  | 'compareToVersionId'
+  | 'draftChangeSummary'
+  | 'draftSkillMarkdown'
   | 'exportDirectory'
   | 'gitImportUrl'
   | 'hasImportBridge'
@@ -2649,7 +2797,11 @@ type LibraryPageProps = Pick<
   | 'onCollectionDirectoryChange'
   | 'onCollectionNameChange'
   | 'onCollectionPackageDirectoryChange'
+  | 'onCompareFromVersionIdChange'
+  | 'onCompareToVersionIdChange'
+  | 'onCompareVersions'
   | 'onCreateCollection'
+  | 'onCreateDraftVersion'
   | 'onCreateInstallPlan'
   | 'onCreateMultiTargetPlans'
   | 'onExportCollection'
@@ -2657,6 +2809,8 @@ type LibraryPageProps = Pick<
   | 'onExportSkill'
   | 'onExportSignedSkill'
   | 'onGitImportUrlChange'
+  | 'onDraftChangeSummaryChange'
+  | 'onDraftSkillMarkdownChange'
   | 'onImportCollection'
   | 'onImportGit'
   | 'onImportGitSparse'
@@ -2676,6 +2830,9 @@ type LibraryPageProps = Pick<
   | 'onLibrarySourceFilterChange'
   | 'onLibraryTagFilterChange'
   | 'onMirrorImportDirectoryChange'
+  | 'onPromoteReleaseChannelChange'
+  | 'onPromoteVersion'
+  | 'onPromoteVersionIdChange'
   | 'onScanAgentRoots'
   | 'onSelectSkill'
   | 'onSetFavorite'
@@ -2686,11 +2843,14 @@ type LibraryPageProps = Pick<
   | 'onTarImportPathChange'
   | 'onZipImportPathChange'
   | 'operationMessage'
+  | 'promoteReleaseChannel'
+  | 'promoteVersionId'
   | 'selectedSkillDetail'
   | 'signedExportSigner'
   | 'sparseGitSubpath'
   | 'sparseGitUrl'
   | 'tarImportPath'
+  | 'versionComparison'
   | 'viewModel'
   | 'workspaceState'
   | 'zipImportPath'
@@ -2702,6 +2862,10 @@ function LibraryPage({
   collectionDirectory,
   collectionName,
   collectionPackageDirectory,
+  compareFromVersionId,
+  compareToVersionId,
+  draftChangeSummary,
+  draftSkillMarkdown,
   exportDirectory,
   gitImportUrl,
   hasImportBridge,
@@ -2727,7 +2891,11 @@ function LibraryPage({
   onCollectionDirectoryChange,
   onCollectionNameChange,
   onCollectionPackageDirectoryChange,
+  onCompareFromVersionIdChange,
+  onCompareToVersionIdChange,
+  onCompareVersions,
   onCreateCollection,
+  onCreateDraftVersion,
   onCreateInstallPlan,
   onCreateMultiTargetPlans,
   onExportCollection,
@@ -2735,6 +2903,8 @@ function LibraryPage({
   onExportSkill,
   onExportSignedSkill,
   onGitImportUrlChange,
+  onDraftChangeSummaryChange,
+  onDraftSkillMarkdownChange,
   onImportCollection,
   onImportGit,
   onImportGitSparse,
@@ -2754,6 +2924,9 @@ function LibraryPage({
   onLibrarySourceFilterChange,
   onLibraryTagFilterChange,
   onMirrorImportDirectoryChange,
+  onPromoteReleaseChannelChange,
+  onPromoteVersion,
+  onPromoteVersionIdChange,
   onScanAgentRoots,
   onSelectSkill,
   onSetFavorite,
@@ -2764,11 +2937,14 @@ function LibraryPage({
   onTarImportPathChange,
   onZipImportPathChange,
   operationMessage,
+  promoteReleaseChannel,
+  promoteVersionId,
   selectedSkillDetail,
   signedExportSigner,
   sparseGitSubpath,
   sparseGitUrl,
   tarImportPath,
+  versionComparison,
   viewModel,
   workspaceState,
   zipImportPath
@@ -2825,22 +3001,43 @@ function LibraryPage({
           zipImportPath={zipImportPath}
         />
       ) : activeTab === 'Governance' ? (
-        <div className="section-grid">
-          <Panel
-            title="History"
-            rows={workspaceState.governance.history.map((item) => ({
-              label: `v${item.versionNo}`,
-              value: item.summary
-            }))}
+        <>
+          <div className="section-grid">
+            <Panel
+              title="History"
+              rows={workspaceState.governance.history.map((item) => ({
+                label: `v${item.versionNo}`,
+                value: item.summary
+              }))}
+            />
+            <Panel
+              title="Diff"
+              rows={workspaceState.governance.diff.map((item) => ({
+                label: item.relativePath,
+                value: item.changeType
+              }))}
+            />
+          </div>
+          <VersionAuthorWorkflow
+            compareFromVersionId={compareFromVersionId}
+            compareToVersionId={compareToVersionId}
+            draftChangeSummary={draftChangeSummary}
+            draftSkillMarkdown={draftSkillMarkdown}
+            onCompareFromVersionIdChange={onCompareFromVersionIdChange}
+            onCompareToVersionIdChange={onCompareToVersionIdChange}
+            onCompareVersions={onCompareVersions}
+            onCreateDraftVersion={onCreateDraftVersion}
+            onDraftChangeSummaryChange={onDraftChangeSummaryChange}
+            onDraftSkillMarkdownChange={onDraftSkillMarkdownChange}
+            onPromoteReleaseChannelChange={onPromoteReleaseChannelChange}
+            onPromoteVersion={onPromoteVersion}
+            onPromoteVersionIdChange={onPromoteVersionIdChange}
+            promoteReleaseChannel={promoteReleaseChannel}
+            promoteVersionId={promoteVersionId}
+            selectedSkillDetail={selectedSkillDetail}
+            versionComparison={versionComparison}
           />
-          <Panel
-            title="Diff"
-            rows={workspaceState.governance.diff.map((item) => ({
-              label: item.relativePath,
-              value: item.changeType
-            }))}
-          />
-        </div>
+        </>
       ) : activeTab === 'Collections' ? (
         <div className="split-two">
           <CollectionActions
@@ -4860,6 +5057,139 @@ function LibrarySkillList({
           </button>
         </article>
       ))}
+    </section>
+  );
+}
+
+function VersionAuthorWorkflow({
+  compareFromVersionId,
+  compareToVersionId,
+  draftChangeSummary,
+  draftSkillMarkdown,
+  onCompareFromVersionIdChange,
+  onCompareToVersionIdChange,
+  onCompareVersions,
+  onCreateDraftVersion,
+  onDraftChangeSummaryChange,
+  onDraftSkillMarkdownChange,
+  onPromoteReleaseChannelChange,
+  onPromoteVersion,
+  onPromoteVersionIdChange,
+  promoteReleaseChannel,
+  promoteVersionId,
+  selectedSkillDetail,
+  versionComparison
+}: {
+  compareFromVersionId: string;
+  compareToVersionId: string;
+  draftChangeSummary: string;
+  draftSkillMarkdown: string;
+  onCompareFromVersionIdChange: (value: string) => void;
+  onCompareToVersionIdChange: (value: string) => void;
+  onCompareVersions: () => void;
+  onCreateDraftVersion: () => void;
+  onDraftChangeSummaryChange: (value: string) => void;
+  onDraftSkillMarkdownChange: (value: string) => void;
+  onPromoteReleaseChannelChange: (value: 'beta' | 'stable') => void;
+  onPromoteVersion: () => void;
+  onPromoteVersionIdChange: (value: string) => void;
+  promoteReleaseChannel: 'beta' | 'stable';
+  promoteVersionId: string;
+  selectedSkillDetail: SkillDetail | null;
+  versionComparison: VersionComparisonReport | null;
+}): ReactElement {
+  const hasSkill = Boolean(selectedSkillDetail);
+
+  return (
+    <section className="panel panel-spaced" aria-label="Version author workflow">
+      <PanelHeader tag={selectedSkillDetail?.skill.name ?? 'no skill'} title="Version authoring" />
+      <div className="flow-actions">
+        <label htmlFor="draft-change-summary">
+          Draft change summary
+          <input
+            aria-label="Draft change summary"
+            id="draft-change-summary"
+            onChange={(event) => onDraftChangeSummaryChange(event.target.value)}
+            value={draftChangeSummary}
+          />
+        </label>
+        <label htmlFor="draft-skill-markdown">
+          Draft SKILL.md content
+          <textarea
+            aria-label="Draft SKILL.md content"
+            id="draft-skill-markdown"
+            onChange={(event) => onDraftSkillMarkdownChange(event.target.value)}
+            rows={6}
+            value={draftSkillMarkdown}
+          />
+        </label>
+        <button disabled={!hasSkill || draftSkillMarkdown.trim().length === 0} onClick={onCreateDraftVersion} type="button">
+          Create draft version
+        </button>
+        <label htmlFor="promote-version-id">
+          Promote version ID
+          <input
+            aria-label="Promote version ID"
+            id="promote-version-id"
+            onChange={(event) => onPromoteVersionIdChange(event.target.value)}
+            value={promoteVersionId}
+          />
+        </label>
+        <label htmlFor="promote-release-channel">
+          Release channel
+          <select
+            aria-label="Release channel"
+            id="promote-release-channel"
+            onChange={(event) => onPromoteReleaseChannelChange(event.target.value as 'beta' | 'stable')}
+            value={promoteReleaseChannel}
+          >
+            <option value="beta">Beta</option>
+            <option value="stable">Stable</option>
+          </select>
+        </label>
+        <button disabled={promoteVersionId.trim().length === 0} onClick={onPromoteVersion} type="button">
+          Promote version
+        </button>
+        <label htmlFor="compare-from-version-id">
+          Compare from version ID
+          <input
+            aria-label="Compare from version ID"
+            id="compare-from-version-id"
+            onChange={(event) => onCompareFromVersionIdChange(event.target.value)}
+            value={compareFromVersionId}
+          />
+        </label>
+        <label htmlFor="compare-to-version-id">
+          Compare to version ID
+          <input
+            aria-label="Compare to version ID"
+            id="compare-to-version-id"
+            onChange={(event) => onCompareToVersionIdChange(event.target.value)}
+            value={compareToVersionId}
+          />
+        </label>
+        <button
+          disabled={compareFromVersionId.trim().length === 0 || compareToVersionId.trim().length === 0}
+          onClick={onCompareVersions}
+          type="button"
+        >
+          Compare versions
+        </button>
+      </div>
+      {versionComparison ? (
+        <KeyValueList
+          rows={[
+            {
+              label: 'Manifest',
+              value: versionComparison.manifestHashChanged ? 'manifest changed' : 'manifest unchanged'
+            },
+            ...versionComparison.files.map((file) => ({
+              label: file.relativePath,
+              value: file.changeType
+            }))
+          ]}
+        />
+      ) : null}
     </section>
   );
 }

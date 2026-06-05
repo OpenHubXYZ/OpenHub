@@ -501,6 +501,54 @@ describe('desktop runtime IPC dispatch', () => {
     ]);
   });
 
+  it('dispatches desktop draft version, promotion, and comparison workflows', async () => {
+    const workspace = await tempDir();
+    const runtime = createDesktopRuntime({
+      dataDirectory: path.join(workspace, 'app-data'),
+      homeDirectory: path.join(workspace, 'home')
+    });
+    const imported = await runtime.dispatch('import.localFolder', {
+      folderPath: await createSkillFixture(path.join(workspace, 'author-source'), 'author-helper')
+    });
+
+    const draft = await runtime.dispatch('version.createDraft', {
+      skillId: imported.skill.id,
+      changeSummary: 'Draft author edits',
+      files: [
+        {
+          relativePath: 'SKILL.md',
+          content: [
+            '---',
+            'name: author-helper',
+            'description: Author helper draft',
+            'tags: [runtime, local]',
+            '---',
+            '# Draft Author Helper'
+          ].join('\n')
+        },
+        { relativePath: 'references/draft.md', content: 'draft notes' }
+      ]
+    });
+    const promoted = await runtime.dispatch('version.promote', {
+      versionId: draft.versionId,
+      releaseChannel: 'stable'
+    });
+    const comparison = await runtime.dispatch('version.compare', {
+      fromVersionId: imported.skill.versionId,
+      toVersionId: draft.versionId
+    });
+
+    expect(draft).toMatchObject({ lifecycle: 'draft', releaseChannel: 'local' });
+    expect(promoted).toMatchObject({ lifecycle: 'released', releaseChannel: 'stable' });
+    expect(comparison).toMatchObject({
+      manifestHashChanged: true,
+      files: expect.arrayContaining([
+        expect.objectContaining({ relativePath: 'SKILL.md', changeType: 'modified' }),
+        expect.objectContaining({ relativePath: 'references/draft.md', changeType: 'added' })
+      ])
+    });
+  });
+
   it('persists onboarding completion, imports explicit migration selections, and leaves preview read-only', async () => {
     const workspace = await tempDir();
     const sourcePath = path.join(workspace, 'openskills');

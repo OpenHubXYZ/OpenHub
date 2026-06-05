@@ -124,12 +124,28 @@ describe('version service', () => {
       changeSummary: 'Draft beta update',
       lifecycle: 'draft',
       releaseChannel: 'local',
-      files: [{ relativePath: 'SKILL.md', content: '# Draft beta' }]
+      files: [
+        { relativePath: 'SKILL.md', content: '# Draft beta' },
+        { relativePath: 'references/draft.md', content: 'draft notes' }
+      ]
     });
     const released = versions.promoteVersion({ versionId: draft.versionId, releaseChannel: 'beta' });
+    const comparison = versions.compareVersions({
+      fromVersionId: imported.skill.versionId,
+      toVersionId: draft.versionId
+    });
 
     expect(draft).toMatchObject({ lifecycle: 'draft', releaseChannel: 'local' });
     expect(released).toMatchObject({ lifecycle: 'released', releaseChannel: 'beta' });
+    expect(comparison).toMatchObject({
+      fromVersionId: imported.skill.versionId,
+      toVersionId: draft.versionId,
+      manifestHashChanged: true,
+      files: expect.arrayContaining([
+        expect.objectContaining({ relativePath: 'SKILL.md', changeType: 'modified' }),
+        expect.objectContaining({ relativePath: 'references/draft.md', changeType: 'added' })
+      ])
+    });
     expect(versions.listVersions({ skillId: imported.skill.id })[0]).toMatchObject({
       lifecycle: 'released',
       releaseChannel: 'beta'

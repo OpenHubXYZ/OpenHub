@@ -31,6 +31,7 @@ export {
   skillDetailSchema,
   skillSummarySchema,
   syncStartupPlanSchema,
+  versionComparisonReportSchema,
   versionRollbackResultSchema
 } from './ipc-contracts';
 
@@ -88,5 +89,6 @@ export type {
   SyncProfile,
   SyncStartupPlan,
   UsageCenterState,
+  VersionComparisonReport,
   VersionRollbackResult
 } from './ipc-contracts';

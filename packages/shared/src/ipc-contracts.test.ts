@@ -172,6 +172,9 @@ describe('desktop shell IPC contract', () => {
         'install.uninstall',
         'version.list',
         'version.diff',
+        'version.createDraft',
+        'version.promote',
+        'version.compare',
         'version.rollback',
         'security.rescan',
         'security.findingDetail',
@@ -281,6 +284,29 @@ describe('desktop shell IPC contract', () => {
         readOnlyLocked: true
       }).readOnlyLocked
     ).toBe(true);
+    expect(parseIpcRequest('version.createDraft', {
+      skillId: 'skill-1',
+      changeSummary: 'Draft update',
+      files: [{ relativePath: 'SKILL.md', content: '# Draft' }]
+    })).toMatchObject({ changeSummary: 'Draft update' });
+    expect(parseIpcRequest('version.promote', { versionId: 'version-2', releaseChannel: 'beta' })).toEqual({
+      versionId: 'version-2',
+      releaseChannel: 'beta'
+    });
+    expect(parseIpcRequest('version.compare', {
+      fromVersionId: 'version-1',
+      toVersionId: 'version-2'
+    })).toEqual({ fromVersionId: 'version-1', toVersionId: 'version-2' });
+    expect(
+      desktopShellContract.versionCompare.response.parse({
+        fromVersionId: 'version-1',
+        toVersionId: 'version-2',
+        fromManifestHash: 'hash-1',
+        toManifestHash: 'hash-2',
+        manifestHashChanged: true,
+        files: [{ relativePath: 'SKILL.md', changeType: 'modified', fromHash: 'hash-1', toHash: 'hash-2' }]
+      }).files[0]?.changeType
+    ).toBe('modified');
     expect(parseIpcRequest('security.createExemption', {
       skillId: 'skill-1',
       scope: 'user',
