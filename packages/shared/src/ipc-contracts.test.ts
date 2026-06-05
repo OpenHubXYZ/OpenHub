@@ -205,6 +205,10 @@ describe('desktop shell IPC contract', () => {
       skillIds: ['skill-1']
     });
     expect(parseIpcRequest('library.search', { query: 'path docs' })).toEqual({ query: 'path docs' });
+    expect(parseIpcRequest('library.search', { query: 'db', mode: 'hybrid' })).toEqual({
+      query: 'db',
+      mode: 'hybrid'
+    });
     expect(parseIpcRequest('install.uninstall', { installationId: 'installation-1' })).toEqual({
       installationId: 'installation-1'
     });

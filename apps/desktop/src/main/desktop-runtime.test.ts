@@ -483,6 +483,40 @@ describe('desktop runtime IPC dispatch', () => {
     await expect(runtime.dispatch('library.search', { query: 'favorite', favoritesOnly: true })).resolves.toEqual([]);
   });
 
+  it('dispatches local semantic and hybrid library search modes without remote lookup', async () => {
+    const workspace = await tempDir();
+    const runtime = createDesktopRuntime({
+      dataDirectory: path.join(workspace, 'app-data'),
+      homeDirectory: path.join(workspace, 'home')
+    });
+    const sqlite = await runtime.dispatch('import.localFolder', {
+      folderPath: await createSkillFixture(
+        path.join(workspace, 'sqlite-source'),
+        'SQLite Runtime Helper',
+        '# SQLite Runtime Helper\n\nIndexes schema migrations and local storage tables.'
+      )
+    });
+    const exact = await runtime.dispatch('import.localFolder', {
+      folderPath: await createSkillFixture(
+        path.join(workspace, 'database-source'),
+        'Database Runtime Helper',
+        '# Database Runtime Helper'
+      )
+    });
+
+    await expect(runtime.dispatch('library.search', { query: 'db', mode: 'fts' })).resolves.toEqual([]);
+    await expect(runtime.dispatch('library.search', { query: 'db', mode: 'semantic' })).resolves.toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ id: sqlite.skill.id }),
+        expect.objectContaining({ id: exact.skill.id })
+      ])
+    );
+    await expect(runtime.dispatch('library.search', { query: 'database', mode: 'hybrid' })).resolves.toEqual([
+      expect.objectContaining({ id: exact.skill.id }),
+      expect.objectContaining({ id: sqlite.skill.id })
+    ]);
+  });
+
   it('stores REST sync credentials through the injected secret store without leaking raw tokens', async () => {
     const workspace = await tempDir();
     const database = createMemoryDatabase();

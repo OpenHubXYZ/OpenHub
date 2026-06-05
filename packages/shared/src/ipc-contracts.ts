@@ -893,6 +893,7 @@ export const appInfo: AppInfo = {
 const emptyRequestSchema = z.object({}).strict();
 const skillIdRequestSchema = z.object({ skillId: z.string().min(1) }).strict();
 const collectionIdRequestSchema = z.object({ collectionId: z.string().min(1) }).strict();
+const librarySearchModeSchema = z.enum(['fts', 'semantic', 'hybrid']);
 const installTargetRequestSchema = z
   .object({
     agentCode: z.enum(['codex', 'claude', 'gemini', 'opencode']),
@@ -1021,7 +1022,13 @@ export const desktopShellContract = {
   },
   librarySearch: {
     channel: 'library.search',
-    request: z.object({ query: z.string(), favoritesOnly: z.boolean().optional() }).strict(),
+    request: z
+      .object({
+        query: z.string(),
+        favoritesOnly: z.boolean().optional(),
+        mode: librarySearchModeSchema.optional()
+      })
+      .strict(),
     response: z.array(skillSummarySchema)
   },
   librarySetFavorite: {

@@ -491,12 +491,16 @@ export function createDesktopRuntime(input: CreateDesktopRuntimeInput): DesktopR
       }
 
       if (channel === desktopShellContract.librarySearch.channel) {
-        const searchRequest = request as { query: string; favoritesOnly?: boolean };
+        const searchRequest = request as {
+          query: string;
+          favoritesOnly?: boolean;
+          mode?: 'fts' | 'semantic' | 'hybrid';
+        };
         const result = createSkillRepository(database)
-          .searchSkills(
-            searchRequest.query,
-            searchRequest.favoritesOnly === undefined ? {} : { favoritesOnly: searchRequest.favoritesOnly }
-          )
+          .searchSkills(searchRequest.query, {
+            ...(searchRequest.favoritesOnly === undefined ? {} : { favoritesOnly: searchRequest.favoritesOnly }),
+            ...(searchRequest.mode ? { mode: searchRequest.mode } : {})
+          })
           .map(toSkillSummary);
         return parseIpcResponse(channel, result) as RuntimeDispatchResult<C>;
       }

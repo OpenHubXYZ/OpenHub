@@ -2,7 +2,7 @@ import { createHash, randomUUID } from 'node:crypto';
 import { mkdir, stat, unlink, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 
-import type { SqliteDatabase } from '@theopenhub/db';
+import { refreshSkillSearchIndexes, type SqliteDatabase } from '@theopenhub/db';
 
 import type { ContentStore } from './content-store';
 import { assertZipEntryPathSafe, ensurePathInsideRoot } from './path-safety';
@@ -141,7 +141,7 @@ export function createVersionService(input: CreateVersionServiceInput): VersionS
             });
         }
 
-        refreshSkillSearch(input.database, skillId, files.map((file) => file.content).join('\n'));
+        refreshSkillSearchIndexes(input.database, skillId, files.map((file) => file.content).join('\n'));
       });
 
       create();
@@ -390,55 +390,6 @@ function recordRollback(
   });
 
   record();
-}
-
-function refreshSkillSearch(database: SqliteDatabase, skillId: string, fileContent?: string): void {
-  const existing = database
-    .prepare('select file_content as fileContent from skill_search where skill_id = ? limit 1')
-    .get(skillId) as { fileContent: string } | undefined;
-  const row = database
-    .prepare(
-      `
-        select
-          s.id,
-          s.name,
-          s.description,
-          s.tags_json as tagsJson,
-          group_concat(sf.relative_path, ' ') as filePaths
-        from skills s
-        join skill_versions sv on sv.skill_id = s.id
-        left join skill_files sf on sf.skill_version_id = sv.id
-        where s.id = ?
-          and sv.version_no = (
-            select max(version_no)
-            from skill_versions
-            where skill_id = s.id
-          )
-        group by s.id
-      `
-    )
-    .get(skillId) as { name: string; description: string; tagsJson: string; filePaths: string | null } | undefined;
-
-  if (!row) {
-    return;
-  }
-
-  database.prepare('delete from skill_search where skill_id = ?').run(skillId);
-  database
-    .prepare(
-      `
-        insert into skill_search (skill_id, name, description, tags, file_paths, file_content)
-        values (@skillId, @name, @description, @tags, @filePaths, @fileContent)
-      `
-    )
-    .run({
-      skillId,
-      name: row.name,
-      description: row.description,
-      tags: JSON.parse(row.tagsJson).join(' '),
-      filePaths: row.filePaths ?? '',
-      fileContent: fileContent ?? existing?.fileContent ?? ''
-    });
 }
 
 async function fileExists(filePath: string): Promise<boolean> {

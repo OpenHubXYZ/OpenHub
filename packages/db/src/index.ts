@@ -7,7 +7,7 @@ export { resolveAppDataDirectory } from './app-data';
 export { createLibraryRepository } from './library-repository';
 export { createFileDatabase, createMemoryDatabase, getCurrentSchemaVersion, runMigrations } from './migrations';
 export { createReviewRepository } from './review-repository';
-export { createSkillRepository } from './skill-repository';
+export { createSkillRepository, refreshSkillSearchIndexes } from './skill-repository';
 export { createUsageRepository } from './usage-repository';
 
 export type { AppDataDirectoryInput } from './app-data';
@@ -25,6 +25,8 @@ export type {
 } from './review-repository';
 export type {
   CreateSkillInput,
+  SkillSearchMode,
+  SkillSearchOptions,
   SkillRecord,
   SkillRepository,
   UpdateSkillMetadataInput

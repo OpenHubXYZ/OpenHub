@@ -161,10 +161,14 @@ const api = {
     return parseIpcResponse(desktopShellContract.collectionImport.channel, payload);
   },
 
-  async searchLibrary(query: string, options?: { favoritesOnly?: boolean }): Promise<SkillSummary[]> {
+  async searchLibrary(query: string, options?: {
+    favoritesOnly?: boolean;
+    mode?: 'fts' | 'semantic' | 'hybrid';
+  }): Promise<SkillSummary[]> {
     const payload = await ipcRenderer.invoke(desktopShellContract.librarySearch.channel, {
       query,
-      favoritesOnly: options?.favoritesOnly
+      favoritesOnly: options?.favoritesOnly,
+      mode: options?.mode
     });
     return parseIpcResponse(desktopShellContract.librarySearch.channel, payload);
   },

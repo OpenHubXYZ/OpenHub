@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 
 import { createMemoryDatabase, runMigrations } from './migrations';
 import { createSkillRepository } from './skill-repository';
@@ -81,5 +81,80 @@ describe('skill repository', () => {
 
     expect(repository.listSkills()).toEqual([]);
     expect(repository.searchSkills('imports')).toEqual([]);
+  });
+
+  it('supports deterministic local semantic and hybrid search without network dependencies', () => {
+    const fetchSpy = vi.spyOn(globalThis, 'fetch').mockRejectedValue(new Error('network disabled'));
+    const db = createMemoryDatabase();
+    runMigrations(db);
+    const repository = createSkillRepository(db);
+
+    const sqliteSkill = repository.createSkill({
+      slug: 'sqlite-store',
+      name: 'SQLite Store',
+      description: 'Local source of truth with schema migrations.',
+      tags: ['sqlite', 'storage'],
+      source: {
+        type: 'local',
+        url: null,
+        trustLevel: 'user'
+      },
+      files: [
+        {
+          relativePath: 'SKILL.md',
+          content: '# SQLite Store\n\nIndexes migration tables and schema state.'
+        }
+      ]
+    });
+    const exactDatabaseSkill = repository.createSkill({
+      slug: 'database-importer',
+      name: 'Database Importer',
+      description: 'Exact database import helper.',
+      tags: ['import'],
+      source: {
+        type: 'local',
+        url: null,
+        trustLevel: 'user'
+      },
+      files: [
+        {
+          relativePath: 'SKILL.md',
+          content: '# Database Importer'
+        }
+      ]
+    });
+    repository.createSkill({
+      slug: 'path-safety',
+      name: 'Path Safety',
+      description: 'Blocks traversal and symlink escapes.',
+      tags: ['security'],
+      source: {
+        type: 'local',
+        url: null,
+        trustLevel: 'user'
+      },
+      files: [
+        {
+          relativePath: 'SKILL.md',
+          content: '# Path Safety'
+        }
+      ]
+    });
+
+    expect(repository.searchSkills('db', { mode: 'fts' })).toEqual([]);
+    expect(repository.searchSkills('db', { mode: 'semantic' }).map((skill) => skill.id)).toEqual([
+      sqliteSkill.id,
+      exactDatabaseSkill.id
+    ]);
+    expect(repository.searchSkills('database', { mode: 'hybrid' }).map((skill) => skill.id)).toEqual([
+      exactDatabaseSkill.id,
+      sqliteSkill.id
+    ]);
+    expect(repository.searchSkills('database', { mode: 'hybrid' }).map((skill) => skill.id)).toEqual([
+      exactDatabaseSkill.id,
+      sqliteSkill.id
+    ]);
+    expect(fetchSpy).not.toHaveBeenCalled();
+    fetchSpy.mockRestore();
   });
 });

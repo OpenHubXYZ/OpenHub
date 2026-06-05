@@ -476,6 +476,19 @@ const migrations: Migration[] = [
         );
       `);
     }
+  },
+  {
+    version: 11,
+    name: '011_local_similarity_index',
+    up(database) {
+      database.exec(`
+        create table skill_similarity_index (
+          skill_id text primary key references skills(id) on delete cascade,
+          tokens_json text not null,
+          updated_at text not null default current_timestamp
+        );
+      `);
+    }
   }
 ];
 

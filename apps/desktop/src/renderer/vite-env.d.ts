@@ -80,7 +80,10 @@ declare global {
       }): Promise<CollectionRecord>;
       exportCollection(collectionId: string, outputDirectory: string): Promise<CollectionExportResult>;
       importCollection(packageDirectory: string): Promise<CollectionImportResult>;
-      searchLibrary(query: string, options?: { favoritesOnly?: boolean }): Promise<SkillSummary[]>;
+      searchLibrary(
+        query: string,
+        options?: { favoritesOnly?: boolean; mode?: 'fts' | 'semantic' | 'hybrid' }
+      ): Promise<SkillSummary[]>;
       setFavorite(skillId: string, favorite: boolean): Promise<SkillSummary>;
       getSkillDetail(skillId: string): Promise<SkillDetail>;
       listInstallTargets(): Promise<InstallTarget[]>;
