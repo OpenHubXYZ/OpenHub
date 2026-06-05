@@ -71,6 +71,8 @@ import {
   type InstallUninstallResult,
   type IpcChannel,
   type LibraryScanResult,
+  type LibraryFacets,
+  type LibrarySearchFilters,
   type LibrarySkillSummary,
   type MigrationPreviewResult,
   type MultiTargetInstallResult,
@@ -153,7 +155,9 @@ type RuntimeDispatchResult<C extends IpcChannel> = C extends typeof desktopShell
                             ? CollectionImportResult
                             : C extends typeof desktopShellContract.librarySearch.channel
                               ? SkillSummary[]
-                              : C extends typeof desktopShellContract.librarySetFavorite.channel
+                              : C extends typeof desktopShellContract.libraryFacets.channel
+                                ? LibraryFacets
+                                : C extends typeof desktopShellContract.librarySetFavorite.channel
                                 ? SkillSummary
                                 : C extends typeof desktopShellContract.libraryDetail.channel
                                   ? SkillDetail
@@ -495,13 +499,22 @@ export function createDesktopRuntime(input: CreateDesktopRuntimeInput): DesktopR
           query: string;
           favoritesOnly?: boolean;
           mode?: 'fts' | 'semantic' | 'hybrid';
+          filters?: LibrarySearchFilters;
         };
         const result = createSkillRepository(database)
           .searchSkills(searchRequest.query, {
             ...(searchRequest.favoritesOnly === undefined ? {} : { favoritesOnly: searchRequest.favoritesOnly }),
-            ...(searchRequest.mode ? { mode: searchRequest.mode } : {})
+            ...(searchRequest.mode ? { mode: searchRequest.mode } : {}),
+            ...(searchRequest.filters ? { filters: searchRequest.filters } : {})
           })
           .map(toSkillSummary);
+        return parseIpcResponse(channel, result) as RuntimeDispatchResult<C>;
+      }
+
+      if (channel === desktopShellContract.libraryFacets.channel) {
+        const result = createSkillRepository(database).getFacets(
+          (request as { filters?: LibrarySearchFilters }).filters
+        );
         return parseIpcResponse(channel, result) as RuntimeDispatchResult<C>;
       }
 

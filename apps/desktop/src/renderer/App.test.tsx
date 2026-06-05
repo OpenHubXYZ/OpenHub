@@ -628,6 +628,97 @@ describe('desktop app shell', () => {
     expect(screen.getByText('Imported Pack')).toBeInTheDocument();
   });
 
+  it('lets the user combine library filters, reset them, and refresh facets after favorites change', async () => {
+    const runtimeSkill = {
+      id: 'skill-runtime',
+      versionId: 'version-runtime',
+      name: 'Runtime Helper',
+      description: 'Searchable runtime helper',
+      versionNo: 1,
+      favorite: false
+    };
+    const api = {
+      getWorkspaceState: vi.fn().mockResolvedValue(
+        workspaceState({
+          skills: [runtimeSkill]
+        })
+      ),
+      getLibraryFacets: vi
+        .fn()
+        .mockResolvedValueOnce({
+          sources: [{ value: 'local', count: 1 }],
+          risks: [{ value: 'blocked', count: 1 }],
+          agents: [{ value: 'codex', count: 1 }],
+          tags: [{ value: 'imports', count: 1 }],
+          favorites: { value: 'favorites', count: 0 }
+        })
+        .mockResolvedValueOnce({
+          sources: [{ value: 'local', count: 1 }],
+          risks: [{ value: 'blocked', count: 1 }],
+          agents: [{ value: 'codex', count: 1 }],
+          tags: [{ value: 'imports', count: 1 }],
+          favorites: { value: 'favorites', count: 1 }
+        }),
+      searchLibrary: vi.fn().mockResolvedValue([runtimeSkill]),
+      setFavorite: vi.fn().mockResolvedValue({ ...runtimeSkill, favorite: true }),
+      getPluginCenterState: vi.fn()
+    };
+    window.theOpenHub = api as unknown as NonNullable<typeof window.theOpenHub>;
+
+    render(<App />);
+
+    await waitFor(() => expect(api.getWorkspaceState).toHaveBeenCalled());
+    fireEvent.click(screen.getByRole('button', { name: 'Library' }));
+    await waitFor(() => expect(api.getLibraryFacets).toHaveBeenCalledTimes(1));
+    expect(screen.getByText('local 1')).toBeInTheDocument();
+    expect(screen.getByText('Favorites 0')).toBeInTheDocument();
+
+    fireEvent.change(screen.getByLabelText('Library search query'), {
+      target: { value: 'imports' }
+    });
+    fireEvent.change(screen.getByLabelText('Library search mode'), {
+      target: { value: 'hybrid' }
+    });
+    fireEvent.change(screen.getByLabelText('Source type filter'), {
+      target: { value: 'local' }
+    });
+    fireEvent.change(screen.getByLabelText('Risk status filter'), {
+      target: { value: 'blocked' }
+    });
+    fireEvent.change(screen.getByLabelText('Agent code filter'), {
+      target: { value: 'codex' }
+    });
+    fireEvent.change(screen.getByLabelText('Tag filter'), {
+      target: { value: 'imports' }
+    });
+    fireEvent.click(screen.getByRole('button', { name: 'Search library' }));
+
+    await waitFor(() =>
+      expect(api.searchLibrary).toHaveBeenCalledWith('imports', {
+        favoritesOnly: false,
+        mode: 'hybrid',
+        filters: {
+          sourceTypes: ['local'],
+          riskStatuses: ['blocked'],
+          agentCodes: ['codex'],
+          tags: ['imports']
+        }
+      })
+    );
+
+    fireEvent.click(screen.getByRole('button', { name: 'Reset library filters' }));
+    expect(screen.getByLabelText('Source type filter')).toHaveValue('');
+    expect(screen.getByLabelText('Risk status filter')).toHaveValue('');
+    expect(screen.getByLabelText('Agent code filter')).toHaveValue('');
+    expect(screen.getByLabelText('Tag filter')).toHaveValue('');
+    expect(screen.getByLabelText('Library search mode')).toHaveValue('fts');
+
+    fireEvent.click(screen.getByRole('button', { name: 'Favorite Runtime Helper' }));
+    await waitFor(() => expect(api.setFavorite).toHaveBeenCalledWith(runtimeSkill.id, true));
+    await waitFor(() => expect(api.getLibraryFacets).toHaveBeenCalledTimes(2));
+    expect(screen.getByText('Favorites 1')).toBeInTheDocument();
+  });
+
   it('lets the user import TAR, sparse Git, signed mirrors, and export signed skills through IPC', async () => {
     const runtimeSkill = {
       id: 'skill-runtime',

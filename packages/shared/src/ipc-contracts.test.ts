@@ -162,6 +162,7 @@ describe('desktop shell IPC contract', () => {
         'collection.export',
         'collection.import',
         'library.search',
+        'library.facets',
         'library.detail',
         'install.listTargets',
         'install.uninstall',
@@ -209,6 +210,28 @@ describe('desktop shell IPC contract', () => {
       query: 'db',
       mode: 'hybrid'
     });
+    expect(
+      parseIpcRequest('library.search', {
+        query: 'imports',
+        filters: {
+          sourceTypes: ['git'],
+          riskStatuses: ['blocked'],
+          agentCodes: ['codex'],
+          tags: ['imports'],
+          favoritesOnly: true
+        }
+      })
+    ).toMatchObject({ filters: { sourceTypes: ['git'], favoritesOnly: true } });
+    expect(parseIpcRequest('library.facets', {})).toEqual({});
+    expect(
+      desktopShellContract.libraryFacets.response.parse({
+        sources: [{ value: 'git', count: 1 }],
+        risks: [{ value: 'blocked', count: 1 }],
+        agents: [{ value: 'codex', count: 1 }],
+        tags: [{ value: 'imports', count: 1 }],
+        favorites: { value: 'favorites', count: 1 }
+      }).favorites.count
+    ).toBe(1);
     expect(parseIpcRequest('install.uninstall', { installationId: 'installation-1' })).toEqual({
       installationId: 'installation-1'
     });

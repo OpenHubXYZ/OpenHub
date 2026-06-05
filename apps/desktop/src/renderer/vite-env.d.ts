@@ -15,7 +15,9 @@ import type {
   InstallResult,
   InstallTarget,
   InstallUninstallResult,
+  LibraryFacets,
   LibraryScanResult,
+  LibrarySearchFilters,
   LibrarySkillSummary,
   MigrationPreviewResult,
   MultiTargetInstallResult,
@@ -82,8 +84,9 @@ declare global {
       importCollection(packageDirectory: string): Promise<CollectionImportResult>;
       searchLibrary(
         query: string,
-        options?: { favoritesOnly?: boolean; mode?: 'fts' | 'semantic' | 'hybrid' }
+        options?: { favoritesOnly?: boolean; mode?: 'fts' | 'semantic' | 'hybrid'; filters?: LibrarySearchFilters }
       ): Promise<SkillSummary[]>;
+      getLibraryFacets(filters?: LibrarySearchFilters): Promise<LibraryFacets>;
       setFavorite(skillId: string, favorite: boolean): Promise<SkillSummary>;
       getSkillDetail(skillId: string): Promise<SkillDetail>;
       listInstallTargets(): Promise<InstallTarget[]>;

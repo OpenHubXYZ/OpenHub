@@ -1,5 +1,6 @@
 import { describe, expect, it, vi } from 'vitest';
 
+import { createLibraryRepository } from './library-repository';
 import { createMemoryDatabase, runMigrations } from './migrations';
 import { createSkillRepository } from './skill-repository';
 
@@ -156,5 +157,113 @@ describe('skill repository', () => {
     ]);
     expect(fetchSpy).not.toHaveBeenCalled();
     fetchSpy.mockRestore();
+  });
+
+  it('filters library search by source, risk, agent, tags, and favorites while returning facet counts', () => {
+    const db = createMemoryDatabase();
+    runMigrations(db);
+    const repository = createSkillRepository(db);
+    const library = createLibraryRepository(db);
+
+    const local = repository.createSkill({
+      slug: 'local-helper',
+      name: 'Local Helper',
+      description: 'Local helper',
+      tags: ['runtime', 'local'],
+      source: {
+        type: 'local',
+        url: null,
+        trustLevel: 'user'
+      },
+      files: [{ relativePath: 'SKILL.md', content: '# Local Helper' }]
+    });
+    const git = repository.createSkill({
+      slug: 'git-import-helper',
+      name: 'Git Import Helper',
+      description: 'Imports shared packages.',
+      tags: ['imports', 'runtime'],
+      source: {
+        type: 'git',
+        url: 'file:///tmp/git-helper',
+        trustLevel: 'user'
+      },
+      files: [{ relativePath: 'SKILL.md', content: '# Git Import Helper\n\nPackage importer.' }]
+    });
+    repository.createSkill({
+      slug: 'zip-helper',
+      name: 'ZIP Helper',
+      description: 'Archive helper',
+      tags: ['archive'],
+      source: {
+        type: 'zip',
+        url: '/tmp/helper.zip',
+        trustLevel: 'user'
+      },
+      files: [{ relativePath: 'SKILL.md', content: '# ZIP Helper' }]
+    });
+
+    library.recordScannedInstallation({
+      skillId: git.id,
+      versionId: git.versionId,
+      agentCode: 'codex',
+      agentDisplayName: 'Codex',
+      adapterVersion: 'test',
+      rootPath: '/tmp/.codex/skills',
+      rootScope: 'user',
+      writable: true,
+      isDefault: true,
+      skillPath: '/tmp/.codex/skills/git-import-helper',
+      installStatus: 'installed'
+    });
+    repository.setFavorite(git.id, true);
+    db.prepare(
+      `
+        insert into security_scans
+          (id, skill_version_id, score, level, blocked, ruleset_version)
+        values
+          ('scan-git', ?, 100, 'critical', 1, 'test')
+      `
+    ).run(git.versionId);
+
+    expect(
+      repository.searchSkills('package', {
+        mode: 'hybrid',
+        filters: {
+          sourceTypes: ['git'],
+          riskStatuses: ['blocked'],
+          agentCodes: ['codex'],
+          tags: ['imports'],
+          favoritesOnly: true
+        }
+      })
+    ).toEqual([expect.objectContaining({ id: git.id, name: 'Git Import Helper' })]);
+    expect(
+      repository.searchSkills('', {
+        filters: {
+          sourceTypes: ['local']
+        }
+      })
+    ).toEqual([expect.objectContaining({ id: local.id, name: 'Local Helper' })]);
+
+    expect(repository.getFacets()).toMatchObject({
+      sources: expect.arrayContaining([
+        { value: 'git', count: 1 },
+        { value: 'local', count: 1 },
+        { value: 'zip', count: 1 }
+      ]),
+      risks: expect.arrayContaining([
+        { value: 'blocked', count: 1 },
+        { value: 'unscanned', count: 2 }
+      ]),
+      agents: [{ value: 'codex', count: 1 }],
+      tags: expect.arrayContaining([
+        { value: 'imports', count: 1 },
+        { value: 'runtime', count: 2 }
+      ]),
+      favorites: { value: 'favorites', count: 1 }
+    });
+
+    repository.setFavorite(git.id, false);
+    expect(repository.getFacets().favorites.count).toBe(0);
   });
 });

@@ -4,9 +4,31 @@ import type { SqliteDatabase } from './migrations';
 
 export type SkillSearchMode = 'fts' | 'semantic' | 'hybrid';
 
+export interface SkillSearchFilters {
+  sourceTypes?: string[] | undefined;
+  riskStatuses?: string[] | undefined;
+  agentCodes?: string[] | undefined;
+  tags?: string[] | undefined;
+  favoritesOnly?: boolean | undefined;
+}
+
 export interface SkillSearchOptions {
-  favoritesOnly?: boolean;
-  mode?: SkillSearchMode;
+  favoritesOnly?: boolean | undefined;
+  mode?: SkillSearchMode | undefined;
+  filters?: SkillSearchFilters | undefined;
+}
+
+export interface LibraryFacetValue {
+  value: string;
+  count: number;
+}
+
+export interface LibraryFacets {
+  sources: LibraryFacetValue[];
+  risks: LibraryFacetValue[];
+  agents: LibraryFacetValue[];
+  tags: LibraryFacetValue[];
+  favorites: LibraryFacetValue;
 }
 
 export interface CreateSkillInput {
@@ -48,6 +70,7 @@ export interface SkillRepository {
   getSkill(skillId: string): SkillRecord | null;
   updateSkillMetadata(skillId: string, input: UpdateSkillMetadataInput): void;
   searchSkills(query: string, options?: SkillSearchOptions): SkillRecord[];
+  getFacets(filters?: SkillSearchFilters): LibraryFacets;
   setFavorite(skillId: string, favorite: boolean): void;
   listFavorites(): SkillRecord[];
   deleteSkill(skillId: string): void;
@@ -214,11 +237,11 @@ export function createSkillRepository(database: SqliteDatabase): SkillRepository
 
     searchSkills(query, options = {}) {
       const normalizedQuery = query.trim();
+      const mode = options.mode ?? 'fts';
       if (!normalizedQuery) {
-        return [];
+        return listSearchCandidates(database, options.filters, options.favoritesOnly).map((candidate) => candidate.skill);
       }
 
-      const mode = options.mode ?? 'fts';
       if (mode === 'fts') {
         return searchFts(database, normalizedQuery, options);
       }
@@ -237,6 +260,10 @@ export function createSkillRepository(database: SqliteDatabase): SkillRepository
         }
       }
       return [...results.values()];
+    },
+
+    getFacets(filters = {}) {
+      return facetCounts(listSearchCandidates(database, filters));
     },
 
     setFavorite(skillId, favorite) {
@@ -398,6 +425,12 @@ function searchFts(
   if (!ftsQuery) {
     return [];
   }
+  const candidates = new Map(
+    listSearchCandidates(database, options.filters, options.favoritesOnly).map((candidate) => [
+      candidate.skill.id,
+      candidate.skill
+    ])
+  );
 
   return database
     .prepare(
@@ -422,7 +455,9 @@ function searchFts(
       `
     )
     .all({ query: ftsQuery })
-    .map(skillRow);
+    .map(skillRow)
+    .filter((skill) => candidates.has(skill.id))
+    .map((skill) => candidates.get(skill.id) ?? skill);
 }
 
 function searchSemantic(
@@ -435,34 +470,13 @@ function searchSemantic(
     return [];
   }
 
-  return database
-    .prepare(
-      `
-        select
-          s.id,
-          s.slug,
-          s.name,
-          s.description,
-          s.tags_json as tagsJson,
-          sv.id as versionId,
-          max(sv.version_no) as versionNo,
-          case when sfav.skill_id is null then 0 else 1 end as favorite,
-          si.tokens_json as tokensJson
-        from skill_similarity_index si
-        join skills s on s.id = si.skill_id
-        join skill_versions sv on sv.skill_id = s.id
-        left join skill_favorites sfav on sfav.skill_id = s.id
-        where 1 = 1
-          ${options.favoritesOnly ? 'and sfav.skill_id is not null' : ''}
-        group by s.id
-      `
-    )
-    .all()
-    .map((row) => {
-      const typed = row as { tokensJson: string };
+  return listSearchCandidates(database, options.filters, options.favoritesOnly)
+    .map((candidate) => {
       return {
-        skill: skillRow(row),
-        score: similarityScore(queryVector, JSON.parse(typed.tokensJson) as Array<[string, number]>)
+        skill: candidate.skill,
+        score: candidate.tokensJson
+          ? similarityScore(queryVector, JSON.parse(candidate.tokensJson) as Array<[string, number]>)
+          : 0
       };
     })
     .filter((result) => result.score > 0)
@@ -474,6 +488,139 @@ function searchSemantic(
       return left.skill.name.localeCompare(right.skill.name);
     })
     .map((result) => result.skill);
+}
+
+interface SearchCandidate {
+  skill: SkillRecord;
+  sourceType: string;
+  riskStatus: string;
+  agentCodes: string[];
+  tags: string[];
+  tokensJson: string | null;
+}
+
+function listSearchCandidates(
+  database: SqliteDatabase,
+  filters: SkillSearchFilters = {},
+  favoritesOnly?: boolean
+): SearchCandidate[] {
+  return database
+    .prepare(
+      `
+        select
+          s.id,
+          s.slug,
+          s.name,
+          s.description,
+          s.tags_json as tagsJson,
+          sv.id as versionId,
+          sv.version_no as versionNo,
+          coalesce(src.source_type, 'unknown') as sourceType,
+          case when sfav.skill_id is null then 0 else 1 end as favorite,
+          (
+            select group_concat(distinct a.code)
+            from installations i
+            join agent_roots ar on ar.id = i.agent_root_id
+            join agents a on a.id = ar.agent_id
+            where i.skill_id = s.id
+              and i.status != 'uninstalled'
+          ) as agentCodesCsv,
+          coalesce(
+            (
+              select case when ss.blocked = 1 then 'blocked' else ss.level end
+              from security_scans ss
+              join skill_versions scan_sv on scan_sv.id = ss.skill_version_id
+              where scan_sv.skill_id = s.id
+              order by ss.scanned_at desc, ss.id desc
+              limit 1
+            ),
+            'unscanned'
+          ) as riskStatus,
+          si.tokens_json as tokensJson
+        from skills s
+        join skill_versions sv on sv.skill_id = s.id
+        left join sources src on src.id = s.canonical_source_id
+        left join skill_favorites sfav on sfav.skill_id = s.id
+        left join skill_similarity_index si on si.skill_id = s.id
+        where sv.version_no = (
+          select max(version_no)
+          from skill_versions
+          where skill_id = s.id
+        )
+        order by s.name collate nocase
+      `
+    )
+    .all()
+    .map(searchCandidateRow)
+    .filter((candidate) => matchesSearchFilters(candidate, filters, favoritesOnly));
+}
+
+function searchCandidateRow(row: unknown): SearchCandidate {
+  const typed = row as {
+    sourceType: string;
+    riskStatus: string;
+    agentCodesCsv: string | null;
+    tokensJson: string | null;
+  };
+  const skill = skillRow(row);
+  return {
+    skill,
+    sourceType: typed.sourceType,
+    riskStatus: typed.riskStatus,
+    agentCodes: splitCsv(typed.agentCodesCsv),
+    tags: skill.tags,
+    tokensJson: typed.tokensJson
+  };
+}
+
+function matchesSearchFilters(
+  candidate: SearchCandidate,
+  filters: SkillSearchFilters,
+  favoritesOnly = false
+): boolean {
+  if ((favoritesOnly || filters.favoritesOnly) && !candidate.skill.favorite) {
+    return false;
+  }
+  if (filters.sourceTypes?.length && !filters.sourceTypes.includes(candidate.sourceType)) {
+    return false;
+  }
+  if (filters.riskStatuses?.length && !filters.riskStatuses.includes(candidate.riskStatus)) {
+    return false;
+  }
+  if (filters.agentCodes?.length && !filters.agentCodes.some((agentCode) => candidate.agentCodes.includes(agentCode))) {
+    return false;
+  }
+  if (filters.tags?.length && !filters.tags.every((tag) => candidate.tags.includes(tag))) {
+    return false;
+  }
+  return true;
+}
+
+function facetCounts(candidates: SearchCandidate[]): LibraryFacets {
+  return {
+    sources: countFacet(candidates.flatMap((candidate) => [candidate.sourceType])),
+    risks: countFacet(candidates.flatMap((candidate) => [candidate.riskStatus])),
+    agents: countFacet(candidates.flatMap((candidate) => candidate.agentCodes)),
+    tags: countFacet(candidates.flatMap((candidate) => candidate.tags)),
+    favorites: {
+      value: 'favorites',
+      count: candidates.filter((candidate) => candidate.skill.favorite).length
+    }
+  };
+}
+
+function countFacet(values: string[]): LibraryFacetValue[] {
+  const counts = new Map<string, number>();
+  for (const value of values.filter(Boolean)) {
+    counts.set(value, (counts.get(value) ?? 0) + 1);
+  }
+  return [...counts.entries()]
+    .map(([value, count]) => ({ value, count }))
+    .sort((left, right) => left.value.localeCompare(right.value));
+}
+
+function splitCsv(input: string | null): string[] {
+  return input?.split(',').filter(Boolean) ?? [];
 }
 
 function skillRow(row: unknown): SkillRecord {

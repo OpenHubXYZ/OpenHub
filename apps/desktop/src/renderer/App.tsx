@@ -26,6 +26,8 @@ import type {
   ImportedSkillResult,
   InstallPlan,
   InstallTarget,
+  LibraryFacets,
+  LibrarySearchFilters,
   LibrarySkillSummary,
   OnboardingState,
   BaselinePreview,
@@ -117,6 +119,14 @@ const filterSets: Partial<Record<PageKey, Array<{ label: string; value: string }
   ]
 };
 
+const emptyLibraryFacets: LibraryFacets = {
+  sources: [],
+  risks: [],
+  agents: [],
+  tags: [],
+  favorites: { value: 'favorites', count: 0 }
+};
+
 export function App({
   initialLibrarySkills = [],
   initialSkills = [],
@@ -164,6 +174,12 @@ export function App({
   const [librarySearchQuery, setLibrarySearchQuery] = useState('');
   const [librarySearchResults, setLibrarySearchResults] = useState<SkillSummary[]>([]);
   const [libraryFavoritesOnly, setLibraryFavoritesOnly] = useState(false);
+  const [librarySearchMode, setLibrarySearchMode] = useState<'fts' | 'semantic' | 'hybrid'>('fts');
+  const [librarySourceFilter, setLibrarySourceFilter] = useState('');
+  const [libraryRiskFilter, setLibraryRiskFilter] = useState('');
+  const [libraryAgentFilter, setLibraryAgentFilter] = useState('');
+  const [libraryTagFilter, setLibraryTagFilter] = useState('');
+  const [libraryFacets, setLibraryFacets] = useState<LibraryFacets>(emptyLibraryFacets);
   const [selectedSkillDetail, setSelectedSkillDetail] = useState<SkillDetail | null>(null);
   const [exportDirectory, setExportDirectory] = useState('');
   const [signedExportSigner, setSignedExportSigner] = useState('');
@@ -225,6 +241,18 @@ export function App({
   const applyWorkspaceState = useCallback((state: DesktopWorkspaceState) => {
     setWorkspaceState(state);
   }, []);
+
+  const refreshLibraryFacets = useCallback(async () => {
+    if (!window.theOpenHub?.getLibraryFacets) {
+      return;
+    }
+
+    setLibraryFacets(await window.theOpenHub.getLibraryFacets());
+  }, []);
+
+  useEffect(() => {
+    void refreshLibraryFacets();
+  }, [refreshLibraryFacets]);
 
   useEffect(() => {
     let cancelled = false;
@@ -446,9 +474,28 @@ export function App({
       return;
     }
 
+    const filters = librarySearchFilters({
+      sourceType: librarySourceFilter,
+      riskStatus: libraryRiskFilter,
+      agentCode: libraryAgentFilter,
+      tag: libraryTagFilter
+    });
     setLibrarySearchResults(
-      await window.theOpenHub.searchLibrary(librarySearchQuery.trim(), { favoritesOnly: libraryFavoritesOnly })
+      await window.theOpenHub.searchLibrary(librarySearchQuery.trim(), {
+        favoritesOnly: libraryFavoritesOnly,
+        ...(librarySearchMode === 'fts' ? {} : { mode: librarySearchMode }),
+        ...(hasLibrarySearchFilters(filters) ? { filters } : {})
+      })
     );
+  }
+
+  function handleResetLibraryFilters(): void {
+    setLibraryFavoritesOnly(false);
+    setLibrarySearchMode('fts');
+    setLibrarySourceFilter('');
+    setLibraryRiskFilter('');
+    setLibraryAgentFilter('');
+    setLibraryTagFilter('');
   }
 
   async function handleSetFavorite(skill: SkillSummary): Promise<void> {
@@ -476,6 +523,7 @@ export function App({
         skill: { ...selectedSkillDetail.skill, favorite: updated.favorite }
       });
     }
+    await refreshLibraryFacets();
   }
 
   async function handleSelectSkill(skillId: string): Promise<void> {
@@ -766,6 +814,7 @@ export function App({
         ]
       }
     }));
+    await refreshLibraryFacets();
   }
 
   async function handleSecurityRescanAll(): Promise<void> {
@@ -779,6 +828,7 @@ export function App({
     if (refreshed) {
       applyWorkspaceState(refreshed);
     }
+    await refreshLibraryFacets();
   }
 
   async function handleCreateExemption(): Promise<void> {
@@ -1240,10 +1290,16 @@ export function App({
                   installProjectionMode={installProjectionMode}
                   importPath={importPath}
                   installTargetRoot={installTargetRoot}
+                  libraryAgentFilter={libraryAgentFilter}
+                  libraryFacets={libraryFacets}
                   libraryFavoritesOnly={libraryFavoritesOnly}
+                  libraryRiskFilter={libraryRiskFilter}
+                  librarySearchMode={librarySearchMode}
                   lastInstallationId={lastInstallationId}
                   librarySearchQuery={librarySearchQuery}
                   librarySearchResults={librarySearchResults}
+                  librarySourceFilter={librarySourceFilter}
+                  libraryTagFilter={libraryTagFilter}
                   mirrorImportDirectory={mirrorImportDirectory}
                   mirrorSignatureStatus={mirrorSignatureStatus}
                   migrationSourcePath={migrationSourcePath}
@@ -1347,10 +1403,16 @@ export function App({
                   onInstallProjectionModeChange={setInstallProjectionMode}
                   onInstallTargetRootChange={setInstallTargetRoot}
                   onLibraryFavoritesOnlyChange={setLibraryFavoritesOnly}
+                  onLibraryAgentFilterChange={setLibraryAgentFilter}
+                  onLibraryRiskFilterChange={setLibraryRiskFilter}
+                  onLibrarySearchModeChange={setLibrarySearchMode}
                   onLibrarySearch={() => {
                     void handleSearchLibrary();
                   }}
                   onLibrarySearchQueryChange={setLibrarySearchQuery}
+                  onLibrarySourceFilterChange={setLibrarySourceFilter}
+                  onLibraryTagFilterChange={setLibraryTagFilter}
+                  onResetLibraryFilters={handleResetLibraryFilters}
                   onSetFavorite={(skill) => {
                     void handleSetFavorite(skill);
                   }}
@@ -1807,10 +1869,16 @@ type PageContentProps = {
   installProjectionMode: InstallPlan['projectionMode'];
   importPath: string;
   installTargetRoot: string;
+  libraryAgentFilter: string;
+  libraryFacets: LibraryFacets;
   libraryFavoritesOnly: boolean;
+  libraryRiskFilter: string;
+  librarySearchMode: 'fts' | 'semantic' | 'hybrid';
   lastInstallationId: string;
   librarySearchQuery: string;
   librarySearchResults: SkillSummary[];
+  librarySourceFilter: string;
+  libraryTagFilter: string;
   mirrorImportDirectory: string;
   mirrorSignatureStatus: 'unsigned' | 'signed' | 'untrusted' | '';
   migrationSourcePath: string;
@@ -1868,9 +1936,14 @@ type PageContentProps = {
   onInstallPlugin: () => void;
   onInstallProjectionModeChange: (value: InstallPlan['projectionMode']) => void;
   onInstallTargetRootChange: (value: string) => void;
+  onLibraryAgentFilterChange: (value: string) => void;
   onLibraryFavoritesOnlyChange: (value: boolean) => void;
+  onLibraryRiskFilterChange: (value: string) => void;
   onLibrarySearch: () => void;
+  onLibrarySearchModeChange: (value: 'fts' | 'semantic' | 'hybrid') => void;
   onLibrarySearchQueryChange: (value: string) => void;
+  onLibrarySourceFilterChange: (value: string) => void;
+  onLibraryTagFilterChange: (value: string) => void;
   onLoadSyncConflicts: () => void;
   onMirrorImportDirectoryChange: (value: string) => void;
   onMigrationSourcePathChange: (value: string) => void;
@@ -1879,6 +1952,7 @@ type PageContentProps = {
   onPreviewBaseline: () => void;
   onPreviewMigration: () => void;
   onRevokeExemption: () => void;
+  onResetLibraryFilters: () => void;
   onRollback: () => void;
   onRollbackVersionIdChange: (value: string) => void;
   onScanAgentRoots: () => void;
@@ -1960,10 +2034,16 @@ function PageContent(props: PageContentProps): ReactElement {
     installProjectionMode,
     importPath,
     installTargetRoot,
+    libraryAgentFilter,
+    libraryFacets,
     libraryFavoritesOnly,
+    libraryRiskFilter,
+    librarySearchMode,
     lastInstallationId,
     librarySearchQuery,
     librarySearchResults,
+    librarySourceFilter,
+    libraryTagFilter,
     mirrorImportDirectory,
     mirrorSignatureStatus,
     migrationSourcePath,
@@ -2012,9 +2092,14 @@ function PageContent(props: PageContentProps): ReactElement {
     onInstallPlugin,
     onInstallProjectionModeChange,
     onInstallTargetRootChange,
+    onLibraryAgentFilterChange,
     onLibraryFavoritesOnlyChange,
+    onLibraryRiskFilterChange,
     onLibrarySearch,
+    onLibrarySearchModeChange,
     onLibrarySearchQueryChange,
+    onLibrarySourceFilterChange,
+    onLibraryTagFilterChange,
     onLoadSyncConflicts,
     onMirrorImportDirectoryChange,
     onMigrationSourcePathChange,
@@ -2023,6 +2108,7 @@ function PageContent(props: PageContentProps): ReactElement {
     onPreviewBaseline,
     onPreviewMigration,
     onRevokeExemption,
+    onResetLibraryFilters,
     onRollback,
     onRollbackVersionIdChange,
     onScanAgentRoots,
@@ -2091,9 +2177,15 @@ function PageContent(props: PageContentProps): ReactElement {
         installProjectionMode={installProjectionMode}
         importPath={importPath}
         installTargetRoot={installTargetRoot}
+        libraryAgentFilter={libraryAgentFilter}
+        libraryFacets={libraryFacets}
         libraryFavoritesOnly={libraryFavoritesOnly}
+        libraryRiskFilter={libraryRiskFilter}
+        librarySearchMode={librarySearchMode}
         librarySearchQuery={librarySearchQuery}
         librarySearchResults={librarySearchResults}
+        librarySourceFilter={librarySourceFilter}
+        libraryTagFilter={libraryTagFilter}
         mirrorImportDirectory={mirrorImportDirectory}
         mirrorSignatureStatus={mirrorSignatureStatus}
         onApplyInstallPlan={onApplyInstallPlan}
@@ -2119,13 +2211,19 @@ function PageContent(props: PageContentProps): ReactElement {
         onImportZip={onImportZip}
         onInstallProjectionModeChange={onInstallProjectionModeChange}
         onInstallTargetRootChange={onInstallTargetRootChange}
+        onLibraryAgentFilterChange={onLibraryAgentFilterChange}
         onLibraryFavoritesOnlyChange={onLibraryFavoritesOnlyChange}
+        onLibraryRiskFilterChange={onLibraryRiskFilterChange}
         onLibrarySearch={onLibrarySearch}
+        onLibrarySearchModeChange={onLibrarySearchModeChange}
         onLibrarySearchQueryChange={onLibrarySearchQueryChange}
+        onLibrarySourceFilterChange={onLibrarySourceFilterChange}
+        onLibraryTagFilterChange={onLibraryTagFilterChange}
         onMirrorImportDirectoryChange={onMirrorImportDirectoryChange}
         onScanAgentRoots={onScanAgentRoots}
         onSelectSkill={onSelectSkill}
         onSetFavorite={onSetFavorite}
+        onResetLibraryFilters={onResetLibraryFilters}
         onSignedExportSignerChange={onSignedExportSignerChange}
         onSparseGitSubpathChange={onSparseGitSubpathChange}
         onSparseGitUrlChange={onSparseGitUrlChange}
@@ -2342,9 +2440,15 @@ type LibraryPageProps = Pick<
   | 'installProjectionMode'
   | 'importPath'
   | 'installTargetRoot'
+  | 'libraryAgentFilter'
+  | 'libraryFacets'
   | 'libraryFavoritesOnly'
+  | 'libraryRiskFilter'
+  | 'librarySearchMode'
   | 'librarySearchQuery'
   | 'librarySearchResults'
+  | 'librarySourceFilter'
+  | 'libraryTagFilter'
   | 'mirrorImportDirectory'
   | 'mirrorSignatureStatus'
   | 'onApplyInstallPlan'
@@ -2370,13 +2474,19 @@ type LibraryPageProps = Pick<
   | 'onImportZip'
   | 'onInstallProjectionModeChange'
   | 'onInstallTargetRootChange'
+  | 'onLibraryAgentFilterChange'
   | 'onLibraryFavoritesOnlyChange'
+  | 'onLibraryRiskFilterChange'
   | 'onLibrarySearch'
+  | 'onLibrarySearchModeChange'
   | 'onLibrarySearchQueryChange'
+  | 'onLibrarySourceFilterChange'
+  | 'onLibraryTagFilterChange'
   | 'onMirrorImportDirectoryChange'
   | 'onScanAgentRoots'
   | 'onSelectSkill'
   | 'onSetFavorite'
+  | 'onResetLibraryFilters'
   | 'onSignedExportSignerChange'
   | 'onSparseGitSubpathChange'
   | 'onSparseGitUrlChange'
@@ -2408,9 +2518,15 @@ function LibraryPage({
   installProjectionMode,
   importPath,
   installTargetRoot,
+  libraryAgentFilter,
+  libraryFacets,
   libraryFavoritesOnly,
+  libraryRiskFilter,
+  librarySearchMode,
   librarySearchQuery,
   librarySearchResults,
+  librarySourceFilter,
+  libraryTagFilter,
   mirrorImportDirectory,
   mirrorSignatureStatus,
   onApplyInstallPlan,
@@ -2436,13 +2552,19 @@ function LibraryPage({
   onImportZip,
   onInstallProjectionModeChange,
   onInstallTargetRootChange,
+  onLibraryAgentFilterChange,
   onLibraryFavoritesOnlyChange,
+  onLibraryRiskFilterChange,
   onLibrarySearch,
+  onLibrarySearchModeChange,
   onLibrarySearchQueryChange,
+  onLibrarySourceFilterChange,
+  onLibraryTagFilterChange,
   onMirrorImportDirectoryChange,
   onScanAgentRoots,
   onSelectSkill,
   onSetFavorite,
+  onResetLibraryFilters,
   onSignedExportSignerChange,
   onSparseGitSubpathChange,
   onSparseGitUrlChange,
@@ -2553,17 +2675,29 @@ function LibraryPage({
         <>
           <LibrarySearchPanel
             exportDirectory={exportDirectory}
+            libraryAgentFilter={libraryAgentFilter}
+            libraryFacets={libraryFacets}
             librarySearchQuery={librarySearchQuery}
             librarySearchResults={librarySearchResults}
             libraryFavoritesOnly={libraryFavoritesOnly}
+            libraryRiskFilter={libraryRiskFilter}
+            librarySearchMode={librarySearchMode}
+            librarySourceFilter={librarySourceFilter}
+            libraryTagFilter={libraryTagFilter}
             onExportDirectoryChange={onExportDirectoryChange}
             onExportSkill={onExportSkill}
             onExportSignedSkill={onExportSignedSkill}
+            onLibraryAgentFilterChange={onLibraryAgentFilterChange}
             onLibraryFavoritesOnlyChange={onLibraryFavoritesOnlyChange}
+            onLibraryRiskFilterChange={onLibraryRiskFilterChange}
             onLibrarySearch={onLibrarySearch}
+            onLibrarySearchModeChange={onLibrarySearchModeChange}
             onLibrarySearchQueryChange={onLibrarySearchQueryChange}
+            onLibrarySourceFilterChange={onLibrarySourceFilterChange}
+            onLibraryTagFilterChange={onLibraryTagFilterChange}
             onSelectSkill={onSelectSkill}
             onSetFavorite={onSetFavorite}
+            onResetLibraryFilters={onResetLibraryFilters}
             onSignedExportSignerChange={onSignedExportSignerChange}
             operationMessage={operationMessage}
             selectedSkillDetail={selectedSkillDetail}
@@ -4029,15 +4163,27 @@ function PanelHeader({ tag, title }: { tag?: string | undefined; title: string }
 
 function LibrarySearchPanel({
   exportDirectory,
+  libraryAgentFilter,
+  libraryFacets,
   libraryFavoritesOnly,
+  libraryRiskFilter,
+  librarySearchMode,
   librarySearchQuery,
   librarySearchResults,
+  librarySourceFilter,
+  libraryTagFilter,
   onExportDirectoryChange,
   onExportSkill,
   onExportSignedSkill,
+  onLibraryAgentFilterChange,
   onLibraryFavoritesOnlyChange,
+  onLibraryRiskFilterChange,
   onLibrarySearch,
+  onLibrarySearchModeChange,
   onLibrarySearchQueryChange,
+  onLibrarySourceFilterChange,
+  onLibraryTagFilterChange,
+  onResetLibraryFilters,
   onSelectSkill,
   onSetFavorite,
   onSignedExportSignerChange,
@@ -4046,15 +4192,27 @@ function LibrarySearchPanel({
   signedExportSigner
 }: {
   exportDirectory: string;
+  libraryAgentFilter: string;
+  libraryFacets: LibraryFacets;
   libraryFavoritesOnly: boolean;
+  libraryRiskFilter: string;
+  librarySearchMode: 'fts' | 'semantic' | 'hybrid';
   librarySearchQuery: string;
   librarySearchResults: SkillSummary[];
+  librarySourceFilter: string;
+  libraryTagFilter: string;
   onExportDirectoryChange: (value: string) => void;
   onExportSkill: () => void;
   onExportSignedSkill: () => void;
+  onLibraryAgentFilterChange: (value: string) => void;
   onLibraryFavoritesOnlyChange: (value: boolean) => void;
+  onLibraryRiskFilterChange: (value: string) => void;
   onLibrarySearch: () => void;
+  onLibrarySearchModeChange: (value: 'fts' | 'semantic' | 'hybrid') => void;
   onLibrarySearchQueryChange: (value: string) => void;
+  onLibrarySourceFilterChange: (value: string) => void;
+  onLibraryTagFilterChange: (value: string) => void;
+  onResetLibraryFilters: () => void;
   onSelectSkill: (skillId: string) => void;
   onSetFavorite: (skill: SkillSummary) => void;
   onSignedExportSignerChange: (value: string) => void;
@@ -4081,8 +4239,27 @@ function LibrarySearchPanel({
               value={librarySearchQuery}
             />
           </label>
+          <label htmlFor="library-search-mode">
+            Search mode
+            <select
+              aria-label="Library search mode"
+              id="library-search-mode"
+              name="librarySearchMode"
+              onChange={(event) =>
+                onLibrarySearchModeChange(event.target.value as 'fts' | 'semantic' | 'hybrid')
+              }
+              value={librarySearchMode}
+            >
+              <option value="fts">fts</option>
+              <option value="semantic">semantic</option>
+              <option value="hybrid">hybrid</option>
+            </select>
+          </label>
           <button disabled={librarySearchQuery.trim().length === 0} onClick={onLibrarySearch} type="button">
             Search library
+          </button>
+          <button onClick={onResetLibraryFilters} type="button">
+            Reset library filters
           </button>
           <label className="inline-check" htmlFor="favorites-only">
             <input
@@ -4096,6 +4273,53 @@ function LibrarySearchPanel({
             Favorites only
           </label>
         </div>
+        <div className="flow-actions">
+          <label htmlFor="library-source-filter">
+            Source
+            <input
+              aria-label="Source type filter"
+              id="library-source-filter"
+              name="librarySourceFilter"
+              onChange={(event) => onLibrarySourceFilterChange(event.target.value)}
+              placeholder="local, git, zip"
+              value={librarySourceFilter}
+            />
+          </label>
+          <label htmlFor="library-risk-filter">
+            Risk
+            <input
+              aria-label="Risk status filter"
+              id="library-risk-filter"
+              name="libraryRiskFilter"
+              onChange={(event) => onLibraryRiskFilterChange(event.target.value)}
+              placeholder="unscanned, safe, blocked"
+              value={libraryRiskFilter}
+            />
+          </label>
+          <label htmlFor="library-agent-filter">
+            Agent
+            <input
+              aria-label="Agent code filter"
+              id="library-agent-filter"
+              name="libraryAgentFilter"
+              onChange={(event) => onLibraryAgentFilterChange(event.target.value)}
+              placeholder="codex, claude"
+              value={libraryAgentFilter}
+            />
+          </label>
+          <label htmlFor="library-tag-filter">
+            Tag
+            <input
+              aria-label="Tag filter"
+              id="library-tag-filter"
+              name="libraryTagFilter"
+              onChange={(event) => onLibraryTagFilterChange(event.target.value)}
+              placeholder="imports"
+              value={libraryTagFilter}
+            />
+          </label>
+        </div>
+        <FacetChips facets={libraryFacets} />
         <KeyValueList
           rows={librarySearchResults.map((skill) => ({
             label: skill.name,
@@ -4192,6 +4416,61 @@ function LibrarySearchPanel({
       </article>
     </section>
   );
+}
+
+function FacetChips({ facets }: { facets: LibraryFacets }): ReactElement {
+  const visibleFacets = [
+    ...facets.sources,
+    ...facets.risks,
+    ...facets.agents,
+    ...facets.tags,
+    { value: 'Favorites', count: facets.favorites.count }
+  ];
+
+  return (
+    <div className="facet-chips" aria-label="Library facet counts">
+      {visibleFacets.length === 0 ? (
+        <span className="tag">Favorites 0</span>
+      ) : (
+        visibleFacets.map((facet) => (
+          <span className="tag" key={`${facet.value}:${facet.count}`}>
+            {facet.value} {facet.count}
+          </span>
+        ))
+      )}
+    </div>
+  );
+}
+
+function librarySearchFilters(input: {
+  sourceType: string;
+  riskStatus: string;
+  agentCode: string;
+  tag: string;
+}): LibrarySearchFilters {
+  return {
+    ...(filterValues(input.sourceType).length > 0 ? { sourceTypes: filterValues(input.sourceType) } : {}),
+    ...(filterValues(input.riskStatus).length > 0 ? { riskStatuses: filterValues(input.riskStatus) } : {}),
+    ...(filterValues(input.agentCode).length > 0 ? { agentCodes: filterValues(input.agentCode) } : {}),
+    ...(filterValues(input.tag).length > 0 ? { tags: filterValues(input.tag) } : {})
+  };
+}
+
+function hasLibrarySearchFilters(filters: LibrarySearchFilters): boolean {
+  return Boolean(
+    filters.sourceTypes?.length ||
+      filters.riskStatuses?.length ||
+      filters.agentCodes?.length ||
+      filters.tags?.length ||
+      filters.favoritesOnly
+  );
+}
+
+function filterValues(input: string): string[] {
+  return input
+    .split(',')
+    .map((value) => value.trim())
+    .filter(Boolean);
 }
 
 function CollectionActions({

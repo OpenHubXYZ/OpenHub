@@ -472,6 +472,21 @@ describe('desktop runtime IPC dispatch', () => {
     });
 
     expect(favorited).toEqual(expect.objectContaining({ id: imported.skill.id, favorite: true }));
+    await expect(runtime.dispatch('library.facets', {})).resolves.toMatchObject({
+      sources: [{ value: 'local', count: 1 }],
+      tags: expect.arrayContaining([{ value: 'runtime', count: 1 }]),
+      favorites: { value: 'favorites', count: 1 }
+    });
+    await expect(
+      runtime.dispatch('library.search', {
+        query: 'favorite',
+        filters: {
+          sourceTypes: ['local'],
+          tags: ['runtime'],
+          favoritesOnly: true
+        }
+      })
+    ).resolves.toEqual([expect.objectContaining({ id: imported.skill.id, favorite: true })]);
     await expect(runtime.dispatch('library.search', { query: 'favorite', favoritesOnly: true })).resolves.toEqual([
       expect.objectContaining({ id: imported.skill.id, favorite: true })
     ]);
@@ -480,6 +495,9 @@ describe('desktop runtime IPC dispatch', () => {
     });
 
     await runtime.dispatch('library.setFavorite', { skillId: imported.skill.id, favorite: false });
+    await expect(runtime.dispatch('library.facets', {})).resolves.toMatchObject({
+      favorites: { value: 'favorites', count: 0 }
+    });
     await expect(runtime.dispatch('library.search', { query: 'favorite', favoritesOnly: true })).resolves.toEqual([]);
   });
 

@@ -25,6 +25,9 @@ export type {
 } from './review-repository';
 export type {
   CreateSkillInput,
+  LibraryFacets,
+  LibraryFacetValue,
+  SkillSearchFilters,
   SkillSearchMode,
   SkillSearchOptions,
   SkillRecord,

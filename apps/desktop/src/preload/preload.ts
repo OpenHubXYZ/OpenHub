@@ -16,7 +16,9 @@ import type {
   InstallResult,
   InstallTarget,
   InstallUninstallResult,
+  LibraryFacets,
   LibraryScanResult,
+  LibrarySearchFilters,
   LibrarySkillSummary,
   MigrationPreviewResult,
   MultiTargetInstallResult,
@@ -164,13 +166,20 @@ const api = {
   async searchLibrary(query: string, options?: {
     favoritesOnly?: boolean;
     mode?: 'fts' | 'semantic' | 'hybrid';
+    filters?: LibrarySearchFilters;
   }): Promise<SkillSummary[]> {
     const payload = await ipcRenderer.invoke(desktopShellContract.librarySearch.channel, {
       query,
       favoritesOnly: options?.favoritesOnly,
-      mode: options?.mode
+      mode: options?.mode,
+      filters: options?.filters
     });
     return parseIpcResponse(desktopShellContract.librarySearch.channel, payload);
+  },
+
+  async getLibraryFacets(filters?: LibrarySearchFilters): Promise<LibraryFacets> {
+    const payload = await ipcRenderer.invoke(desktopShellContract.libraryFacets.channel, { filters });
+    return parseIpcResponse(desktopShellContract.libraryFacets.channel, payload);
   },
 
   async setFavorite(skillId: string, favorite: boolean): Promise<SkillSummary> {

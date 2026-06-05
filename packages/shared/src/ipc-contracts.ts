@@ -39,6 +39,37 @@ export const skillSummarySchema = z
 
 export type SkillSummary = z.infer<typeof skillSummarySchema>;
 
+const librarySearchFiltersSchema = z
+  .object({
+    sourceTypes: z.array(z.string().min(1)).optional(),
+    riskStatuses: z.array(z.string().min(1)).optional(),
+    agentCodes: z.array(z.string().min(1)).optional(),
+    tags: z.array(z.string().min(1)).optional(),
+    favoritesOnly: z.boolean().optional()
+  })
+  .strict();
+
+export type LibrarySearchFilters = z.infer<typeof librarySearchFiltersSchema>;
+
+const libraryFacetValueSchema = z
+  .object({
+    value: z.string().min(1),
+    count: z.number().int().nonnegative()
+  })
+  .strict();
+
+export const libraryFacetsSchema = z
+  .object({
+    sources: z.array(libraryFacetValueSchema),
+    risks: z.array(libraryFacetValueSchema),
+    agents: z.array(libraryFacetValueSchema),
+    tags: z.array(libraryFacetValueSchema),
+    favorites: libraryFacetValueSchema
+  })
+  .strict();
+
+export type LibraryFacets = z.infer<typeof libraryFacetsSchema>;
+
 export const libraryScanResultSchema = z
   .object({
     indexedSkills: z.array(
@@ -1026,10 +1057,16 @@ export const desktopShellContract = {
       .object({
         query: z.string(),
         favoritesOnly: z.boolean().optional(),
-        mode: librarySearchModeSchema.optional()
+        mode: librarySearchModeSchema.optional(),
+        filters: librarySearchFiltersSchema.optional()
       })
       .strict(),
     response: z.array(skillSummarySchema)
+  },
+  libraryFacets: {
+    channel: 'library.facets',
+    request: z.object({ filters: librarySearchFiltersSchema.optional() }).strict(),
+    response: libraryFacetsSchema
   },
   librarySetFavorite: {
     channel: 'library.setFavorite',
@@ -1474,6 +1511,10 @@ export function parseIpcResponse(
   channel: typeof desktopShellContract.librarySearch.channel,
   payload: unknown
 ): SkillSummary[];
+export function parseIpcResponse(
+  channel: typeof desktopShellContract.libraryFacets.channel,
+  payload: unknown
+): LibraryFacets;
 export function parseIpcResponse(
   channel: typeof desktopShellContract.librarySetFavorite.channel,
   payload: unknown

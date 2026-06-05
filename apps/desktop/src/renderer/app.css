@@ -669,6 +669,13 @@ tr.selected td {
   min-width: 0;
 }
 
+.facet-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  min-width: 0;
+}
+
 .list,
 .flow-details {
   display: grid;
