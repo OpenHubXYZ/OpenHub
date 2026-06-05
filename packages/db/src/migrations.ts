@@ -498,6 +498,48 @@ const migrations: Migration[] = [
         alter table installations add column read_only_locked integer not null default 0;
       `);
     }
+  },
+  {
+    version: 13,
+    name: '013_plugin_directories',
+    up(database) {
+      database.exec(`
+        alter table plugin_manifests
+          add column signature_json text not null default '{"status":"unsigned"}';
+
+        alter table plugin_manifests
+          add column signature_status text not null default 'unsigned';
+
+        create table plugin_directories (
+          id text primary key,
+          root_path text not null unique,
+          status text not null default 'active',
+          scanned_at text,
+          created_at text not null default current_timestamp,
+          updated_at text not null default current_timestamp
+        );
+
+        create table plugin_catalog_entries (
+          id text primary key,
+          directory_id text not null references plugin_directories(id) on delete cascade,
+          plugin_id text not null,
+          name text not null,
+          version text not null,
+          root_path text not null,
+          signature_status text not null,
+          status text not null default 'available',
+          error_message text,
+          created_at text not null default current_timestamp,
+          updated_at text not null default current_timestamp
+        );
+
+        create index idx_plugin_catalog_directory
+          on plugin_catalog_entries(directory_id, plugin_id);
+
+        create index idx_plugin_catalog_plugin
+          on plugin_catalog_entries(plugin_id);
+      `);
+    }
   }
 ];
 

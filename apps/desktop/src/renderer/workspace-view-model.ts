@@ -171,6 +171,8 @@ export function createEmptyWorkspaceState(): DesktopWorkspaceState {
       conflicts: []
     },
     plugins: {
+      directories: [],
+      catalog: [],
       plugins: []
     }
   };
@@ -456,16 +458,35 @@ function createSyncRows(state: DesktopWorkspaceState): KeyValueRow[] {
 }
 
 function createPluginRows(state: DesktopWorkspaceState): KeyValueRow[] {
-  if (state.plugins.plugins.length === 0) {
-    return [{ label: 'Installed plugins', value: '0' }];
+  const directories = state.plugins.directories ?? [];
+  const catalog = state.plugins.catalog ?? [];
+  const rows: KeyValueRow[] = [
+    { label: 'Plugin directories', value: String(directories.length) },
+    { label: 'Catalog entries', value: String(catalog.length) }
+  ];
+
+  for (const directory of directories) {
+    rows.push({ label: directory.rootPath, value: directory.status });
   }
 
-  return state.plugins.plugins.flatMap((plugin) => [
-    { label: plugin.name, value: plugin.status },
-    ...plugin.capabilities.map((capability) => ({ label: capability, value: 'declared' })),
-    ...plugin.permissions.map((permission) => ({ label: permission.name, value: permission.status })),
-    ...plugin.errors.map((error) => ({ label: error.message, value: 'logged' }))
-  ]);
+  for (const entry of catalog) {
+    rows.push({ label: entry.name, value: entry.signatureStatus });
+  }
+
+  if (state.plugins.plugins.length === 0) {
+    return [...rows, { label: 'Installed plugins', value: '0' }];
+  }
+
+  return [
+    ...rows,
+    ...state.plugins.plugins.flatMap((plugin) => [
+      { label: plugin.name, value: plugin.status },
+      ...(plugin.signatureStatus ? [{ label: 'Signature', value: plugin.signatureStatus }] : []),
+      ...plugin.capabilities.map((capability) => ({ label: capability, value: 'declared' })),
+      ...plugin.permissions.map((permission) => ({ label: permission.name, value: permission.status })),
+      ...plugin.errors.map((error) => ({ label: error.message, value: 'logged' }))
+    ])
+  ];
 }
 
 function createAgentRootViews(librarySkills: LibrarySkillSummary[]): AgentRootView[] {

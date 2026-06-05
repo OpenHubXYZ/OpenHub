@@ -187,10 +187,15 @@ describe('desktop shell IPC contract', () => {
         'sync.listConflicts',
         'sync.resolveConflict',
         'plugins.install',
+        'plugins.addDirectory',
+        'plugins.listDirectories',
+        'plugins.scanDirectory',
+        'plugins.removeDirectory',
         'plugins.authorizePermission',
         'plugins.enable',
         'plugins.disable',
         'plugins.registry',
+        'plugins.invokeProvider',
         'discover.addSource',
         'discover.previewSource',
         'discover.migrationPreview'
@@ -320,9 +325,49 @@ describe('desktop shell IPC contract', () => {
     })).toMatchObject({ authRef: 'keychain://sync/shared' });
     expect(parseIpcRequest('plugins.authorizePermission', {
       pluginId: 'plugin-1',
-      permission: 'network:fetch',
+      permission: 'export:local',
       reason: 'Needed for catalog fetches'
-    })).toMatchObject({ permission: 'network:fetch' });
+    })).toMatchObject({ permission: 'export:local' });
+    expect(parseIpcRequest('plugins.addDirectory', {
+      rootPath: '/tmp/plugins'
+    })).toMatchObject({ rootPath: '/tmp/plugins' });
+    expect(parseIpcRequest('plugins.scanDirectory', {
+      directoryId: 'directory-1'
+    })).toMatchObject({ directoryId: 'directory-1' });
+    expect(parseIpcRequest('plugins.invokeProvider', {
+      pluginId: 'plugin-1',
+      capabilityType: 'exporter',
+      capabilityId: 'bundle-exporter',
+      input: { outputDirectory: '/tmp/out' }
+    })).toMatchObject({ capabilityType: 'exporter' });
+    expect(
+      desktopShellContract.pluginsRegistry.response.parse({
+        agentAdapters: [],
+        importers: [],
+        securityRules: [],
+        syncDrivers: [],
+        exporters: [{ pluginId: 'plugin-1', id: 'bundle-exporter', name: 'Bundle Exporter' }]
+      }).exporters[0]?.id
+    ).toBe('bundle-exporter');
+    expect(
+      desktopShellContract.pluginsCenterState.response.parse({
+        directories: [{ id: 'directory-1', rootPath: '/tmp/plugins', status: 'scanned', scannedAt: '2026-06-05T00:00:00.000Z' }],
+        catalog: [
+          {
+            id: 'catalog-1',
+            directoryId: 'directory-1',
+            pluginId: 'plugin-1',
+            name: 'Exporter Plugin',
+            version: '1.0.0',
+            rootPath: '/tmp/plugins/exporter',
+            signatureStatus: 'trusted',
+            installed: false,
+            status: 'available'
+          }
+        ],
+        plugins: []
+      }).catalog[0]?.signatureStatus
+    ).toBe('trusted');
     expect(parseIpcRequest('discover.addSource', {
       name: 'Local curated',
       sourceType: 'local',

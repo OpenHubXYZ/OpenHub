@@ -96,7 +96,11 @@ describe('desktop runtime IPC dispatch', () => {
       shouldStart: false,
       enabledProfiles: []
     });
-    await expect(runtime.dispatch('plugins.centerState', {})).resolves.toEqual({ plugins: [] });
+    await expect(runtime.dispatch('plugins.centerState', {})).resolves.toEqual({
+      directories: [],
+      catalog: [],
+      plugins: []
+    });
   });
 
   it('scans detected local agent roots into the runtime library', async () => {
@@ -1000,6 +1004,72 @@ describe('desktop runtime IPC dispatch', () => {
     });
   });
 
+  it('dispatches plugin directory scans, signature trust, and exporter providers', async () => {
+    const workspace = await tempDir();
+    const runtime = createDesktopRuntime({
+      dataDirectory: path.join(workspace, 'app-data'),
+      homeDirectory: path.join(workspace, 'home')
+    });
+    const pluginDirectory = path.join(workspace, 'plugin-directory');
+    const exporterRoot = await createPluginFixture({
+      directory: path.join(pluginDirectory, 'exporter-plugin'),
+      id: 'exporter-plugin',
+      name: 'Exporter Plugin',
+      source: `
+        exports.register = (host) => {
+          host.registerExporter({
+            id: 'bundle-exporter',
+            name: 'Bundle Exporter',
+            invoke(input) {
+              return { outputDirectory: input.outputDirectory, exported: input.files.length };
+            }
+          });
+        };
+      `,
+      capabilities: [{ type: 'exporter', id: 'bundle-exporter' }],
+      permissions: ['export:local'],
+      signature: {
+        signer: 'trusted:runtime',
+        value: signedPluginManifestValue('exporter-plugin', 'Exporter Plugin', '1.0.0', 'trusted:runtime')
+      }
+    });
+    const dispatch = runtime.dispatch as unknown as (channel: string, payload: unknown) => Promise<unknown>;
+    const directory = (await dispatch('plugins.addDirectory', { rootPath: pluginDirectory })) as { id: string };
+
+    await expect(dispatch('plugins.scanDirectory', { directoryId: directory.id })).resolves.toMatchObject({
+      catalog: [
+        expect.objectContaining({
+          pluginId: 'exporter-plugin',
+          rootPath: exporterRoot,
+          signatureStatus: 'trusted',
+          installed: false
+        })
+      ]
+    });
+    const installed = await runtime.dispatch('plugins.install', { rootPath: exporterRoot });
+    await runtime.dispatch('plugins.authorizePermission', {
+      pluginId: installed.id,
+      permission: 'export:local',
+      reason: 'Exporter runtime test'
+    });
+    await runtime.dispatch('plugins.enable', { pluginId: installed.id });
+    await expect(runtime.dispatch('plugins.registry', {})).resolves.toMatchObject({
+      exporters: [{ pluginId: installed.id, id: 'bundle-exporter', name: 'Bundle Exporter' }]
+    });
+    await expect(
+      dispatch('plugins.invokeProvider', {
+        pluginId: installed.id,
+        capabilityType: 'exporter',
+        capabilityId: 'bundle-exporter',
+        input: { outputDirectory: '/tmp/out', files: ['SKILL.md'] }
+      })
+    ).resolves.toEqual({ outputDirectory: '/tmp/out', exported: 1 });
+
+    await runtime.dispatch('plugins.disable', { pluginId: installed.id });
+    await expect(runtime.dispatch('plugins.registry', {})).resolves.toMatchObject({ exporters: [] });
+    await expect(dispatch('plugins.removeDirectory', { directoryId: directory.id })).resolves.toEqual({ status: 'removed' });
+  });
+
   it('dispatches sync, plugin runtime, and discover source workflows', async () => {
     const workspace = await tempDir();
     const database = createMemoryDatabase();
@@ -1271,10 +1341,11 @@ async function createPluginFixture(input: {
   permission?: 'network:fetch';
   source?: string;
   capabilities?: Array<{
-    type: 'agent-adapter' | 'importer' | 'security-rule' | 'sync-driver';
+    type: 'agent-adapter' | 'importer' | 'security-rule' | 'sync-driver' | 'exporter';
     id: string;
   }>;
-  permissions?: Array<'agent-root:read' | 'agent-root:write' | 'network:fetch' | 'import:local' | 'sync-driver'>;
+  permissions?: Array<'agent-root:read' | 'agent-root:write' | 'network:fetch' | 'import:local' | 'sync-driver' | 'export:local'>;
+  signature?: { signer: string; value: string };
 }): Promise<string> {
   await mkdir(input.directory, { recursive: true });
   const source = input.source ?? `
@@ -1298,13 +1369,27 @@ async function createPluginFixture(input: {
         integrity: {
           algorithm: 'sha256',
           hash: createHash('sha256').update(source).digest('hex')
-        }
+        },
+        ...(input.signature
+          ? {
+              signature: {
+                status: 'signed',
+                algorithm: 'sha256',
+                signer: input.signature.signer,
+                value: input.signature.value
+              }
+            }
+          : {})
       },
       null,
       2
     )
   );
   return input.directory;
+}
+
+function signedPluginManifestValue(id: string, name: string, version: string, signer: string): string {
+  return createHash('sha256').update(`${JSON.stringify({ id, name, version })}:${signer}`).digest('hex');
 }
 
 function countRows(database: ReturnType<typeof createMemoryDatabase>, tableName: string): number {

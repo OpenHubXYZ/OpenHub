@@ -21,10 +21,11 @@ describe('SQLite migrations', () => {
       '009_research_gap_closure',
       '010_app_settings',
       '011_local_similarity_index',
-      '012_installation_lifecycle_lock'
+      '012_installation_lifecycle_lock',
+      '013_plugin_directories'
     ]);
     expect(secondRun.applied).toEqual([]);
-    expect(getCurrentSchemaVersion(db)).toBe(12);
+    expect(getCurrentSchemaVersion(db)).toBe(13);
   });
 
   it('creates the required Phase 2 domain tables and FTS table', () => {
@@ -51,6 +52,8 @@ describe('SQLite migrations', () => {
         'installations',
         'installation_files',
         'plugin_errors',
+        'plugin_catalog_entries',
+        'plugin_directories',
         'plugin_manifests',
         'plugin_permission_grants',
         'policy_packs',

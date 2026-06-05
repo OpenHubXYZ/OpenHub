@@ -29,6 +29,8 @@ import type {
   BaselinePreview,
   PolicyEvaluation,
   PolicyPack,
+  PluginDirectoryRecord,
+  PluginDirectoryScanResult,
   PluginInstallResult,
   PluginRegistry,
   PluginsState,
@@ -198,9 +200,13 @@ declare global {
       }): Promise<SyncConflictRecord & { draftVersionIds?: string[] }>;
       getPluginCenterState(): Promise<PluginsState>;
       installPlugin(rootPath: string): Promise<PluginInstallResult>;
+      addPluginDirectory(rootPath: string): Promise<PluginDirectoryRecord>;
+      listPluginDirectories(): Promise<PluginDirectoryRecord[]>;
+      scanPluginDirectory(directoryId: string): Promise<PluginDirectoryScanResult>;
+      removePluginDirectory(directoryId: string): Promise<StatusOnlyResult>;
       authorizePluginPermission(input: {
         pluginId: string;
-        permission: 'agent-root:read' | 'agent-root:write' | 'network:fetch' | 'import:local' | 'sync-driver';
+        permission: 'agent-root:read' | 'agent-root:write' | 'network:fetch' | 'import:local' | 'sync-driver' | 'export:local';
         reason: string;
       }): Promise<StatusOnlyResult>;
       enablePlugin(pluginId: string): Promise<PluginRegistry>;
@@ -208,7 +214,7 @@ declare global {
       getPluginRegistry(): Promise<PluginRegistry>;
       invokePluginProvider(input: {
         pluginId: string;
-        capabilityType: 'agent-adapter' | 'importer' | 'security-rule' | 'sync-driver';
+        capabilityType: 'agent-adapter' | 'importer' | 'security-rule' | 'sync-driver' | 'exporter';
         capabilityId: string;
         input: unknown;
       }): Promise<unknown>;

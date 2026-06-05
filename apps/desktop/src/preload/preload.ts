@@ -30,6 +30,8 @@ import type {
   BaselinePreview,
   PolicyEvaluation,
   PolicyPack,
+  PluginDirectoryRecord,
+  PluginDirectoryScanResult,
   PluginInstallResult,
   PluginRegistry,
   PluginsState,
@@ -454,9 +456,29 @@ const api = {
     return parseIpcResponse(desktopShellContract.pluginsInstall.channel, payload);
   },
 
+  async addPluginDirectory(rootPath: string): Promise<PluginDirectoryRecord> {
+    const payload = await ipcRenderer.invoke(desktopShellContract.pluginsAddDirectory.channel, { rootPath });
+    return parseIpcResponse(desktopShellContract.pluginsAddDirectory.channel, payload);
+  },
+
+  async listPluginDirectories(): Promise<PluginDirectoryRecord[]> {
+    const payload = await ipcRenderer.invoke(desktopShellContract.pluginsListDirectories.channel, {});
+    return parseIpcResponse(desktopShellContract.pluginsListDirectories.channel, payload);
+  },
+
+  async scanPluginDirectory(directoryId: string): Promise<PluginDirectoryScanResult> {
+    const payload = await ipcRenderer.invoke(desktopShellContract.pluginsScanDirectory.channel, { directoryId });
+    return parseIpcResponse(desktopShellContract.pluginsScanDirectory.channel, payload);
+  },
+
+  async removePluginDirectory(directoryId: string): Promise<StatusOnlyResult> {
+    const payload = await ipcRenderer.invoke(desktopShellContract.pluginsRemoveDirectory.channel, { directoryId });
+    return parseIpcResponse(desktopShellContract.pluginsRemoveDirectory.channel, payload);
+  },
+
   async authorizePluginPermission(input: {
     pluginId: string;
-    permission: 'agent-root:read' | 'agent-root:write' | 'network:fetch' | 'import:local' | 'sync-driver';
+    permission: 'agent-root:read' | 'agent-root:write' | 'network:fetch' | 'import:local' | 'sync-driver' | 'export:local';
     reason: string;
   }): Promise<StatusOnlyResult> {
     const payload = await ipcRenderer.invoke(desktopShellContract.pluginsAuthorizePermission.channel, input);
@@ -480,7 +502,7 @@ const api = {
 
   async invokePluginProvider(input: {
     pluginId: string;
-    capabilityType: 'agent-adapter' | 'importer' | 'security-rule' | 'sync-driver';
+    capabilityType: 'agent-adapter' | 'importer' | 'security-rule' | 'sync-driver' | 'exporter';
     capabilityId: string;
     input: unknown;
   }): Promise<unknown> {

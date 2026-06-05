@@ -1,5 +1,5 @@
 import { createHash, randomUUID } from 'node:crypto';
-import { readFile } from 'node:fs/promises';
+import { access, readdir, readFile } from 'node:fs/promises';
 import path from 'node:path';
 import vm from 'node:vm';
 
@@ -7,14 +7,18 @@ import type { SqliteDatabase } from '@theopenhub/db';
 
 import { assertZipEntryPathSafe, ensurePathInsideRoot } from './path-safety';
 
-export type PluginCapabilityType = 'agent-adapter' | 'importer' | 'security-rule' | 'sync-driver';
+export type PluginCapabilityType = 'agent-adapter' | 'importer' | 'security-rule' | 'sync-driver' | 'exporter';
 export type PluginPermission =
   | 'agent-root:read'
   | 'agent-root:write'
   | 'network:fetch'
   | 'import:local'
-  | 'sync-driver';
+  | 'sync-driver'
+  | 'export:local';
 export type PluginStatus = 'disabled' | 'enabled' | 'error';
+export type PluginSignatureStatus = 'unsigned' | 'trusted' | 'untrusted';
+export type PluginDirectoryStatus = 'active' | 'scanned';
+export type PluginCatalogStatus = 'available' | 'error';
 export type PluginManifestErrorCode =
   | 'missing-field'
   | 'unknown-permission'
@@ -39,6 +43,13 @@ export interface PluginIntegrity {
   hash: string;
 }
 
+export interface PluginSignature {
+  status: 'unsigned' | 'signed';
+  algorithm?: 'sha256';
+  signer?: string;
+  value?: string;
+}
+
 export interface PluginManifest {
   id: string;
   name: string;
@@ -48,12 +59,14 @@ export interface PluginManifest {
   capabilities: PluginCapability[];
   permissions: PluginPermission[];
   integrity: PluginIntegrity;
+  signature: PluginSignature;
 }
 
 export interface InstalledPlugin extends PluginManifest {
   rootPath: string;
   enabled: boolean;
   status: PluginStatus;
+  signatureStatus: PluginSignatureStatus;
 }
 
 export interface PluginAgentAdapterRegistration {
@@ -67,22 +80,51 @@ export interface PluginRegistry {
   importers: Array<{ pluginId: string; id: string; name: string }>;
   securityRules: Array<{ pluginId: string; id: string; name: string }>;
   syncDrivers: Array<{ pluginId: string; id: string; name: string }>;
+  exporters: Array<{ pluginId: string; id: string; name: string }>;
 }
 
 type PluginProvider = (input: unknown) => unknown;
 type PluginProviderMap = Map<string, PluginProvider>;
 
 export interface PluginCenterState {
+  directories: PluginDirectoryRecord[];
+  catalog: PluginCatalogEntry[];
   plugins: Array<{
     id: string;
     name: string;
     version: string;
     rootPath: string;
     status: PluginStatus;
+    signatureStatus: PluginSignatureStatus;
     capabilities: string[];
     permissions: Array<{ name: PluginPermission; status: 'declared' | 'authorized' }>;
     errors: Array<{ message: string }>;
   }>;
+}
+
+export interface PluginDirectoryRecord {
+  id: string;
+  rootPath: string;
+  status: PluginDirectoryStatus;
+  scannedAt: string | null;
+}
+
+export interface PluginCatalogEntry {
+  id: string;
+  directoryId: string;
+  pluginId: string;
+  name: string;
+  version: string;
+  rootPath: string;
+  signatureStatus: PluginSignatureStatus;
+  installed: boolean;
+  status: PluginCatalogStatus;
+  errorMessage?: string | null;
+}
+
+export interface PluginDirectoryScanResult {
+  directory: PluginDirectoryRecord;
+  catalog: PluginCatalogEntry[];
 }
 
 export interface CreatePluginServiceInput {
@@ -92,6 +134,10 @@ export interface CreatePluginServiceInput {
 export interface PluginService {
   validateManifest(input: unknown): PluginManifest;
   installPlugin(input: { rootPath: string }): Promise<InstalledPlugin>;
+  addPluginDirectory(input: { rootPath: string }): PluginDirectoryRecord;
+  listPluginDirectories(): PluginDirectoryRecord[];
+  scanPluginDirectory(input: { directoryId: string }): Promise<PluginDirectoryScanResult>;
+  removePluginDirectory(input: { directoryId: string }): { status: 'removed' };
   authorizePermission(input: { pluginId: string; permission: PluginPermission; reason: string }): void;
   enablePlugin(input: { pluginId: string }): Promise<PluginRegistry>;
   disablePlugin(input: { pluginId: string }): void;
@@ -131,13 +177,15 @@ const ALLOWED_PERMISSIONS = new Set<PluginPermission>([
   'agent-root:write',
   'network:fetch',
   'import:local',
-  'sync-driver'
+  'sync-driver',
+  'export:local'
 ]);
 const ALLOWED_CAPABILITIES = new Set<PluginCapabilityType>([
   'agent-adapter',
   'importer',
   'security-rule',
-  'sync-driver'
+  'sync-driver',
+  'exporter'
 ]);
 const UNSAFE_ENTRY_PATTERNS = [
   /\brequire\s*\(/,
@@ -166,14 +214,39 @@ export function createPluginService(input: CreatePluginServiceInput): PluginServ
       const entryPath = await resolveEntryPath(rootPath, manifest.entry);
       const entrySource = await readFile(entryPath, 'utf8');
       verifyIntegrity(manifest, entrySource);
+      const signatureStatus = getPluginSignatureStatus(manifest);
 
       input.database
         .prepare(
           `
             insert into plugin_manifests
-              (id, name, version, api_version, entry, capabilities_json, permissions_json, integrity_json, root_path)
+              (
+                id,
+                name,
+                version,
+                api_version,
+                entry,
+                capabilities_json,
+                permissions_json,
+                integrity_json,
+                signature_json,
+                signature_status,
+                root_path
+              )
             values
-              (@id, @name, @version, @apiVersion, @entry, @capabilitiesJson, @permissionsJson, @integrityJson, @rootPath)
+              (
+                @id,
+                @name,
+                @version,
+                @apiVersion,
+                @entry,
+                @capabilitiesJson,
+                @permissionsJson,
+                @integrityJson,
+                @signatureJson,
+                @signatureStatus,
+                @rootPath
+              )
           `
         )
         .run({
@@ -185,10 +258,106 @@ export function createPluginService(input: CreatePluginServiceInput): PluginServ
           capabilitiesJson: JSON.stringify(manifest.capabilities),
           permissionsJson: JSON.stringify(manifest.permissions),
           integrityJson: JSON.stringify(manifest.integrity),
+          signatureJson: JSON.stringify(manifest.signature),
+          signatureStatus,
           rootPath
         });
 
       return getInstalledPlugin(input.database, manifest.id);
+    },
+
+    addPluginDirectory({ rootPath }) {
+      const existing = input.database
+        .prepare(
+          `
+            select id, root_path as rootPath, status, scanned_at as scannedAt
+            from plugin_directories
+            where root_path = ?
+          `
+        )
+        .get(rootPath);
+      if (existing) {
+        return pluginDirectoryRow(existing);
+      }
+
+      const id = randomUUID();
+      input.database
+        .prepare(
+          `
+            insert into plugin_directories (id, root_path)
+            values (@id, @rootPath)
+          `
+        )
+        .run({ id, rootPath });
+      return getPluginDirectory(input.database, id);
+    },
+
+    listPluginDirectories() {
+      return listPluginDirectories(input.database);
+    },
+
+    async scanPluginDirectory({ directoryId }) {
+      const directory = getPluginDirectory(input.database, directoryId);
+      const pluginRoots = await collectPluginRoots(directory.rootPath);
+      input.database.prepare('delete from plugin_catalog_entries where directory_id = ?').run(directory.id);
+
+      for (const pluginRoot of pluginRoots) {
+        const catalogEntry = await readPluginCatalogEntry(input.database, directory.id, pluginRoot);
+        input.database
+          .prepare(
+            `
+              insert into plugin_catalog_entries
+                (
+                  id,
+                  directory_id,
+                  plugin_id,
+                  name,
+                  version,
+                  root_path,
+                  signature_status,
+                  status,
+                  error_message
+                )
+              values
+                (
+                  @id,
+                  @directoryId,
+                  @pluginId,
+                  @name,
+                  @version,
+                  @rootPath,
+                  @signatureStatus,
+                  @status,
+                  @errorMessage
+                )
+            `
+          )
+          .run(catalogEntry);
+      }
+
+      input.database
+        .prepare(
+          `
+            update plugin_directories
+            set status = 'scanned',
+                scanned_at = current_timestamp,
+                updated_at = current_timestamp
+            where id = ?
+          `
+        )
+        .run(directory.id);
+
+      return {
+        directory: getPluginDirectory(input.database, directory.id),
+        catalog: listPluginCatalog(input.database, directory.id)
+      };
+    },
+
+    removePluginDirectory({ directoryId }) {
+      getPluginDirectory(input.database, directoryId);
+      input.database.prepare('delete from plugin_catalog_entries where directory_id = ?').run(directoryId);
+      input.database.prepare('delete from plugin_directories where id = ?').run(directoryId);
+      return { status: 'removed' };
     },
 
     authorizePermission({ pluginId, permission, reason }) {
@@ -297,6 +466,8 @@ export function createPluginService(input: CreatePluginServiceInput): PluginServ
               capabilities_json as capabilitiesJson,
               permissions_json as permissionsJson,
               integrity_json as integrityJson,
+              signature_json as signatureJson,
+              signature_status as signatureStatus,
               root_path as rootPath,
               enabled,
               status
@@ -308,12 +479,15 @@ export function createPluginService(input: CreatePluginServiceInput): PluginServ
         .map(pluginRow);
 
       return {
+        directories: listPluginDirectories(input.database),
+        catalog: listPluginCatalog(input.database),
         plugins: plugins.map((plugin) => ({
           id: plugin.id,
           name: plugin.name,
           version: plugin.version,
           rootPath: plugin.rootPath,
           status: plugin.status,
+          signatureStatus: plugin.signatureStatus,
           capabilities: plugin.capabilities.map((capability) => capabilityKey(capability)),
           permissions: plugin.permissions.map((permission) => ({
             name: permission,
@@ -363,6 +537,7 @@ function validatePluginManifest(input: unknown): PluginManifest {
   });
 
   const integrity = validateIntegrityMetadata(manifest.integrity);
+  const signature = validateSignatureMetadata((manifest as { signature?: unknown }).signature);
 
   return {
     id,
@@ -372,7 +547,8 @@ function validatePluginManifest(input: unknown): PluginManifest {
     entry,
     capabilities,
     permissions,
-    integrity
+    integrity,
+    signature
   };
 }
 
@@ -434,6 +610,35 @@ function validateIntegrityMetadata(input: unknown): PluginIntegrity {
   }
 
   return { algorithm: 'sha256', hash: integrity.hash };
+}
+
+function validateSignatureMetadata(input: unknown): PluginSignature {
+  if (input === undefined || input === null) {
+    return { status: 'unsigned' };
+  }
+
+  const signature = input as Partial<PluginSignature> | null;
+  if (!signature || typeof signature !== 'object' || signature.status === 'unsigned') {
+    return { status: 'unsigned' };
+  }
+
+  if (
+    signature.status !== 'signed' ||
+    signature.algorithm !== 'sha256' ||
+    typeof signature.signer !== 'string' ||
+    signature.signer.trim() === '' ||
+    typeof signature.value !== 'string' ||
+    signature.value.trim() === ''
+  ) {
+    return { status: 'unsigned' };
+  }
+
+  return {
+    status: 'signed',
+    algorithm: 'sha256',
+    signer: signature.signer,
+    value: signature.value
+  };
 }
 
 async function resolveEntryPath(rootPath: string, entry: string): Promise<string> {
@@ -534,6 +739,13 @@ function createRestrictedHost(plugin: InstalledPlugin, registry: PluginRegistry,
       if (typeof driver.invoke === 'function') {
         providers.set(providerKey(plugin.id, 'sync-driver', driver.id), driver.invoke);
       }
+    },
+
+    registerExporter(exporter: { id: string; name: string; invoke?: PluginProvider }) {
+      assertNamedRegistration(plugin, registry.exporters, 'exporter', exporter);
+      if (typeof exporter.invoke === 'function') {
+        providers.set(providerKey(plugin.id, 'exporter', exporter.id), exporter.invoke);
+      }
     }
   };
 }
@@ -566,6 +778,7 @@ function unregisterPlugin(registry: PluginRegistry, providers: PluginProviderMap
   registry.importers = registry.importers.filter((importer) => importer.pluginId !== pluginId);
   registry.securityRules = registry.securityRules.filter((rule) => rule.pluginId !== pluginId);
   registry.syncDrivers = registry.syncDrivers.filter((driver) => driver.pluginId !== pluginId);
+  registry.exporters = registry.exporters.filter((exporter) => exporter.pluginId !== pluginId);
   for (const key of providers.keys()) {
     if (key.startsWith(`${pluginId}:`)) {
       providers.delete(key);
@@ -578,7 +791,8 @@ function emptyRegistry(): PluginRegistry {
     agentAdapters: [],
     importers: [],
     securityRules: [],
-    syncDrivers: []
+    syncDrivers: [],
+    exporters: []
   };
 }
 
@@ -587,7 +801,8 @@ function cloneRegistry(registry: PluginRegistry): PluginRegistry {
     agentAdapters: [...registry.agentAdapters],
     importers: [...registry.importers],
     securityRules: [...registry.securityRules],
-    syncDrivers: [...registry.syncDrivers]
+    syncDrivers: [...registry.syncDrivers],
+    exporters: [...registry.exporters]
   };
 }
 
@@ -604,6 +819,8 @@ function getInstalledPlugin(database: SqliteDatabase, pluginId: string): Install
           capabilities_json as capabilitiesJson,
           permissions_json as permissionsJson,
           integrity_json as integrityJson,
+          signature_json as signatureJson,
+          signature_status as signatureStatus,
           root_path as rootPath,
           enabled,
           status
@@ -630,6 +847,8 @@ function pluginRow(row: unknown): InstalledPlugin {
     capabilitiesJson: string;
     permissionsJson: string;
     integrityJson: string;
+    signatureJson: string;
+    signatureStatus: PluginSignatureStatus;
     rootPath: string;
     enabled: number;
     status: PluginStatus;
@@ -644,9 +863,11 @@ function pluginRow(row: unknown): InstalledPlugin {
     capabilities: JSON.parse(plugin.capabilitiesJson) as PluginCapability[],
     permissions: JSON.parse(plugin.permissionsJson) as PluginPermission[],
     integrity: JSON.parse(plugin.integrityJson) as PluginIntegrity,
+    signature: JSON.parse(plugin.signatureJson) as PluginSignature,
     rootPath: plugin.rootPath,
     enabled: plugin.enabled === 1,
-    status: plugin.status
+    status: plugin.status,
+    signatureStatus: plugin.signatureStatus
   };
 }
 
@@ -692,6 +913,226 @@ function getPluginErrors(database: SqliteDatabase, pluginId: string): Array<{ me
     )
     .all(pluginId)
     .map((row) => row as { message: string });
+}
+
+function getPluginDirectory(database: SqliteDatabase, directoryId: string): PluginDirectoryRecord {
+  const row = database
+    .prepare(
+      `
+        select id, root_path as rootPath, status, scanned_at as scannedAt
+        from plugin_directories
+        where id = ?
+      `
+    )
+    .get(directoryId);
+
+  if (!row) {
+    throw new PluginHostError('plugin-not-found', `Plugin directory not found: ${directoryId}`);
+  }
+
+  return pluginDirectoryRow(row);
+}
+
+function listPluginDirectories(database: SqliteDatabase): PluginDirectoryRecord[] {
+  return database
+    .prepare(
+      `
+        select id, root_path as rootPath, status, scanned_at as scannedAt
+        from plugin_directories
+        order by created_at
+      `
+    )
+    .all()
+    .map(pluginDirectoryRow);
+}
+
+function pluginDirectoryRow(row: unknown): PluginDirectoryRecord {
+  const directory = row as {
+    id: string;
+    rootPath: string;
+    status: PluginDirectoryStatus;
+    scannedAt: string | null;
+  };
+
+  return {
+    id: directory.id,
+    rootPath: directory.rootPath,
+    status: directory.status,
+    scannedAt: directory.scannedAt
+  };
+}
+
+async function readPluginCatalogEntry(
+  database: SqliteDatabase,
+  directoryId: string,
+  rootPath: string
+): Promise<{
+  id: string;
+  directoryId: string;
+  pluginId: string;
+  name: string;
+  version: string;
+  rootPath: string;
+  signatureStatus: PluginSignatureStatus;
+  status: PluginCatalogStatus;
+  errorMessage: string | null;
+}> {
+  try {
+    const manifestPath = await ensurePathInsideRoot(rootPath, path.join(rootPath, 'plugin.json'));
+    const manifest = validatePluginManifest(JSON.parse(await readFile(manifestPath, 'utf8')));
+    return {
+      id: randomUUID(),
+      directoryId,
+      pluginId: manifest.id,
+      name: manifest.name,
+      version: manifest.version,
+      rootPath,
+      signatureStatus: getPluginSignatureStatus(manifest),
+      status: 'available',
+      errorMessage: null
+    };
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    const fallbackId = path.basename(rootPath) || randomUUID();
+    return {
+      id: randomUUID(),
+      directoryId,
+      pluginId: fallbackId,
+      name: fallbackId,
+      version: '0.0.0',
+      rootPath,
+      signatureStatus: 'unsigned',
+      status: 'error',
+      errorMessage: message
+    };
+  }
+}
+
+function listPluginCatalog(database: SqliteDatabase, directoryId?: string): PluginCatalogEntry[] {
+  const rows = directoryId
+    ? database
+        .prepare(
+          `
+            select
+              pce.id,
+              pce.directory_id as directoryId,
+              pce.plugin_id as pluginId,
+              pce.name,
+              pce.version,
+              pce.root_path as rootPath,
+              pce.signature_status as signatureStatus,
+              pce.status,
+              pce.error_message as errorMessage,
+              case when pm.id is null then 0 else 1 end as installed
+            from plugin_catalog_entries pce
+            left join plugin_manifests pm on pm.id = pce.plugin_id
+            where pce.directory_id = ?
+            order by pce.name
+          `
+        )
+        .all(directoryId)
+    : database
+        .prepare(
+          `
+            select
+              pce.id,
+              pce.directory_id as directoryId,
+              pce.plugin_id as pluginId,
+              pce.name,
+              pce.version,
+              pce.root_path as rootPath,
+              pce.signature_status as signatureStatus,
+              pce.status,
+              pce.error_message as errorMessage,
+              case when pm.id is null then 0 else 1 end as installed
+            from plugin_catalog_entries pce
+            left join plugin_manifests pm on pm.id = pce.plugin_id
+            order by pce.name
+          `
+        )
+        .all();
+
+  return rows.map(pluginCatalogRow);
+}
+
+function pluginCatalogRow(row: unknown): PluginCatalogEntry {
+  const entry = row as {
+    id: string;
+    directoryId: string;
+    pluginId: string;
+    name: string;
+    version: string;
+    rootPath: string;
+    signatureStatus: PluginSignatureStatus;
+    installed: number;
+    status: PluginCatalogStatus;
+    errorMessage: string | null;
+  };
+
+  return {
+    id: entry.id,
+    directoryId: entry.directoryId,
+    pluginId: entry.pluginId,
+    name: entry.name,
+    version: entry.version,
+    rootPath: entry.rootPath,
+    signatureStatus: entry.signatureStatus,
+    installed: entry.installed === 1,
+    status: entry.status,
+    errorMessage: entry.errorMessage
+  };
+}
+
+async function collectPluginRoots(directory: string): Promise<string[]> {
+  if (await fileExists(path.join(directory, 'plugin.json'))) {
+    return [directory];
+  }
+
+  const entries = await readdir(directory, { withFileTypes: true });
+  const roots: string[] = [];
+  for (const entry of entries) {
+    if (!entry.isDirectory()) {
+      continue;
+    }
+    const candidate = path.join(directory, entry.name);
+    if (await fileExists(path.join(candidate, 'plugin.json'))) {
+      roots.push(candidate);
+    }
+  }
+
+  return roots.sort();
+}
+
+async function fileExists(filePath: string): Promise<boolean> {
+  try {
+    await access(filePath);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+function getPluginSignatureStatus(manifest: PluginManifest): PluginSignatureStatus {
+  if (manifest.signature.status !== 'signed') {
+    return 'unsigned';
+  }
+
+  const { signer, value } = manifest.signature;
+  if (!signer || !value) {
+    return 'untrusted';
+  }
+
+  if (signedPluginManifestValue(manifest, signer) !== value) {
+    return 'untrusted';
+  }
+
+  return signer.startsWith('trusted:') ? 'trusted' : 'untrusted';
+}
+
+function signedPluginManifestValue(manifest: Pick<PluginManifest, 'id' | 'name' | 'version'>, signer: string): string {
+  return createHash('sha256')
+    .update(`${JSON.stringify({ id: manifest.id, name: manifest.name, version: manifest.version })}:${signer}`)
+    .digest('hex');
 }
 
 function capabilityKey(capability: PluginCapability): string {

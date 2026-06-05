@@ -197,6 +197,131 @@ describe('plugin service', () => {
       })
     ).rejects.toMatchObject({ code: 'plugin-not-found' });
   });
+
+  it('registers exporter providers only after permission grants and removes them when disabled', async () => {
+    const database = createMemoryDatabase();
+    runMigrations(database);
+    const plugins = createPluginService({ database });
+    const rootPath = await createPluginFixture({
+      id: 'exporter-plugin',
+      name: 'Exporter Plugin',
+      capabilities: [{ type: 'exporter', id: 'bundle-exporter' }],
+      permissions: ['export:local'],
+      signature: {
+        signer: 'trusted:fixture',
+        value: signedPluginManifestValue('exporter-plugin', 'Exporter Plugin', '1.0.0', 'trusted:fixture')
+      },
+      source: `
+        exports.register = (host) => {
+          host.registerExporter({
+            id: 'bundle-exporter',
+            name: 'Bundle Exporter',
+            invoke(input) {
+              return { outputDirectory: input.outputDirectory, fileCount: input.files.length };
+            }
+          });
+        };
+      `
+    });
+    const installed = await plugins.installPlugin({ rootPath });
+
+    expect(installed.signatureStatus).toBe('trusted');
+    await expect(plugins.enablePlugin({ pluginId: installed.id })).rejects.toMatchObject({
+      code: 'permission-not-authorized'
+    });
+    expect(plugins.getRegistry().exporters).toEqual([]);
+
+    plugins.authorizePermission({
+      pluginId: installed.id,
+      permission: 'export:local',
+      reason: 'Export provider test'
+    });
+    await plugins.enablePlugin({ pluginId: installed.id });
+
+    expect(plugins.getRegistry().exporters).toEqual([
+      { pluginId: installed.id, id: 'bundle-exporter', name: 'Bundle Exporter' }
+    ]);
+    await expect(
+      plugins.invokeProvider({
+        pluginId: installed.id,
+        capabilityType: 'exporter',
+        capabilityId: 'bundle-exporter',
+        input: { outputDirectory: '/tmp/out', files: ['SKILL.md'] }
+      })
+    ).resolves.toEqual({ outputDirectory: '/tmp/out', fileCount: 1 });
+
+    plugins.disablePlugin({ pluginId: installed.id });
+    expect(plugins.getRegistry().exporters).toEqual([]);
+    await expect(
+      plugins.invokeProvider({
+        pluginId: installed.id,
+        capabilityType: 'exporter',
+        capabilityId: 'bundle-exporter',
+        input: { outputDirectory: '/tmp/out', files: [] }
+      })
+    ).rejects.toMatchObject({ code: 'plugin-not-found' });
+  });
+
+  it('manages plugin directories, catalog scans, and package signature trust state', async () => {
+    const database = createMemoryDatabase();
+    runMigrations(database);
+    const plugins = createPluginService({ database });
+    const directory = await mkdtemp(path.join(tmpdir(), 'theopenhub-plugin-catalog-'));
+    tempDirectories.push(directory);
+    const trustedRoot = await createPluginFixture({
+      directory: path.join(directory, 'trusted'),
+      id: 'trusted-plugin',
+      name: 'Trusted Plugin',
+      signature: {
+        signer: 'trusted:catalog',
+        value: signedPluginManifestValue('trusted-plugin', 'Trusted Plugin', '1.0.0', 'trusted:catalog')
+      }
+    });
+    await createPluginFixture({
+      directory: path.join(directory, 'untrusted'),
+      id: 'untrusted-plugin',
+      name: 'Untrusted Plugin',
+      signature: {
+        signer: 'unknown:catalog',
+        value: 'bad-signature'
+      }
+    });
+    await createPluginFixture({
+      directory: path.join(directory, 'unsigned'),
+      id: 'unsigned-plugin',
+      name: 'Unsigned Plugin'
+    });
+
+    const record = plugins.addPluginDirectory({ rootPath: directory });
+    expect(plugins.listPluginDirectories()).toEqual([expect.objectContaining({ id: record.id, rootPath: directory })]);
+
+    const scan = await plugins.scanPluginDirectory({ directoryId: record.id });
+    expect(scan.directory.status).toBe('scanned');
+    expect(scan.catalog).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          pluginId: 'trusted-plugin',
+          rootPath: trustedRoot,
+          signatureStatus: 'trusted',
+          installed: false
+        }),
+        expect.objectContaining({ pluginId: 'untrusted-plugin', signatureStatus: 'untrusted' }),
+        expect.objectContaining({ pluginId: 'unsigned-plugin', signatureStatus: 'unsigned' })
+      ])
+    );
+
+    await plugins.installPlugin({ rootPath: trustedRoot });
+    expect(plugins.getPluginCenterState().catalog).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ pluginId: 'trusted-plugin', installed: true, signatureStatus: 'trusted' })
+      ])
+    );
+
+    const removed = plugins.removePluginDirectory({ directoryId: record.id });
+    expect(removed).toEqual({ status: 'removed' });
+    expect(plugins.listPluginDirectories()).toEqual([]);
+    expect(plugins.getPluginCenterState().catalog).toEqual([]);
+  });
 });
 
 function validManifest(
@@ -216,6 +341,7 @@ function validManifest(
 }
 
 async function createPluginFixture(input: {
+  directory?: string;
   id?: string;
   name?: string;
   apiVersion?: number;
@@ -223,9 +349,12 @@ async function createPluginFixture(input: {
   capabilities?: PluginCapability[];
   permissions?: string[];
   integrityHash?: string;
+  signature?: { signer: string; value: string };
 } = {}): Promise<string> {
-  const directory = await mkdtemp(path.join(tmpdir(), 'theopenhub-plugin-'));
-  tempDirectories.push(directory);
+  const directory = input.directory ?? (await mkdtemp(path.join(tmpdir(), 'theopenhub-plugin-')));
+  if (!input.directory) {
+    tempDirectories.push(directory);
+  }
   await mkdir(directory, { recursive: true });
 
   const source =
@@ -238,16 +367,28 @@ async function createPluginFixture(input: {
   await writeFile(path.join(directory, 'plugin.js'), source);
 
   const hash = createHash('sha256').update(source).digest('hex');
+  const id = input.id ?? 'mock-agent-plugin';
+  const name = input.name ?? 'Mock Agent Plugin';
   await writeFile(
     path.join(directory, 'plugin.json'),
     JSON.stringify(
       validManifest({
-        id: input.id ?? 'mock-agent-plugin',
-        name: input.name ?? 'Mock Agent Plugin',
+        id,
+        name,
         apiVersion: input.apiVersion ?? 1,
         capabilities: input.capabilities ?? [{ type: 'agent-adapter', id: 'mock-agent' }],
         permissions: input.permissions ?? [],
-        integrity: { algorithm: 'sha256', hash: input.integrityHash ?? hash }
+        integrity: { algorithm: 'sha256', hash: input.integrityHash ?? hash },
+        ...(input.signature
+          ? {
+              signature: {
+                status: 'signed',
+                algorithm: 'sha256',
+                signer: input.signature.signer,
+                value: input.signature.value
+              }
+            }
+          : {})
       }),
       null,
       2
@@ -267,4 +408,8 @@ function expectPluginManifestError(fn: () => unknown, code: string): void {
   }
 
   throw new Error(`Expected PluginManifestError: ${code}`);
+}
+
+function signedPluginManifestValue(id: string, name: string, version: string, signer: string): string {
+  return createHash('sha256').update(`${JSON.stringify({ id, name, version })}:${signer}`).digest('hex');
 }

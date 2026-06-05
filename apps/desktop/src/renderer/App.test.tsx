@@ -374,6 +374,8 @@ describe('desktop app shell', () => {
     render(
       <App
         initialPlugins={{
+          directories: [],
+          catalog: [],
           plugins: [
             {
               name: 'Local Agent Plugin',
@@ -397,6 +399,81 @@ describe('desktop app shell', () => {
     expect(screen.getAllByText('network:fetch').length).toBeGreaterThan(0);
     expect(screen.getAllByText('authorized').length).toBeGreaterThan(0);
     expect(screen.getAllByText('Unsafe plugin entry blocked').length).toBeGreaterThan(0);
+  });
+
+  it('lets the user manage plugin directories, catalog scans, trust state, and exporter counts', async () => {
+    const api = {
+      getAppInfo: vi.fn(),
+      listLibrarySkills: vi.fn(),
+      getWorkspaceState: vi.fn().mockResolvedValue(workspaceState()),
+      addPluginDirectory: vi.fn().mockResolvedValue({
+        id: 'directory-1',
+        rootPath: '/tmp/plugins',
+        status: 'active',
+        scannedAt: null
+      }),
+      scanPluginDirectory: vi.fn().mockResolvedValue({
+        directory: {
+          id: 'directory-1',
+          rootPath: '/tmp/plugins',
+          status: 'scanned',
+          scannedAt: '2026-06-05T00:00:00.000Z'
+        },
+        catalog: [
+          {
+            id: 'catalog-1',
+            directoryId: 'directory-1',
+            pluginId: 'exporter-plugin',
+            name: 'Exporter Plugin',
+            version: '1.0.0',
+            rootPath: '/tmp/plugins/exporter-plugin',
+            signatureStatus: 'trusted',
+            installed: false,
+            status: 'available'
+          }
+        ]
+      }),
+      removePluginDirectory: vi.fn().mockResolvedValue({ status: 'removed' }),
+      installPlugin: vi.fn().mockResolvedValue({
+        id: 'exporter-plugin',
+        name: 'Exporter Plugin',
+        version: '1.0.0',
+        rootPath: '/tmp/plugins/exporter-plugin',
+        status: 'disabled',
+        signatureStatus: 'trusted'
+      }),
+      getPluginRegistry: vi.fn().mockResolvedValue({
+        agentAdapters: [],
+        importers: [],
+        securityRules: [],
+        syncDrivers: [],
+        exporters: [{ pluginId: 'exporter-plugin', id: 'bundle-exporter', name: 'Bundle Exporter' }]
+      }),
+      getPluginCenterState: vi.fn()
+    };
+    window.theOpenHub = api as unknown as NonNullable<typeof window.theOpenHub>;
+
+    render(<App />);
+
+    await waitFor(() => expect(api.getWorkspaceState).toHaveBeenCalled());
+    fireEvent.click(screen.getByRole('button', { name: 'Settings' }));
+    fireEvent.click(screen.getByRole('tab', { name: 'Plugins' }));
+    fireEvent.change(screen.getByLabelText('Plugin directory'), {
+      target: { value: '/tmp/plugins' }
+    });
+    fireEvent.click(screen.getByRole('button', { name: 'Add plugin directory' }));
+    await waitFor(() => expect(api.addPluginDirectory).toHaveBeenCalledWith('/tmp/plugins'));
+    fireEvent.click(screen.getByRole('button', { name: 'Scan plugin directory' }));
+    await waitFor(() => expect(api.scanPluginDirectory).toHaveBeenCalledWith('directory-1'));
+
+    expect(screen.getAllByText('Exporter Plugin').length).toBeGreaterThan(0);
+    expect(screen.getAllByText('trusted').length).toBeGreaterThan(0);
+    fireEvent.click(screen.getByRole('button', { name: 'Install catalog plugin' }));
+    await waitFor(() => expect(api.installPlugin).toHaveBeenCalledWith('/tmp/plugins/exporter-plugin'));
+    expect(await screen.findByText('Bundle Exporter')).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Remove plugin directory' }));
+    await waitFor(() => expect(api.removePluginDirectory).toHaveBeenCalledWith('directory-1'));
   });
 
   it('lets the user run the local import and install management loop through IPC', async () => {
@@ -2126,6 +2203,8 @@ function workspaceState(overrides: Partial<DesktopWorkspaceState> = {}): Desktop
       conflicts: []
     },
     plugins: {
+      directories: [],
+      catalog: [],
       plugins: []
     },
     ...overrides

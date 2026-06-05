@@ -84,6 +84,8 @@ import {
   type BaselinePreview,
   type PolicyEvaluation,
   type PolicyPack,
+  type PluginDirectoryRecord,
+  type PluginDirectoryScanResult,
   type PluginInstallResult,
   type PluginRegistry,
   type PluginsState,
@@ -231,16 +233,24 @@ type RuntimeDispatchResult<C extends IpcChannel> = C extends typeof desktopShell
                                                                   ? PluginsState
                                                                   : C extends typeof desktopShellContract.pluginsInstall.channel
                                                                     ? PluginInstallResult
-                                                                    : C extends typeof desktopShellContract.pluginsAuthorizePermission.channel
-                                                                      ? StatusOnlyResult
-                                                                      : C extends typeof desktopShellContract.pluginsEnable.channel
-                                                                        ? PluginRegistry
-                                                                        : C extends typeof desktopShellContract.pluginsDisable.channel
-                                                                          ? StatusOnlyResult
-                                                                          : C extends typeof desktopShellContract.pluginsRegistry.channel
-                                                                            ? PluginRegistry
-                                                                            : C extends typeof desktopShellContract.pluginsInvokeProvider.channel
-                                                                              ? unknown
+                                                                    : C extends typeof desktopShellContract.pluginsAddDirectory.channel
+                                                                      ? PluginDirectoryRecord
+                                                                      : C extends typeof desktopShellContract.pluginsListDirectories.channel
+                                                                        ? PluginDirectoryRecord[]
+                                                                        : C extends typeof desktopShellContract.pluginsScanDirectory.channel
+                                                                          ? PluginDirectoryScanResult
+                                                                          : C extends typeof desktopShellContract.pluginsRemoveDirectory.channel
+                                                                            ? StatusOnlyResult
+                                                                            : C extends typeof desktopShellContract.pluginsAuthorizePermission.channel
+                                                                              ? StatusOnlyResult
+                                                                              : C extends typeof desktopShellContract.pluginsEnable.channel
+                                                                                ? PluginRegistry
+                                                                                : C extends typeof desktopShellContract.pluginsDisable.channel
+                                                                                  ? StatusOnlyResult
+                                                                                  : C extends typeof desktopShellContract.pluginsRegistry.channel
+                                                                                    ? PluginRegistry
+                                                                                    : C extends typeof desktopShellContract.pluginsInvokeProvider.channel
+                                                                                      ? unknown
                                                                               : C extends typeof desktopShellContract.policyCreate.channel
                                                                                 ? PolicyPack
                                                                                 : C extends typeof desktopShellContract.policyList.channel
@@ -1021,8 +1031,29 @@ export function createDesktopRuntime(input: CreateDesktopRuntimeInput): DesktopR
           name: installed.name,
           version: installed.version,
           status: installed.status,
-          rootPath: installed.rootPath
+          rootPath: installed.rootPath,
+          signatureStatus: installed.signatureStatus
         };
+        return parseIpcResponse(channel, result) as RuntimeDispatchResult<C>;
+      }
+
+      if (channel === desktopShellContract.pluginsAddDirectory.channel) {
+        const result = plugins.addPluginDirectory(request as { rootPath: string });
+        return parseIpcResponse(channel, result) as RuntimeDispatchResult<C>;
+      }
+
+      if (channel === desktopShellContract.pluginsListDirectories.channel) {
+        const result = plugins.listPluginDirectories();
+        return parseIpcResponse(channel, result) as RuntimeDispatchResult<C>;
+      }
+
+      if (channel === desktopShellContract.pluginsScanDirectory.channel) {
+        const result = await plugins.scanPluginDirectory(request as { directoryId: string });
+        return parseIpcResponse(channel, result) as RuntimeDispatchResult<C>;
+      }
+
+      if (channel === desktopShellContract.pluginsRemoveDirectory.channel) {
+        const result = plugins.removePluginDirectory(request as { directoryId: string });
         return parseIpcResponse(channel, result) as RuntimeDispatchResult<C>;
       }
 

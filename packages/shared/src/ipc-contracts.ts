@@ -447,8 +447,34 @@ const syncCenterStateSchema = z
 
 export type SyncCenterState = z.infer<typeof syncCenterStateSchema>;
 
+const pluginDirectoryRecordSchema = z
+  .object({
+    id: z.string().min(1),
+    rootPath: z.string().min(1),
+    status: z.string().min(1),
+    scannedAt: z.string().min(1).nullable()
+  })
+  .strict();
+
+const pluginCatalogEntrySchema = z
+  .object({
+    id: z.string().min(1),
+    directoryId: z.string().min(1),
+    pluginId: z.string().min(1),
+    name: z.string().min(1),
+    version: z.string().min(1),
+    rootPath: z.string().min(1),
+    signatureStatus: z.enum(['unsigned', 'trusted', 'untrusted']),
+    installed: z.boolean(),
+    status: z.string().min(1),
+    errorMessage: z.string().nullable().optional()
+  })
+  .strict();
+
 const pluginsStateSchema = z
   .object({
+    directories: z.array(pluginDirectoryRecordSchema).default([]),
+    catalog: z.array(pluginCatalogEntrySchema).default([]),
     plugins: z.array(
       z
         .object({
@@ -457,6 +483,7 @@ const pluginsStateSchema = z
           version: z.string().min(1).optional(),
           rootPath: z.string().min(1).optional(),
           status: z.string().min(1),
+          signatureStatus: z.enum(['unsigned', 'trusted', 'untrusted']).optional(),
           capabilities: z.array(z.string().min(1)),
           permissions: z.array(
             z
@@ -480,6 +507,18 @@ const pluginsStateSchema = z
   .strict();
 
 export type PluginsState = z.infer<typeof pluginsStateSchema>;
+
+export type PluginDirectoryRecord = z.infer<typeof pluginDirectoryRecordSchema>;
+export type PluginCatalogEntry = z.infer<typeof pluginCatalogEntrySchema>;
+
+export const pluginDirectoryScanResultSchema = z
+  .object({
+    directory: pluginDirectoryRecordSchema,
+    catalog: z.array(pluginCatalogEntrySchema)
+  })
+  .strict();
+
+export type PluginDirectoryScanResult = z.infer<typeof pluginDirectoryScanResultSchema>;
 
 export const desktopWorkspaceStateSchema = z
   .object({
@@ -879,10 +918,11 @@ const pluginPermissionSchema = z.enum([
   'agent-root:write',
   'network:fetch',
   'import:local',
-  'sync-driver'
+  'sync-driver',
+  'export:local'
 ]);
 
-const pluginCapabilityTypeSchema = z.enum(['agent-adapter', 'importer', 'security-rule', 'sync-driver']);
+const pluginCapabilityTypeSchema = z.enum(['agent-adapter', 'importer', 'security-rule', 'sync-driver', 'exporter']);
 
 const pluginRegistrySchema = z
   .object({
@@ -897,6 +937,9 @@ const pluginRegistrySchema = z
     ),
     syncDrivers: z.array(
       z.object({ pluginId: z.string().min(1), id: z.string().min(1), name: z.string().min(1) }).strict()
+    ),
+    exporters: z.array(
+      z.object({ pluginId: z.string().min(1), id: z.string().min(1), name: z.string().min(1) }).strict()
     )
   })
   .strict();
@@ -909,7 +952,8 @@ const pluginInstallResultSchema = z
     name: z.string().min(1),
     version: z.string().min(1),
     status: z.string().min(1),
-    rootPath: z.string().min(1)
+    rootPath: z.string().min(1),
+    signatureStatus: z.enum(['unsigned', 'trusted', 'untrusted']).optional()
   })
   .strict();
 
@@ -1424,6 +1468,26 @@ export const desktopShellContract = {
     request: z.object({ rootPath: z.string().min(1) }).strict(),
     response: pluginInstallResultSchema
   },
+  pluginsAddDirectory: {
+    channel: 'plugins.addDirectory',
+    request: z.object({ rootPath: z.string().min(1) }).strict(),
+    response: pluginDirectoryRecordSchema
+  },
+  pluginsListDirectories: {
+    channel: 'plugins.listDirectories',
+    request: emptyRequestSchema,
+    response: z.array(pluginDirectoryRecordSchema)
+  },
+  pluginsScanDirectory: {
+    channel: 'plugins.scanDirectory',
+    request: z.object({ directoryId: z.string().min(1) }).strict(),
+    response: pluginDirectoryScanResultSchema
+  },
+  pluginsRemoveDirectory: {
+    channel: 'plugins.removeDirectory',
+    request: z.object({ directoryId: z.string().min(1) }).strict(),
+    response: statusOnlyResultSchema
+  },
   pluginsAuthorizePermission: {
     channel: 'plugins.authorizePermission',
     request: z
@@ -1791,6 +1855,22 @@ export function parseIpcResponse(
   channel: typeof desktopShellContract.pluginsInstall.channel,
   payload: unknown
 ): PluginInstallResult;
+export function parseIpcResponse(
+  channel: typeof desktopShellContract.pluginsAddDirectory.channel,
+  payload: unknown
+): PluginDirectoryRecord;
+export function parseIpcResponse(
+  channel: typeof desktopShellContract.pluginsListDirectories.channel,
+  payload: unknown
+): PluginDirectoryRecord[];
+export function parseIpcResponse(
+  channel: typeof desktopShellContract.pluginsScanDirectory.channel,
+  payload: unknown
+): PluginDirectoryScanResult;
+export function parseIpcResponse(
+  channel: typeof desktopShellContract.pluginsRemoveDirectory.channel,
+  payload: unknown
+): StatusOnlyResult;
 export function parseIpcResponse(
   channel: typeof desktopShellContract.pluginsAuthorizePermission.channel,
   payload: unknown

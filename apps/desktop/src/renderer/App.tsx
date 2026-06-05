@@ -229,6 +229,8 @@ export function App({
   } | null>(null);
   const [syncConflicts, setSyncConflicts] = useState<SyncConflictRecord[]>([]);
   const [pluginRootPath, setPluginRootPath] = useState('');
+  const [pluginDirectoryPath, setPluginDirectoryPath] = useState('');
+  const [activePluginDirectoryId, setActivePluginDirectoryId] = useState('');
   const [pluginId, setPluginId] = useState('');
   const [pluginRegistry, setPluginRegistry] = useState<PluginRegistry | null>(null);
   const [discoverSourceName, setDiscoverSourceName] = useState('');
@@ -248,7 +250,10 @@ export function App({
   const viewModel = useMemo(() => createWorkspaceViewModel(workspaceState), [workspaceState]);
 
   const applyWorkspaceState = useCallback((state: DesktopWorkspaceState) => {
-    setWorkspaceState(state);
+    setWorkspaceState({
+      ...state,
+      plugins: normalizePluginsState(state.plugins)
+    });
   }, []);
 
   const refreshLibraryFacets = useCallback(async () => {
@@ -1224,6 +1229,7 @@ export function App({
     setWorkspaceState((current) => ({
       ...current,
       plugins: {
+        ...current.plugins,
         plugins: [
           {
             id: plugin.id,
@@ -1231,6 +1237,7 @@ export function App({
             version: plugin.version,
             rootPath: plugin.rootPath,
             status: plugin.status,
+            signatureStatus: plugin.signatureStatus,
             capabilities: [],
             permissions: [],
             errors: []
@@ -1240,6 +1247,121 @@ export function App({
       }
     }));
     setOperationMessage(`Installed plugin ${plugin.name}`);
+  }
+
+  async function handleAddPluginDirectory(): Promise<void> {
+    if (!window.theOpenHub?.addPluginDirectory || pluginDirectoryPath.trim().length === 0) {
+      return;
+    }
+
+    const directory = await window.theOpenHub.addPluginDirectory(pluginDirectoryPath.trim());
+    setActivePluginDirectoryId(directory.id);
+    setWorkspaceState((current) => ({
+      ...current,
+      plugins: {
+        ...current.plugins,
+        directories: [
+          directory,
+          ...current.plugins.directories.filter((item) => item.id !== directory.id)
+        ]
+      }
+    }));
+    setOperationMessage(`Added plugin directory ${directory.rootPath}`);
+  }
+
+  async function handleScanPluginDirectory(): Promise<void> {
+    if (!window.theOpenHub?.scanPluginDirectory) {
+      return;
+    }
+
+    const directoryId = activePluginDirectoryId || workspaceState.plugins.directories[0]?.id;
+    if (!directoryId) {
+      return;
+    }
+
+    const result = await window.theOpenHub.scanPluginDirectory(directoryId);
+    setActivePluginDirectoryId(result.directory.id);
+    setPluginRootPath(result.catalog.find((entry) => !entry.installed)?.rootPath ?? pluginRootPath);
+    setWorkspaceState((current) => ({
+      ...current,
+      plugins: {
+        ...current.plugins,
+        directories: [
+          result.directory,
+          ...current.plugins.directories.filter((item) => item.id !== result.directory.id)
+        ],
+        catalog: [
+          ...result.catalog,
+          ...current.plugins.catalog.filter((item) => item.directoryId !== result.directory.id)
+        ]
+      }
+    }));
+    setOperationMessage(`Scanned ${result.catalog.length} plugin packages`);
+  }
+
+  async function handleInstallCatalogPlugin(): Promise<void> {
+    const candidate = workspaceState.plugins.catalog.find((entry) => !entry.installed && entry.status === 'available');
+    if (!candidate) {
+      return;
+    }
+
+    setPluginRootPath(candidate.rootPath);
+    const plugin = await window.theOpenHub?.installPlugin?.(candidate.rootPath);
+    if (!plugin) {
+      return;
+    }
+
+    setPluginId(plugin.id);
+    setWorkspaceState((current) => ({
+      ...current,
+      plugins: {
+        ...current.plugins,
+        catalog: current.plugins.catalog.map((entry) =>
+          entry.pluginId === plugin.id ? { ...entry, installed: true } : entry
+        ),
+        plugins: [
+          {
+            id: plugin.id,
+            name: plugin.name,
+            version: plugin.version,
+            rootPath: plugin.rootPath,
+            status: plugin.status,
+            signatureStatus: plugin.signatureStatus,
+            capabilities: [],
+            permissions: [],
+            errors: []
+          },
+          ...current.plugins.plugins.filter((item) => item.id !== plugin.id)
+        ]
+      }
+    }));
+    if (window.theOpenHub?.getPluginRegistry) {
+      setPluginRegistry(await window.theOpenHub.getPluginRegistry());
+    }
+    setOperationMessage(`Installed catalog plugin ${plugin.name}`);
+  }
+
+  async function handleRemovePluginDirectory(): Promise<void> {
+    if (!window.theOpenHub?.removePluginDirectory) {
+      return;
+    }
+
+    const directoryId = activePluginDirectoryId || workspaceState.plugins.directories[0]?.id;
+    if (!directoryId) {
+      return;
+    }
+
+    await window.theOpenHub.removePluginDirectory(directoryId);
+    setWorkspaceState((current) => ({
+      ...current,
+      plugins: {
+        ...current.plugins,
+        directories: current.plugins.directories.filter((item) => item.id !== directoryId),
+        catalog: current.plugins.catalog.filter((item) => item.directoryId !== directoryId)
+      }
+    }));
+    setActivePluginDirectoryId('');
+    setOperationMessage('Removed plugin directory');
   }
 
   async function handleAuthorizePlugin(): Promise<void> {
@@ -1526,6 +1648,9 @@ export function App({
                   onAuthorizePlugin={() => {
                     void handleAuthorizePlugin();
                   }}
+                  onAddPluginDirectory={() => {
+                    void handleAddPluginDirectory();
+                  }}
                   onCollectionDirectoryChange={setCollectionDirectory}
                   onCollectionNameChange={setCollectionName}
                   onCollectionPackageDirectoryChange={setCollectionPackageDirectory}
@@ -1606,6 +1731,9 @@ export function App({
                   onInstallPlugin={() => {
                     void handleInstallPlugin();
                   }}
+                  onInstallCatalogPlugin={() => {
+                    void handleInstallCatalogPlugin();
+                  }}
                   onInstallProjectionModeChange={setInstallProjectionMode}
                   onInstallTargetRootChange={setInstallTargetRoot}
                   onLibraryFavoritesOnlyChange={setLibraryFavoritesOnly}
@@ -1625,6 +1753,7 @@ export function App({
                   onMirrorImportDirectoryChange={setMirrorImportDirectory}
                   onMigrationSourcePathChange={setMigrationSourcePath}
                   onPluginRootPathChange={setPluginRootPath}
+                  onPluginDirectoryPathChange={setPluginDirectoryPath}
                   onPreviewDiscoverSource={() => {
                     void handlePreviewDiscoverSource();
                   }}
@@ -1633,6 +1762,9 @@ export function App({
                   }}
                   onPreviewMigration={() => {
                     void handlePreviewMigration();
+                  }}
+                  onRemovePluginDirectory={() => {
+                    void handleRemovePluginDirectory();
                   }}
                   onRevokeExemption={() => {
                     void handleRevokeExemption();
@@ -1653,6 +1785,9 @@ export function App({
                   }}
                   onSecurityScan={() => {
                     void handleSecurityScan();
+                  }}
+                  onScanPluginDirectory={() => {
+                    void handleScanPluginDirectory();
                   }}
                   onSecurityRescanAll={() => {
                     void handleSecurityRescanAll();
@@ -1712,6 +1847,7 @@ export function App({
                   onZipImportPathChange={setZipImportPath}
                   operationMessage={operationMessage}
                   pluginRegistry={pluginRegistry}
+                  pluginDirectoryPath={pluginDirectoryPath}
                   pluginRootPath={pluginRootPath}
                   projectRootAgentCode={projectRootAgentCode}
                   projectRootPath={projectRootPath}
@@ -1768,7 +1904,15 @@ function initialWorkspaceState({
     reviewCenter: initialReviewCenter ?? empty.reviewCenter,
     governance: initialGovernance ?? empty.governance,
     syncCenter: initialSyncCenter ?? empty.syncCenter,
-    plugins: initialPlugins ?? empty.plugins
+    plugins: normalizePluginsState(initialPlugins ?? empty.plugins)
+  };
+}
+
+function normalizePluginsState(plugins: PluginsState): PluginsState {
+  return {
+    directories: plugins.directories ?? [],
+    catalog: plugins.catalog ?? [],
+    plugins: plugins.plugins
   };
 }
 
@@ -2182,6 +2326,7 @@ type PageContentProps = {
       | { type: 'delete'; action: 'soft-delete' }
   ) => void;
   onAuthorizePlugin: () => void;
+  onAddPluginDirectory: () => void;
   onAddProjectRoot: () => void;
   onCollectionDirectoryChange: (value: string) => void;
   onCollectionNameChange: (value: string) => void;
@@ -2220,6 +2365,7 @@ type PageContentProps = {
   onImportTar: () => void;
   onImportZip: () => void;
   onInstallPlugin: () => void;
+  onInstallCatalogPlugin: () => void;
   onInstallProjectionModeChange: (value: InstallPlan['projectionMode']) => void;
   onInstallTargetRootChange: (value: string) => void;
   onLibraryAgentFilterChange: (value: string) => void;
@@ -2234,9 +2380,11 @@ type PageContentProps = {
   onMirrorImportDirectoryChange: (value: string) => void;
   onMigrationSourcePathChange: (value: string) => void;
   onPluginRootPathChange: (value: string) => void;
+  onPluginDirectoryPathChange: (value: string) => void;
   onPreviewDiscoverSource: () => void;
   onPreviewBaseline: () => void;
   onPreviewMigration: () => void;
+  onRemovePluginDirectory: () => void;
   onRelink: () => void;
   onRelinkTargetRootChange: (value: string) => void;
   onReinstall: () => void;
@@ -2247,6 +2395,7 @@ type PageContentProps = {
   onScanAgentRoots: () => void;
   onSecurityRescanAll: () => void;
   onSecurityScan: () => void;
+  onScanPluginDirectory: () => void;
   onSetReadOnlyLock: (locked: boolean) => void;
   onSelectSkill: (skillId: string) => void;
   onApplyBaseline: () => void;
@@ -2278,6 +2427,7 @@ type PageContentProps = {
   onZipImportPathChange: (value: string) => void;
   operationMessage: string;
   pluginRegistry: PluginRegistry | null;
+  pluginDirectoryPath: string;
   pluginRootPath: string;
   projectRootAgentCode: 'codex' | 'claude' | 'gemini' | 'opencode';
   projectRootPath: string;
@@ -2359,6 +2509,7 @@ function PageContent(props: PageContentProps): ReactElement {
     onApplyMultiTargetPlans,
     onApplySyncConflict,
     onAuthorizePlugin,
+    onAddPluginDirectory,
     onAddProjectRoot,
     onCollectionDirectoryChange,
     onCollectionNameChange,
@@ -2397,6 +2548,7 @@ function PageContent(props: PageContentProps): ReactElement {
     onImportTar,
     onImportZip,
     onInstallPlugin,
+    onInstallCatalogPlugin,
     onInstallProjectionModeChange,
     onInstallTargetRootChange,
     onLibraryAgentFilterChange,
@@ -2410,10 +2562,12 @@ function PageContent(props: PageContentProps): ReactElement {
     onLoadSyncConflicts,
     onMirrorImportDirectoryChange,
     onMigrationSourcePathChange,
+    onPluginDirectoryPathChange,
     onPluginRootPathChange,
     onPreviewDiscoverSource,
     onPreviewBaseline,
     onPreviewMigration,
+    onRemovePluginDirectory,
     onRelink,
     onRelinkTargetRootChange,
     onReinstall,
@@ -2424,6 +2578,7 @@ function PageContent(props: PageContentProps): ReactElement {
     onScanAgentRoots,
     onSecurityRescanAll,
     onSecurityScan,
+    onScanPluginDirectory,
     onSetReadOnlyLock,
     onSelectSkill,
     onApplyBaseline,
@@ -2455,6 +2610,7 @@ function PageContent(props: PageContentProps): ReactElement {
     onZipImportPathChange,
     operationMessage,
     pluginRegistry,
+    pluginDirectoryPath,
     pluginRootPath,
     projectRootAgentCode,
     projectRootPath,
@@ -2674,15 +2830,18 @@ function PageContent(props: PageContentProps): ReactElement {
         installTargets={installTargets}
         syncConflicts={syncConflicts}
         onApplySyncConflict={onApplySyncConflict}
+        onAddPluginDirectory={onAddPluginDirectory}
         onAuthorizePlugin={onAuthorizePlugin}
         onCreateSyncProfile={onCreateSyncProfile}
         onDeleteSyncCredential={onDeleteSyncCredential}
         onDisablePlugin={onDisablePlugin}
         onEnablePlugin={onEnablePlugin}
+        onInstallCatalogPlugin={onInstallCatalogPlugin}
         onInstallPlugin={onInstallPlugin}
         onInspectSyncCredential={onInspectSyncCredential}
         onLoadSyncConflicts={onLoadSyncConflicts}
         onAddProjectRoot={onAddProjectRoot}
+        onPluginDirectoryPathChange={onPluginDirectoryPathChange}
         onPluginRootPathChange={onPluginRootPathChange}
         onProjectRootAgentCodeChange={onProjectRootAgentCodeChange}
         onProjectRootPathChange={onProjectRootPathChange}
@@ -2691,8 +2850,11 @@ function PageContent(props: PageContentProps): ReactElement {
         onSyncModeChange={onSyncModeChange}
         onSyncPushPull={onSyncPushPull}
         onSyncRemoteUrlChange={onSyncRemoteUrlChange}
+        onRemovePluginDirectory={onRemovePluginDirectory}
+        onScanPluginDirectory={onScanPluginDirectory}
         operationMessage={operationMessage}
         pluginRegistry={pluginRegistry}
+        pluginDirectoryPath={pluginDirectoryPath}
         pluginRootPath={pluginRootPath}
         projectRootAgentCode={projectRootAgentCode}
         projectRootPath={projectRootPath}
@@ -3802,15 +3964,18 @@ function SettingsPage({
   installTargets,
   syncConflicts,
   onAddProjectRoot,
+  onAddPluginDirectory,
   onApplySyncConflict,
   onAuthorizePlugin,
   onCreateSyncProfile,
   onDeleteSyncCredential,
   onDisablePlugin,
   onEnablePlugin,
+  onInstallCatalogPlugin,
   onInstallPlugin,
   onInspectSyncCredential,
   onLoadSyncConflicts,
+  onPluginDirectoryPathChange,
   onPluginRootPathChange,
   onProjectRootAgentCodeChange,
   onProjectRootPathChange,
@@ -3819,8 +3984,11 @@ function SettingsPage({
   onSyncModeChange,
   onSyncPushPull,
   onSyncRemoteUrlChange,
+  onRemovePluginDirectory,
+  onScanPluginDirectory,
   operationMessage,
   pluginRegistry,
+  pluginDirectoryPath,
   pluginRootPath,
   projectRootAgentCode,
   projectRootPath,
@@ -3836,15 +4004,18 @@ function SettingsPage({
   installTargets: InstallTarget[];
   syncConflicts: SyncConflictRecord[];
   onAddProjectRoot: () => void;
+  onAddPluginDirectory: () => void;
   onApplySyncConflict: PageContentProps['onApplySyncConflict'];
   onAuthorizePlugin: () => void;
   onCreateSyncProfile: () => void;
   onDeleteSyncCredential: () => void;
   onDisablePlugin: () => void;
   onEnablePlugin: () => void;
+  onInstallCatalogPlugin: () => void;
   onInstallPlugin: () => void;
   onInspectSyncCredential: () => void;
   onLoadSyncConflicts: () => void;
+  onPluginDirectoryPathChange: (value: string) => void;
   onPluginRootPathChange: (value: string) => void;
   onProjectRootAgentCodeChange: (value: 'codex' | 'claude' | 'gemini' | 'opencode') => void;
   onProjectRootPathChange: (value: string) => void;
@@ -3853,8 +4024,11 @@ function SettingsPage({
   onSyncModeChange: (value: 'shared-folder' | 'git' | 'rest' | 'mock-rest') => void;
   onSyncPushPull: () => void;
   onSyncRemoteUrlChange: (value: string) => void;
+  onRemovePluginDirectory: () => void;
+  onScanPluginDirectory: () => void;
   operationMessage: string;
   pluginRegistry: PluginRegistry | null;
+  pluginDirectoryPath: string;
   pluginRootPath: string;
   projectRootAgentCode: 'codex' | 'claude' | 'gemini' | 'opencode';
   projectRootPath: string;
@@ -3903,12 +4077,18 @@ function SettingsPage({
       ) : activeTab === 'Plugins' ? (
         <div className="split-two">
           <PluginActions
+            onAddPluginDirectory={onAddPluginDirectory}
             onAuthorizePlugin={onAuthorizePlugin}
             onDisablePlugin={onDisablePlugin}
             onEnablePlugin={onEnablePlugin}
+            onInstallCatalogPlugin={onInstallCatalogPlugin}
             onInstallPlugin={onInstallPlugin}
+            onPluginDirectoryPathChange={onPluginDirectoryPathChange}
             onPluginRootPathChange={onPluginRootPathChange}
+            onRemovePluginDirectory={onRemovePluginDirectory}
+            onScanPluginDirectory={onScanPluginDirectory}
             operationMessage={operationMessage}
+            pluginDirectoryPath={pluginDirectoryPath}
             pluginRegistry={pluginRegistry}
             pluginRootPath={pluginRootPath}
           />
@@ -4228,21 +4408,33 @@ function splitList(value: string): string[] {
 }
 
 function PluginActions({
+  onAddPluginDirectory,
   onAuthorizePlugin,
   onDisablePlugin,
   onEnablePlugin,
+  onInstallCatalogPlugin,
   onInstallPlugin,
+  onPluginDirectoryPathChange,
   onPluginRootPathChange,
+  onRemovePluginDirectory,
+  onScanPluginDirectory,
   operationMessage,
+  pluginDirectoryPath,
   pluginRegistry,
   pluginRootPath
 }: {
+  onAddPluginDirectory: () => void;
   onAuthorizePlugin: () => void;
   onDisablePlugin: () => void;
   onEnablePlugin: () => void;
+  onInstallCatalogPlugin: () => void;
   onInstallPlugin: () => void;
+  onPluginDirectoryPathChange: (value: string) => void;
   onPluginRootPathChange: (value: string) => void;
+  onRemovePluginDirectory: () => void;
+  onScanPluginDirectory: () => void;
   operationMessage: string;
+  pluginDirectoryPath: string;
   pluginRegistry: PluginRegistry | null;
   pluginRootPath: string;
 }): ReactElement {
@@ -4264,6 +4456,29 @@ function PluginActions({
         <button disabled={pluginRootPath.trim().length === 0} onClick={onInstallPlugin} type="button">
           Install plugin
         </button>
+        <label htmlFor="plugin-directory-path">
+          Plugin directory
+          <input
+            aria-label="Plugin directory"
+            id="plugin-directory-path"
+            name="pluginDirectoryPath"
+            onChange={(event) => onPluginDirectoryPathChange(event.target.value)}
+            placeholder="/path/to/plugin-directory"
+            value={pluginDirectoryPath}
+          />
+        </label>
+        <button disabled={pluginDirectoryPath.trim().length === 0} onClick={onAddPluginDirectory} type="button">
+          Add plugin directory
+        </button>
+        <button onClick={onScanPluginDirectory} type="button">
+          Scan plugin directory
+        </button>
+        <button onClick={onInstallCatalogPlugin} type="button">
+          Install catalog plugin
+        </button>
+        <button onClick={onRemovePluginDirectory} type="button">
+          Remove plugin directory
+        </button>
         <button onClick={onAuthorizePlugin} type="button">
           Authorize permission
         </button>
@@ -4279,7 +4494,9 @@ function PluginActions({
           { label: 'Agent adapters', value: String(pluginRegistry?.agentAdapters.length ?? 0) },
           { label: 'Importers', value: String(pluginRegistry?.importers.length ?? 0) },
           { label: 'Security rules', value: String(pluginRegistry?.securityRules.length ?? 0) },
-          { label: 'Sync drivers', value: String(pluginRegistry?.syncDrivers.length ?? 0) }
+          { label: 'Sync drivers', value: String(pluginRegistry?.syncDrivers.length ?? 0) },
+          { label: 'Exporters', value: String(pluginRegistry?.exporters?.length ?? 0) },
+          ...(pluginRegistry?.exporters?.map((exporter) => ({ label: exporter.name, value: exporter.id })) ?? [])
         ]}
       />
     </section>
