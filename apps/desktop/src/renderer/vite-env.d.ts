@@ -2,6 +2,7 @@
 
 import type {
   AppInfo,
+  AppSettings,
   CollectionExportResult,
   CollectionImportResult,
   CollectionRecord,
@@ -234,6 +235,14 @@ declare global {
         capabilityId: string;
         input: unknown;
       }): Promise<unknown>;
+      getSettings(): Promise<AppSettings>;
+      addMirrorSource(input: { name: string; url: string }): Promise<AppSettings['mirrorSources'][number]>;
+      removeMirrorSource(mirrorSourceId: string): Promise<StatusOnlyResult>;
+      setUpdateChecks(enabled: boolean): Promise<AppSettings>;
+      setLogLevel(logLevel: 'debug' | 'info' | 'warn' | 'error'): Promise<AppSettings>;
+      addSettingsPluginDirectory(rootPath: string): Promise<PluginDirectoryRecord>;
+      listSettingsPluginDirectories(): Promise<PluginDirectoryRecord[]>;
+      removeSettingsPluginDirectory(directoryId: string): Promise<StatusOnlyResult>;
       createPolicyPack(input: {
         name: string;
         allowedSources: string[];

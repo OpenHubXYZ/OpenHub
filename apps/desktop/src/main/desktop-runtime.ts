@@ -20,6 +20,7 @@ import {
   createPluginService,
   createRestSyncDriver,
   createSecurityService,
+  createSettingsService,
   createSharedFolderSyncDriver,
   createSyncService,
   createVersionService,
@@ -60,6 +61,7 @@ import {
   type CollectionExportResult,
   type CollectionImportResult,
   type CollectionRecord,
+  type AppSettings,
   type AuthorPackageResult,
   type AuthorPreflightResult,
   type DiscoverPreviewResult,
@@ -263,6 +265,22 @@ type RuntimeDispatchResult<C extends IpcChannel> = C extends typeof desktopShell
                                                                                     ? PluginRegistry
                                                                                     : C extends typeof desktopShellContract.pluginsInvokeProvider.channel
                                                                                       ? unknown
+                                                                                      : C extends typeof desktopShellContract.settingsGet.channel
+                                                                                        ? AppSettings
+                                                                                        : C extends typeof desktopShellContract.settingsAddMirrorSource.channel
+                                                                                          ? AppSettings['mirrorSources'][number]
+                                                                                          : C extends typeof desktopShellContract.settingsRemoveMirrorSource.channel
+                                                                                            ? StatusOnlyResult
+                                                                                            : C extends typeof desktopShellContract.settingsSetUpdateChecks.channel
+                                                                                              ? AppSettings
+                                                                                              : C extends typeof desktopShellContract.settingsSetLogLevel.channel
+                                                                                                ? AppSettings
+                                                                                                : C extends typeof desktopShellContract.settingsAddPluginDirectory.channel
+                                                                                                  ? PluginDirectoryRecord
+                                                                                                  : C extends typeof desktopShellContract.settingsListPluginDirectories.channel
+                                                                                                    ? PluginDirectoryRecord[]
+                                                                                                    : C extends typeof desktopShellContract.settingsRemovePluginDirectory.channel
+                                                                                                      ? StatusOnlyResult
                                                                               : C extends typeof desktopShellContract.policyCreate.channel
                                                                                 ? PolicyPack
                                                                                 : C extends typeof desktopShellContract.policyList.channel
@@ -314,6 +332,7 @@ export function createDesktopRuntime(input: CreateDesktopRuntimeInput): DesktopR
   const installer = createInstallService({ database, contentStore });
   const versions = createVersionService({ database, contentStore });
   const security = createSecurityService({ database, contentStore });
+  const settings = createSettingsService({ database });
   const policies = createPolicyService({ database });
   const secretStore = input.secretStore ?? createOsKeychainSecretStore();
   const sync = createSyncService({
@@ -1151,6 +1170,45 @@ export function createDesktopRuntime(input: CreateDesktopRuntimeInput): DesktopR
         return parseIpcResponse(channel, result) as RuntimeDispatchResult<C>;
       }
 
+      if (channel === desktopShellContract.settingsGet.channel) {
+        return parseIpcResponse(channel, settingsState(settings, plugins)) as RuntimeDispatchResult<C>;
+      }
+
+      if (channel === desktopShellContract.settingsAddMirrorSource.channel) {
+        const result = settings.addMirrorSource(request as { name: string; url: string });
+        return parseIpcResponse(channel, result) as RuntimeDispatchResult<C>;
+      }
+
+      if (channel === desktopShellContract.settingsRemoveMirrorSource.channel) {
+        const result = settings.removeMirrorSource(request as { mirrorSourceId: string });
+        return parseIpcResponse(channel, result) as RuntimeDispatchResult<C>;
+      }
+
+      if (channel === desktopShellContract.settingsSetUpdateChecks.channel) {
+        settings.setUpdateChecks(request as { enabled: boolean });
+        return parseIpcResponse(channel, settingsState(settings, plugins)) as RuntimeDispatchResult<C>;
+      }
+
+      if (channel === desktopShellContract.settingsSetLogLevel.channel) {
+        settings.setLogLevel(request as { logLevel: 'debug' | 'info' | 'warn' | 'error' });
+        return parseIpcResponse(channel, settingsState(settings, plugins)) as RuntimeDispatchResult<C>;
+      }
+
+      if (channel === desktopShellContract.settingsAddPluginDirectory.channel) {
+        const result = plugins.addPluginDirectory(request as { rootPath: string });
+        return parseIpcResponse(channel, result) as RuntimeDispatchResult<C>;
+      }
+
+      if (channel === desktopShellContract.settingsListPluginDirectories.channel) {
+        const result = plugins.listPluginDirectories();
+        return parseIpcResponse(channel, result) as RuntimeDispatchResult<C>;
+      }
+
+      if (channel === desktopShellContract.settingsRemovePluginDirectory.channel) {
+        const result = plugins.removePluginDirectory(request as { directoryId: string });
+        return parseIpcResponse(channel, result) as RuntimeDispatchResult<C>;
+      }
+
       if (channel === desktopShellContract.policyCreate.channel) {
         const result = policies.createPolicyPack(
           request as {
@@ -1252,6 +1310,13 @@ async function onboardingState(input: {
     completed: getBooleanAppSetting(input.database, 'onboarding.completed'),
     detectedRoots: await listInstallTargets(input.database, input.adapters),
     migrationPreviews: getJsonAppSetting<MigrationPreviewResult[]>(input.database, 'migration.wizard.previews') ?? []
+  };
+}
+
+function settingsState(settings: ReturnType<typeof createSettingsService>, plugins: PluginService): AppSettings {
+  return {
+    ...settings.getSettings(),
+    pluginDirectories: plugins.listPluginDirectories()
   };
 }
 

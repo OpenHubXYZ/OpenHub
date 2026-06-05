@@ -528,6 +528,65 @@ describe('desktop app shell', () => {
     await waitFor(() => expect(api.removePluginDirectory).toHaveBeenCalledWith('directory-1'));
   });
 
+  it('lets the user persist mirror, update, log, and plugin directory settings through preload', async () => {
+    const api = {
+      getAppInfo: vi.fn(),
+      listLibrarySkills: vi.fn(),
+      getWorkspaceState: vi.fn().mockResolvedValue(workspaceState()),
+      getSettings: vi.fn().mockResolvedValue({
+        mirrorSources: [],
+        updateChecksEnabled: false,
+        logLevel: 'info',
+        pluginDirectories: []
+      }),
+      addMirrorSource: vi.fn().mockResolvedValue({ id: 'mirror-1', name: 'Local Mirror', url: '/tmp/mirror' }),
+      removeMirrorSource: vi.fn().mockResolvedValue({ status: 'removed' }),
+      setUpdateChecks: vi.fn().mockResolvedValue({
+        mirrorSources: [{ id: 'mirror-1', name: 'Local Mirror', url: '/tmp/mirror' }],
+        updateChecksEnabled: true,
+        logLevel: 'info',
+        pluginDirectories: []
+      }),
+      setLogLevel: vi.fn().mockResolvedValue({
+        mirrorSources: [{ id: 'mirror-1', name: 'Local Mirror', url: '/tmp/mirror' }],
+        updateChecksEnabled: true,
+        logLevel: 'warn',
+        pluginDirectories: []
+      }),
+      addSettingsPluginDirectory: vi.fn().mockResolvedValue({
+        id: 'directory-1',
+        rootPath: '/tmp/plugins',
+        status: 'active',
+        scannedAt: null
+      }),
+      removeSettingsPluginDirectory: vi.fn().mockResolvedValue({ status: 'removed' }),
+      getPluginCenterState: vi.fn()
+    };
+    window.theOpenHub = api as unknown as NonNullable<typeof window.theOpenHub>;
+
+    render(<App />);
+
+    await waitFor(() => expect(api.getWorkspaceState).toHaveBeenCalled());
+    fireEvent.click(screen.getByRole('button', { name: 'Settings' }));
+    fireEvent.click(screen.getByRole('tab', { name: 'Privacy' }));
+    await waitFor(() => expect(api.getSettings).toHaveBeenCalled());
+    fireEvent.change(screen.getByLabelText('Mirror source name'), { target: { value: 'Local Mirror' } });
+    fireEvent.change(screen.getByLabelText('Mirror source URL'), { target: { value: '/tmp/mirror' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Add mirror source' }));
+    await waitFor(() => expect(api.addMirrorSource).toHaveBeenCalledWith({ name: 'Local Mirror', url: '/tmp/mirror' }));
+    fireEvent.click(screen.getByLabelText('Enable update checks'));
+    await waitFor(() => expect(api.setUpdateChecks).toHaveBeenCalledWith(true));
+    fireEvent.change(screen.getByLabelText('Log level'), { target: { value: 'warn' } });
+    await waitFor(() => expect(api.setLogLevel).toHaveBeenCalledWith('warn'));
+    fireEvent.change(screen.getByLabelText('Settings plugin directory'), { target: { value: '/tmp/plugins' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Add settings plugin directory' }));
+    await waitFor(() => expect(api.addSettingsPluginDirectory).toHaveBeenCalledWith('/tmp/plugins'));
+    fireEvent.click(screen.getByRole('button', { name: 'Remove mirror source' }));
+    await waitFor(() => expect(api.removeMirrorSource).toHaveBeenCalledWith('mirror-1'));
+    fireEvent.click(screen.getByRole('button', { name: 'Remove settings plugin directory' }));
+    await waitFor(() => expect(api.removeSettingsPluginDirectory).toHaveBeenCalledWith('directory-1'));
+  });
+
   it('lets the user run the local import and install management loop through IPC', async () => {
     const importedSkill = {
       id: 'skill-runtime',

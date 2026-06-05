@@ -520,6 +520,27 @@ export const pluginDirectoryScanResultSchema = z
 
 export type PluginDirectoryScanResult = z.infer<typeof pluginDirectoryScanResultSchema>;
 
+const logLevelSchema = z.enum(['debug', 'info', 'warn', 'error']);
+
+const mirrorSourceSettingSchema = z
+  .object({
+    id: z.string().min(1),
+    name: z.string().min(1),
+    url: z.string().min(1)
+  })
+  .strict();
+
+export const appSettingsSchema = z
+  .object({
+    mirrorSources: z.array(mirrorSourceSettingSchema),
+    updateChecksEnabled: z.boolean(),
+    logLevel: logLevelSchema,
+    pluginDirectories: z.array(pluginDirectoryRecordSchema)
+  })
+  .strict();
+
+export type AppSettings = z.infer<typeof appSettingsSchema>;
+
 export const desktopWorkspaceStateSchema = z
   .object({
     appInfo: appInfoResponseSchema,
@@ -1601,6 +1622,46 @@ export const desktopShellContract = {
       .strict(),
     response: z.unknown()
   },
+  settingsGet: {
+    channel: 'settings.get',
+    request: emptyRequestSchema,
+    response: appSettingsSchema
+  },
+  settingsAddMirrorSource: {
+    channel: 'settings.addMirrorSource',
+    request: z.object({ name: z.string().min(1), url: z.string().min(1) }).strict(),
+    response: mirrorSourceSettingSchema
+  },
+  settingsRemoveMirrorSource: {
+    channel: 'settings.removeMirrorSource',
+    request: z.object({ mirrorSourceId: z.string().min(1) }).strict(),
+    response: statusOnlyResultSchema
+  },
+  settingsSetUpdateChecks: {
+    channel: 'settings.setUpdateChecks',
+    request: z.object({ enabled: z.boolean() }).strict(),
+    response: appSettingsSchema
+  },
+  settingsSetLogLevel: {
+    channel: 'settings.setLogLevel',
+    request: z.object({ logLevel: logLevelSchema }).strict(),
+    response: appSettingsSchema
+  },
+  settingsAddPluginDirectory: {
+    channel: 'settings.addPluginDirectory',
+    request: z.object({ rootPath: z.string().min(1) }).strict(),
+    response: pluginDirectoryRecordSchema
+  },
+  settingsListPluginDirectories: {
+    channel: 'settings.listPluginDirectories',
+    request: emptyRequestSchema,
+    response: z.array(pluginDirectoryRecordSchema)
+  },
+  settingsRemovePluginDirectory: {
+    channel: 'settings.removePluginDirectory',
+    request: z.object({ directoryId: z.string().min(1) }).strict(),
+    response: statusOnlyResultSchema
+  },
   policyCreate: {
     channel: 'policy.create',
     request: z
@@ -1982,6 +2043,38 @@ export function parseIpcResponse(
   channel: typeof desktopShellContract.pluginsInvokeProvider.channel,
   payload: unknown
 ): unknown;
+export function parseIpcResponse(
+  channel: typeof desktopShellContract.settingsGet.channel,
+  payload: unknown
+): AppSettings;
+export function parseIpcResponse(
+  channel: typeof desktopShellContract.settingsAddMirrorSource.channel,
+  payload: unknown
+): AppSettings['mirrorSources'][number];
+export function parseIpcResponse(
+  channel: typeof desktopShellContract.settingsRemoveMirrorSource.channel,
+  payload: unknown
+): StatusOnlyResult;
+export function parseIpcResponse(
+  channel: typeof desktopShellContract.settingsSetUpdateChecks.channel,
+  payload: unknown
+): AppSettings;
+export function parseIpcResponse(
+  channel: typeof desktopShellContract.settingsSetLogLevel.channel,
+  payload: unknown
+): AppSettings;
+export function parseIpcResponse(
+  channel: typeof desktopShellContract.settingsAddPluginDirectory.channel,
+  payload: unknown
+): PluginDirectoryRecord;
+export function parseIpcResponse(
+  channel: typeof desktopShellContract.settingsListPluginDirectories.channel,
+  payload: unknown
+): PluginDirectoryRecord[];
+export function parseIpcResponse(
+  channel: typeof desktopShellContract.settingsRemovePluginDirectory.channel,
+  payload: unknown
+): StatusOnlyResult;
 export function parseIpcResponse(
   channel: typeof desktopShellContract.policyCreate.channel,
   payload: unknown

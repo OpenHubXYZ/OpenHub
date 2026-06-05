@@ -15,6 +15,7 @@ export { PathSafetyError, assertZipEntryPathSafe, ensurePathInsideRoot } from '.
 export { createPolicyService } from './policy-service';
 export { PluginHostError, PluginManifestError, createPluginService } from './plugin-service';
 export { createSecurityService, defaultSecurityRules } from './security-service';
+export { createSettingsService } from './settings-service';
 export {
   createGitSyncDriver,
   createInMemorySecretStore,
@@ -132,6 +133,13 @@ export type {
   SecurityService,
   SecuritySeverity
 } from './security-service';
+export type {
+  LogLevel,
+  MirrorSourceSetting,
+  RedactedLogRecord,
+  RuntimeSettings,
+  SettingsService
+} from './settings-service';
 export type {
   CreateSyncServiceInput,
   ConflictResolution,

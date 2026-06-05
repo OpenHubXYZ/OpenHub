@@ -1115,6 +1115,48 @@ describe('desktop runtime IPC dispatch', () => {
     await expect(dispatch('plugins.removeDirectory', { directoryId: directory.id })).resolves.toEqual({ status: 'removed' });
   });
 
+  it('dispatches durable settings without writing agent roots', async () => {
+    const workspace = await tempDir();
+    const database = createMemoryDatabase();
+    const runtime = createDesktopRuntime({
+      dataDirectory: path.join(workspace, 'app-data'),
+      homeDirectory: path.join(workspace, 'home'),
+      database
+    });
+    const dispatch = runtime.dispatch as unknown as (channel: string, payload: unknown) => Promise<unknown>;
+    const beforeAgentRoots = countRows(database, 'agent_roots');
+
+    await expect(dispatch('settings.get', {})).resolves.toMatchObject({
+      mirrorSources: [],
+      updateChecksEnabled: false,
+      logLevel: 'info',
+      pluginDirectories: []
+    });
+    const mirror = (await dispatch('settings.addMirrorSource', {
+      name: 'Local Mirror',
+      url: '/tmp/mirror'
+    })) as { id: string };
+    await dispatch('settings.setUpdateChecks', { enabled: true });
+    await dispatch('settings.setLogLevel', { logLevel: 'warn' });
+    const pluginDirectory = (await dispatch('settings.addPluginDirectory', {
+      rootPath: path.join(workspace, 'plugins')
+    })) as { id: string };
+
+    await expect(dispatch('settings.get', {})).resolves.toMatchObject({
+      mirrorSources: [expect.objectContaining({ id: mirror.id, name: 'Local Mirror' })],
+      updateChecksEnabled: true,
+      logLevel: 'warn',
+      pluginDirectories: [expect.objectContaining({ id: pluginDirectory.id })]
+    });
+    await dispatch('settings.removeMirrorSource', { mirrorSourceId: mirror.id });
+    await dispatch('settings.removePluginDirectory', { directoryId: pluginDirectory.id });
+    await expect(dispatch('settings.get', {})).resolves.toMatchObject({
+      mirrorSources: [],
+      pluginDirectories: []
+    });
+    expect(countRows(database, 'agent_roots')).toBe(beforeAgentRoots);
+  });
+
   it('dispatches sync, plugin runtime, and discover source workflows', async () => {
     const workspace = await tempDir();
     const database = createMemoryDatabase();

@@ -21,6 +21,7 @@ import {
 import type { LucideIcon } from 'lucide-react';
 import type {
   DesktopWorkspaceState,
+  AppSettings,
   DiscoverSkillPreview,
   DiscoverSource,
   ImportedSkillResult,
@@ -130,6 +131,13 @@ const emptyLibraryFacets: LibraryFacets = {
   favorites: { value: 'favorites', count: 0 }
 };
 
+const emptyAppSettings: AppSettings = {
+  mirrorSources: [],
+  updateChecksEnabled: false,
+  logLevel: 'info',
+  pluginDirectories: []
+};
+
 export function App({
   initialLibrarySkills = [],
   initialSkills = [],
@@ -237,6 +245,10 @@ export function App({
   const [pluginRootPath, setPluginRootPath] = useState('');
   const [pluginDirectoryPath, setPluginDirectoryPath] = useState('');
   const [activePluginDirectoryId, setActivePluginDirectoryId] = useState('');
+  const [settingsState, setSettingsState] = useState<AppSettings>(emptyAppSettings);
+  const [settingsMirrorName, setSettingsMirrorName] = useState('');
+  const [settingsMirrorUrl, setSettingsMirrorUrl] = useState('');
+  const [settingsPluginDirectoryPath, setSettingsPluginDirectoryPath] = useState('');
   const [pluginId, setPluginId] = useState('');
   const [pluginRegistry, setPluginRegistry] = useState<PluginRegistry | null>(null);
   const [discoverSourceName, setDiscoverSourceName] = useState('');
@@ -374,6 +386,26 @@ export function App({
       cancelled = true;
     };
   }, []);
+
+  useEffect(() => {
+    let cancelled = false;
+
+    async function hydrateSettings(): Promise<void> {
+      if (activePage !== 'settings' || !window.theOpenHub?.getSettings) {
+        return;
+      }
+
+      const nextSettings = await window.theOpenHub.getSettings();
+      if (!cancelled) {
+        setSettingsState(nextSettings);
+      }
+    }
+
+    void hydrateSettings();
+    return () => {
+      cancelled = true;
+    };
+  }, [activePage]);
 
   useEffect(() => {
     function handleKeyboard(event: KeyboardEvent): void {
@@ -1442,6 +1474,83 @@ export function App({
     setOperationMessage('Removed plugin directory');
   }
 
+  async function handleAddSettingsMirrorSource(): Promise<void> {
+    if (
+      !window.theOpenHub?.addMirrorSource ||
+      settingsMirrorName.trim().length === 0 ||
+      settingsMirrorUrl.trim().length === 0
+    ) {
+      return;
+    }
+
+    const mirror = await window.theOpenHub.addMirrorSource({
+      name: settingsMirrorName.trim(),
+      url: settingsMirrorUrl.trim()
+    });
+    setSettingsState((current) => ({ ...current, mirrorSources: [mirror, ...current.mirrorSources] }));
+    setOperationMessage(`Added mirror source ${mirror.name}`);
+  }
+
+  async function handleRemoveSettingsMirrorSource(): Promise<void> {
+    const mirror = settingsState.mirrorSources[0];
+    if (!window.theOpenHub?.removeMirrorSource || !mirror) {
+      return;
+    }
+
+    await window.theOpenHub.removeMirrorSource(mirror.id);
+    setSettingsState((current) => ({
+      ...current,
+      mirrorSources: current.mirrorSources.filter((item) => item.id !== mirror.id)
+    }));
+    setOperationMessage('Removed mirror source');
+  }
+
+  async function handleSetUpdateChecks(enabled: boolean): Promise<void> {
+    if (!window.theOpenHub?.setUpdateChecks) {
+      return;
+    }
+
+    setSettingsState(await window.theOpenHub.setUpdateChecks(enabled));
+  }
+
+  async function handleSetLogLevel(logLevel: AppSettings['logLevel']): Promise<void> {
+    if (!window.theOpenHub?.setLogLevel) {
+      return;
+    }
+
+    setSettingsState(await window.theOpenHub.setLogLevel(logLevel));
+  }
+
+  async function handleAddSettingsPluginDirectory(): Promise<void> {
+    if (!window.theOpenHub?.addSettingsPluginDirectory || settingsPluginDirectoryPath.trim().length === 0) {
+      return;
+    }
+
+    const directory = await window.theOpenHub.addSettingsPluginDirectory(settingsPluginDirectoryPath.trim());
+    setSettingsState((current) => ({
+      ...current,
+      pluginDirectories: [
+        directory,
+        ...current.pluginDirectories.filter((item) => item.id !== directory.id)
+      ]
+    }));
+    setOperationMessage(`Added settings plugin directory ${directory.rootPath}`);
+  }
+
+  async function handleRemoveSettingsPluginDirectory(): Promise<void> {
+    const directory = settingsState.pluginDirectories[0];
+    if (!window.theOpenHub?.removeSettingsPluginDirectory || !directory) {
+      return;
+    }
+
+    await window.theOpenHub.removeSettingsPluginDirectory(directory.id);
+    setSettingsState((current) => ({
+      ...current,
+      pluginDirectories: current.pluginDirectories.filter((item) => item.id !== directory.id)
+    }));
+    setOperationMessage('Removed settings plugin directory');
+  }
+
   async function handleAuthorizePlugin(): Promise<void> {
     if (!window.theOpenHub?.authorizePluginPermission || pluginId.trim().length === 0) {
       return;
@@ -1713,6 +1822,10 @@ export function App({
                   compareToVersionId={compareToVersionId}
                   promoteReleaseChannel={promoteReleaseChannel}
                   promoteVersionId={promoteVersionId}
+                  settingsMirrorName={settingsMirrorName}
+                  settingsMirrorUrl={settingsMirrorUrl}
+                  settingsPluginDirectoryPath={settingsPluginDirectoryPath}
+                  settingsState={settingsState}
                   syncConflicts={syncConflicts}
                   versionComparison={versionComparison}
                   onAddDiscoverSource={() => {
@@ -1836,6 +1949,27 @@ export function App({
                   onResetLibraryFilters={handleResetLibraryFilters}
                   onSetFavorite={(skill) => {
                     void handleSetFavorite(skill);
+                  }}
+                  onAddSettingsMirrorSource={() => {
+                    void handleAddSettingsMirrorSource();
+                  }}
+                  onAddSettingsPluginDirectory={() => {
+                    void handleAddSettingsPluginDirectory();
+                  }}
+                  onRemoveSettingsMirrorSource={() => {
+                    void handleRemoveSettingsMirrorSource();
+                  }}
+                  onRemoveSettingsPluginDirectory={() => {
+                    void handleRemoveSettingsPluginDirectory();
+                  }}
+                  onSetLogLevel={(logLevel) => {
+                    void handleSetLogLevel(logLevel);
+                  }}
+                  onSettingsMirrorNameChange={setSettingsMirrorName}
+                  onSettingsMirrorUrlChange={setSettingsMirrorUrl}
+                  onSettingsPluginDirectoryPathChange={setSettingsPluginDirectoryPath}
+                  onSetUpdateChecks={(enabled) => {
+                    void handleSetUpdateChecks(enabled);
                   }}
                   onMirrorImportDirectoryChange={setMirrorImportDirectory}
                   onMigrationSourcePathChange={setMigrationSourcePath}
@@ -2412,6 +2546,10 @@ type PageContentProps = {
   policyRequiredScanLevel: 'safe' | 'warning' | 'critical';
   promoteReleaseChannel: 'beta' | 'stable';
   promoteVersionId: string;
+  settingsMirrorName: string;
+  settingsMirrorUrl: string;
+  settingsPluginDirectoryPath: string;
+  settingsState: AppSettings;
   onAddDiscoverSource: () => void;
   onApplyInstallPlan: () => void;
   onApplyMultiTargetPlans: () => void;
@@ -2517,7 +2655,16 @@ type PageContentProps = {
   onOpenAuthorSourceFolder: () => void;
   onPrepareAuthorPublishPackage: () => void;
   onRunAuthorPreflight: () => void;
+  onAddSettingsMirrorSource: () => void;
+  onAddSettingsPluginDirectory: () => void;
+  onRemoveSettingsMirrorSource: () => void;
+  onRemoveSettingsPluginDirectory: () => void;
   onSetFavorite: (skill: SkillSummary) => void;
+  onSetLogLevel: (value: AppSettings['logLevel']) => void;
+  onSettingsMirrorNameChange: (value: string) => void;
+  onSettingsMirrorUrlChange: (value: string) => void;
+  onSettingsPluginDirectoryPathChange: (value: string) => void;
+  onSetUpdateChecks: (value: boolean) => void;
   onSignedExportSignerChange: (value: string) => void;
   onSparseGitSubpathChange: (value: string) => void;
   onSparseGitUrlChange: (value: string) => void;
@@ -2614,6 +2761,10 @@ function PageContent(props: PageContentProps): ReactElement {
     policyRequiredScanLevel,
     promoteReleaseChannel,
     promoteVersionId,
+    settingsMirrorName,
+    settingsMirrorUrl,
+    settingsPluginDirectoryPath,
+    settingsState,
     onAddDiscoverSource,
     onApplyInstallPlan,
     onApplyMultiTargetPlans,
@@ -2710,7 +2861,16 @@ function PageContent(props: PageContentProps): ReactElement {
     onOpenAuthorSourceFolder,
     onPrepareAuthorPublishPackage,
     onRunAuthorPreflight,
+    onAddSettingsMirrorSource,
+    onAddSettingsPluginDirectory,
+    onRemoveSettingsMirrorSource,
+    onRemoveSettingsPluginDirectory,
     onSetFavorite,
+    onSetLogLevel,
+    onSettingsMirrorNameChange,
+    onSettingsMirrorUrlChange,
+    onSettingsPluginDirectoryPathChange,
+    onSetUpdateChecks,
     onSignedExportSignerChange,
     onSparseGitSubpathChange,
     onSparseGitUrlChange,
@@ -2967,10 +3127,19 @@ function PageContent(props: PageContentProps): ReactElement {
         onInspectSyncCredential={onInspectSyncCredential}
         onLoadSyncConflicts={onLoadSyncConflicts}
         onAddProjectRoot={onAddProjectRoot}
+        onAddSettingsMirrorSource={onAddSettingsMirrorSource}
+        onAddSettingsPluginDirectory={onAddSettingsPluginDirectory}
         onPluginDirectoryPathChange={onPluginDirectoryPathChange}
         onPluginRootPathChange={onPluginRootPathChange}
         onProjectRootAgentCodeChange={onProjectRootAgentCodeChange}
         onProjectRootPathChange={onProjectRootPathChange}
+        onRemoveSettingsMirrorSource={onRemoveSettingsMirrorSource}
+        onRemoveSettingsPluginDirectory={onRemoveSettingsPluginDirectory}
+        onSetLogLevel={onSetLogLevel}
+        onSettingsMirrorNameChange={onSettingsMirrorNameChange}
+        onSettingsMirrorUrlChange={onSettingsMirrorUrlChange}
+        onSettingsPluginDirectoryPathChange={onSettingsPluginDirectoryPathChange}
+        onSetUpdateChecks={onSetUpdateChecks}
         onSyncCredentialLabelChange={onSyncCredentialLabelChange}
         onSyncCredentialTokenChange={onSyncCredentialTokenChange}
         onSyncModeChange={onSyncModeChange}
@@ -2984,6 +3153,10 @@ function PageContent(props: PageContentProps): ReactElement {
         pluginRootPath={pluginRootPath}
         projectRootAgentCode={projectRootAgentCode}
         projectRootPath={projectRootPath}
+        settingsMirrorName={settingsMirrorName}
+        settingsMirrorUrl={settingsMirrorUrl}
+        settingsPluginDirectoryPath={settingsPluginDirectoryPath}
+        settingsState={settingsState}
         syncCredentialLabel={syncCredentialLabel}
         syncCredentialToken={syncCredentialToken}
         syncMode={syncMode}
@@ -4135,6 +4308,15 @@ function SettingsPage({
   onPluginRootPathChange,
   onProjectRootAgentCodeChange,
   onProjectRootPathChange,
+  onAddSettingsMirrorSource,
+  onAddSettingsPluginDirectory,
+  onRemoveSettingsMirrorSource,
+  onRemoveSettingsPluginDirectory,
+  onSetLogLevel,
+  onSettingsMirrorNameChange,
+  onSettingsMirrorUrlChange,
+  onSettingsPluginDirectoryPathChange,
+  onSetUpdateChecks,
   onSyncCredentialLabelChange,
   onSyncCredentialTokenChange,
   onSyncModeChange,
@@ -4148,6 +4330,10 @@ function SettingsPage({
   pluginRootPath,
   projectRootAgentCode,
   projectRootPath,
+  settingsMirrorName,
+  settingsMirrorUrl,
+  settingsPluginDirectoryPath,
+  settingsState,
   syncCredentialLabel,
   syncCredentialToken,
   syncMode,
@@ -4175,6 +4361,15 @@ function SettingsPage({
   onPluginRootPathChange: (value: string) => void;
   onProjectRootAgentCodeChange: (value: 'codex' | 'claude' | 'gemini' | 'opencode') => void;
   onProjectRootPathChange: (value: string) => void;
+  onAddSettingsMirrorSource: () => void;
+  onAddSettingsPluginDirectory: () => void;
+  onRemoveSettingsMirrorSource: () => void;
+  onRemoveSettingsPluginDirectory: () => void;
+  onSetLogLevel: (value: AppSettings['logLevel']) => void;
+  onSettingsMirrorNameChange: (value: string) => void;
+  onSettingsMirrorUrlChange: (value: string) => void;
+  onSettingsPluginDirectoryPathChange: (value: string) => void;
+  onSetUpdateChecks: (value: boolean) => void;
   onSyncCredentialLabelChange: (value: string) => void;
   onSyncCredentialTokenChange: (value: string) => void;
   onSyncModeChange: (value: 'shared-folder' | 'git' | 'rest' | 'mock-rest') => void;
@@ -4188,6 +4383,10 @@ function SettingsPage({
   pluginRootPath: string;
   projectRootAgentCode: 'codex' | 'claude' | 'gemini' | 'opencode';
   projectRootPath: string;
+  settingsMirrorName: string;
+  settingsMirrorUrl: string;
+  settingsPluginDirectoryPath: string;
+  settingsState: AppSettings;
   syncCredentialLabel: string;
   syncCredentialToken: string;
   syncMode: 'shared-folder' | 'git' | 'rest' | 'mock-rest';
@@ -4253,6 +4452,22 @@ function SettingsPage({
         </div>
       ) : activeTab === 'Privacy' ? (
         <div className="split-two">
+          <SettingsProductizationActions
+            onAddSettingsMirrorSource={onAddSettingsMirrorSource}
+            onAddSettingsPluginDirectory={onAddSettingsPluginDirectory}
+            onRemoveSettingsMirrorSource={onRemoveSettingsMirrorSource}
+            onRemoveSettingsPluginDirectory={onRemoveSettingsPluginDirectory}
+            onSetLogLevel={onSetLogLevel}
+            onSettingsMirrorNameChange={onSettingsMirrorNameChange}
+            onSettingsMirrorUrlChange={onSettingsMirrorUrlChange}
+            onSettingsPluginDirectoryPathChange={onSettingsPluginDirectoryPathChange}
+            onSetUpdateChecks={onSetUpdateChecks}
+            operationMessage={operationMessage}
+            settingsMirrorName={settingsMirrorName}
+            settingsMirrorUrl={settingsMirrorUrl}
+            settingsPluginDirectoryPath={settingsPluginDirectoryPath}
+            settingsState={settingsState}
+          />
           <Panel title="Current defaults" rows={viewModel.settings.defaults} />
           <DatabasePrivacyTable rows={viewModel.settings.databaseRows} />
         </div>
@@ -4274,6 +4489,144 @@ function SettingsPage({
         </div>
       )}
     </>
+  );
+}
+
+function SettingsProductizationActions({
+  onAddSettingsMirrorSource,
+  onAddSettingsPluginDirectory,
+  onRemoveSettingsMirrorSource,
+  onRemoveSettingsPluginDirectory,
+  onSetLogLevel,
+  onSettingsMirrorNameChange,
+  onSettingsMirrorUrlChange,
+  onSettingsPluginDirectoryPathChange,
+  onSetUpdateChecks,
+  operationMessage,
+  settingsMirrorName,
+  settingsMirrorUrl,
+  settingsPluginDirectoryPath,
+  settingsState
+}: {
+  onAddSettingsMirrorSource: () => void;
+  onAddSettingsPluginDirectory: () => void;
+  onRemoveSettingsMirrorSource: () => void;
+  onRemoveSettingsPluginDirectory: () => void;
+  onSetLogLevel: (value: AppSettings['logLevel']) => void;
+  onSettingsMirrorNameChange: (value: string) => void;
+  onSettingsMirrorUrlChange: (value: string) => void;
+  onSettingsPluginDirectoryPathChange: (value: string) => void;
+  onSetUpdateChecks: (value: boolean) => void;
+  operationMessage: string;
+  settingsMirrorName: string;
+  settingsMirrorUrl: string;
+  settingsPluginDirectoryPath: string;
+  settingsState: AppSettings;
+}): ReactElement {
+  const rows = [
+    { label: 'Update checks', value: settingsState.updateChecksEnabled ? 'enabled' : 'disabled' },
+    { label: 'Log level', value: settingsState.logLevel },
+    ...settingsState.mirrorSources.map((mirror) => ({ label: mirror.name, value: mirror.url })),
+    ...settingsState.pluginDirectories.map((directory) => ({
+      label: 'Plugin directory',
+      value: directory.rootPath
+    }))
+  ];
+
+  return (
+    <section className="panel" aria-label="Runtime settings">
+      <PanelHeader tag={operationMessage || 'local'} title="Runtime settings" />
+      <div className="flow-actions">
+        <label htmlFor="settings-mirror-name">
+          Mirror source name
+          <input
+            aria-label="Mirror source name"
+            id="settings-mirror-name"
+            name="settingsMirrorName"
+            onChange={(event) => onSettingsMirrorNameChange(event.target.value)}
+            placeholder="Local Mirror"
+            value={settingsMirrorName}
+          />
+        </label>
+        <label htmlFor="settings-mirror-url">
+          Mirror source URL
+          <input
+            aria-label="Mirror source URL"
+            id="settings-mirror-url"
+            name="settingsMirrorUrl"
+            onChange={(event) => onSettingsMirrorUrlChange(event.target.value)}
+            placeholder="/path/to/mirror"
+            value={settingsMirrorUrl}
+          />
+        </label>
+        <button
+          disabled={settingsMirrorName.trim().length === 0 || settingsMirrorUrl.trim().length === 0}
+          onClick={onAddSettingsMirrorSource}
+          type="button"
+        >
+          Add mirror source
+        </button>
+        <button
+          disabled={settingsState.mirrorSources.length === 0}
+          onClick={onRemoveSettingsMirrorSource}
+          type="button"
+        >
+          Remove mirror source
+        </button>
+        <label htmlFor="settings-update-checks">
+          <input
+            aria-label="Enable update checks"
+            checked={settingsState.updateChecksEnabled}
+            id="settings-update-checks"
+            name="settingsUpdateChecks"
+            onChange={(event) => onSetUpdateChecks(event.target.checked)}
+            type="checkbox"
+          />
+          Enable update checks
+        </label>
+        <label htmlFor="settings-log-level">
+          Log level
+          <select
+            aria-label="Log level"
+            id="settings-log-level"
+            name="settingsLogLevel"
+            onChange={(event) => onSetLogLevel(event.target.value as AppSettings['logLevel'])}
+            value={settingsState.logLevel}
+          >
+            <option value="debug">Debug</option>
+            <option value="info">Info</option>
+            <option value="warn">Warn</option>
+            <option value="error">Error</option>
+          </select>
+        </label>
+        <label htmlFor="settings-plugin-directory">
+          Settings plugin directory
+          <input
+            aria-label="Settings plugin directory"
+            id="settings-plugin-directory"
+            name="settingsPluginDirectory"
+            onChange={(event) => onSettingsPluginDirectoryPathChange(event.target.value)}
+            placeholder="/path/to/plugins"
+            value={settingsPluginDirectoryPath}
+          />
+        </label>
+        <button
+          disabled={settingsPluginDirectoryPath.trim().length === 0}
+          onClick={onAddSettingsPluginDirectory}
+          type="button"
+        >
+          Add settings plugin directory
+        </button>
+        <button
+          disabled={settingsState.pluginDirectories.length === 0}
+          onClick={onRemoveSettingsPluginDirectory}
+          type="button"
+        >
+          Remove settings plugin directory
+        </button>
+      </div>
+      <KeyValueList rows={rows} />
+    </section>
   );
 }
 

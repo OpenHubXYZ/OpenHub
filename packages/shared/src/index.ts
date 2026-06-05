@@ -3,6 +3,7 @@ export {
   PRODUCT_NAME,
   appInfo,
   appInfoResponseSchema,
+  appSettingsSchema,
   authorPackageResultSchema,
   authorPreflightResultSchema,
   baselineExportResultSchema,
@@ -40,6 +41,7 @@ export {
 
 export type {
   AppInfo,
+  AppSettings,
   AuthorPackageResult,
   AuthorPreflightResult,
   BaselineExportResult,

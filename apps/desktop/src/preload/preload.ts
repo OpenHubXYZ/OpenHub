@@ -3,6 +3,7 @@ import { contextBridge, ipcRenderer } from 'electron';
 import { desktopShellContract, parseIpcResponse } from '@theopenhub/shared';
 import type {
   AppInfo,
+  AppSettings,
   CollectionExportResult,
   CollectionImportResult,
   CollectionRecord,
@@ -540,6 +541,46 @@ const api = {
   }): Promise<unknown> {
     const payload = await ipcRenderer.invoke(desktopShellContract.pluginsInvokeProvider.channel, input);
     return parseIpcResponse(desktopShellContract.pluginsInvokeProvider.channel, payload);
+  },
+
+  async getSettings(): Promise<AppSettings> {
+    const payload = await ipcRenderer.invoke(desktopShellContract.settingsGet.channel, {});
+    return parseIpcResponse(desktopShellContract.settingsGet.channel, payload);
+  },
+
+  async addMirrorSource(input: { name: string; url: string }): Promise<AppSettings['mirrorSources'][number]> {
+    const payload = await ipcRenderer.invoke(desktopShellContract.settingsAddMirrorSource.channel, input);
+    return parseIpcResponse(desktopShellContract.settingsAddMirrorSource.channel, payload);
+  },
+
+  async removeMirrorSource(mirrorSourceId: string): Promise<StatusOnlyResult> {
+    const payload = await ipcRenderer.invoke(desktopShellContract.settingsRemoveMirrorSource.channel, { mirrorSourceId });
+    return parseIpcResponse(desktopShellContract.settingsRemoveMirrorSource.channel, payload);
+  },
+
+  async setUpdateChecks(enabled: boolean): Promise<AppSettings> {
+    const payload = await ipcRenderer.invoke(desktopShellContract.settingsSetUpdateChecks.channel, { enabled });
+    return parseIpcResponse(desktopShellContract.settingsSetUpdateChecks.channel, payload);
+  },
+
+  async setLogLevel(logLevel: 'debug' | 'info' | 'warn' | 'error'): Promise<AppSettings> {
+    const payload = await ipcRenderer.invoke(desktopShellContract.settingsSetLogLevel.channel, { logLevel });
+    return parseIpcResponse(desktopShellContract.settingsSetLogLevel.channel, payload);
+  },
+
+  async addSettingsPluginDirectory(rootPath: string): Promise<PluginDirectoryRecord> {
+    const payload = await ipcRenderer.invoke(desktopShellContract.settingsAddPluginDirectory.channel, { rootPath });
+    return parseIpcResponse(desktopShellContract.settingsAddPluginDirectory.channel, payload);
+  },
+
+  async listSettingsPluginDirectories(): Promise<PluginDirectoryRecord[]> {
+    const payload = await ipcRenderer.invoke(desktopShellContract.settingsListPluginDirectories.channel, {});
+    return parseIpcResponse(desktopShellContract.settingsListPluginDirectories.channel, payload);
+  },
+
+  async removeSettingsPluginDirectory(directoryId: string): Promise<StatusOnlyResult> {
+    const payload = await ipcRenderer.invoke(desktopShellContract.settingsRemovePluginDirectory.channel, { directoryId });
+    return parseIpcResponse(desktopShellContract.settingsRemovePluginDirectory.channel, payload);
   },
 
   async createPolicyPack(input: {

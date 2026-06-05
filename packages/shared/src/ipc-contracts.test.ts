@@ -200,6 +200,14 @@ describe('desktop shell IPC contract', () => {
         'plugins.disable',
         'plugins.registry',
         'plugins.invokeProvider',
+        'settings.get',
+        'settings.addMirrorSource',
+        'settings.removeMirrorSource',
+        'settings.setUpdateChecks',
+        'settings.setLogLevel',
+        'settings.addPluginDirectory',
+        'settings.listPluginDirectories',
+        'settings.removePluginDirectory',
         'discover.addSource',
         'discover.previewSource',
         'discover.migrationPreview'
@@ -393,6 +401,21 @@ describe('desktop shell IPC contract', () => {
         networkUpload: false
       }).networkUpload
     ).toBe(false);
+    expect(desktopShellContract.settingsGet.response.parse({
+      mirrorSources: [],
+      updateChecksEnabled: false,
+      logLevel: 'info',
+      pluginDirectories: []
+    }).updateChecksEnabled).toBe(false);
+    expect(parseIpcRequest('settings.addMirrorSource', {
+      name: 'Local Mirror',
+      url: '/tmp/mirror'
+    })).toMatchObject({ name: 'Local Mirror' });
+    expect(parseIpcRequest('settings.setUpdateChecks', { enabled: true })).toEqual({ enabled: true });
+    expect(parseIpcRequest('settings.setLogLevel', { logLevel: 'warn' })).toEqual({ logLevel: 'warn' });
+    expect(parseIpcRequest('settings.addPluginDirectory', { rootPath: '/tmp/plugins' })).toEqual({
+      rootPath: '/tmp/plugins'
+    });
     expect(parseIpcRequest('discover.addSource', {
       name: 'Local curated',
       sourceType: 'local',
