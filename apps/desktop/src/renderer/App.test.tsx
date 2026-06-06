@@ -54,6 +54,54 @@ describe('desktop app shell', () => {
     }
   });
 
+  it('collapses and expands the sidebar for the current renderer session', () => {
+    render(<App />);
+    const shell = document.querySelector('.screen');
+
+    expect(shell).not.toHaveClass('sidebar-collapsed');
+
+    fireEvent.click(screen.getByRole('button', { name: 'Collapse sidebar' }));
+    expect(shell).toHaveClass('sidebar-collapsed');
+    expect(screen.getByRole('button', { name: 'Expand sidebar' })).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Expand sidebar' }));
+    expect(shell).not.toHaveClass('sidebar-collapsed');
+    expect(screen.getByRole('button', { name: 'Collapse sidebar' })).toBeInTheDocument();
+  });
+
+  it('keeps collapsed sidebar navigation accessible and interactive', () => {
+    render(<App />);
+
+    fireEvent.click(screen.getByRole('button', { name: 'Collapse sidebar' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Library' }));
+
+    expect(screen.getByRole('heading', { name: 'Library' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Library' })).toHaveAttribute('aria-current', 'page');
+    expect(document.querySelector('.screen')).toHaveClass('sidebar-collapsed');
+  });
+
+  it('opens and closes local workspace help from the sidebar', () => {
+    render(<App />);
+
+    expect(screen.queryByRole('dialog', { name: 'Workspace help' })).not.toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Help' }));
+    const dialog = screen.getByRole('dialog', { name: 'Workspace help' });
+
+    expect(dialog).toBeInTheDocument();
+    expect(dialog).toHaveAttribute('aria-modal', 'true');
+    expect(within(dialog).getByText('Scan agent roots')).toBeInTheDocument();
+    expect(within(dialog).getByText('Local data')).toBeInTheDocument();
+
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Close' }));
+    expect(screen.queryByRole('dialog', { name: 'Workspace help' })).not.toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Help' }));
+    expect(screen.getByRole('dialog', { name: 'Workspace help' })).toBeInTheDocument();
+    fireEvent.keyDown(window, { key: 'Escape' });
+    expect(screen.queryByRole('dialog', { name: 'Workspace help' })).not.toBeInTheDocument();
+  });
+
   it('switches dashboard section tabs to runtime-backed content', () => {
     render(
       <App

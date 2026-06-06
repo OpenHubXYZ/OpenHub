@@ -15,10 +15,12 @@ import {
   LayoutDashboard,
   PackagePlus,
   PanelLeftClose,
+  PanelLeftOpen,
   Search,
   Settings,
   ShieldCheck,
-  Star
+  Star,
+  X
 } from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
 import type {
@@ -125,6 +127,29 @@ const filterSets: Partial<Record<PageKey, Array<{ label: string; value: string }
   ]
 };
 
+const helpItems = [
+  {
+    title: 'Scan agent roots',
+    description: 'Detect Codex, Claude, Gemini, and OpenCode skill roots from local filesystem state.'
+  },
+  {
+    title: 'Import skills',
+    description: 'Bring in local folders, Git sources, archives, mirrors, or collections before install planning.'
+  },
+  {
+    title: 'Install safely',
+    description: 'Review write plans, conflicts, projection mode, target root, and rollback state before applying changes.'
+  },
+  {
+    title: 'Search and review',
+    description: 'Filter indexed skills, inspect versions, compare diffs, and record security or governance decisions.'
+  },
+  {
+    title: 'Local data',
+    description: 'SQLite remains the local source of truth; sync and plugin permissions stay explicit from Settings.'
+  }
+];
+
 const emptyLibraryFacets: LibraryFacets = {
   sources: [],
   risks: [],
@@ -165,6 +190,8 @@ export function App({
     })
   );
   const [activePage, setActivePage] = useState<PageKey>('dashboard');
+  const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
+  const [helpOpen, setHelpOpen] = useState(false);
   const [activeTabs, setActiveTabs] = useState<Record<PageKey, string>>(() => ({
     dashboard: firstTabForPage('dashboard'),
     library: firstTabForPage('library'),
@@ -1637,6 +1664,18 @@ export function App({
     }));
   }
 
+  const handleToggleSidebar = useCallback(() => {
+    setSidebarCollapsed((current) => !current);
+  }, []);
+
+  const handleOpenHelp = useCallback(() => {
+    setHelpOpen(true);
+  }, []);
+
+  const handleCloseHelp = useCallback(() => {
+    setHelpOpen(false);
+  }, []);
+
   if (!onboardingChecked) {
     return (
       <main className="screen">
@@ -1663,8 +1702,15 @@ export function App({
   }
 
   return (
-    <main className="screen">
-      <Sidebar activePage={activePage} navItems={viewModel.navItems} onNavigate={handleNavigate} />
+    <main className={sidebarCollapsed ? 'screen sidebar-collapsed' : 'screen'}>
+      <Sidebar
+        activePage={activePage}
+        collapsed={sidebarCollapsed}
+        navItems={viewModel.navItems}
+        onNavigate={handleNavigate}
+        onOpenHelp={handleOpenHelp}
+        onToggleCollapse={handleToggleSidebar}
+      />
       <section className="app-frame" aria-label="OpenHub workspace">
         <Topbar searchRef={searchRef} />
         <section className="content">
@@ -2011,6 +2057,7 @@ export function App({
           lastScanLabel={viewModel.lastScanLabel}
         />
       </section>
+      {helpOpen ? <HelpDrawer onClose={handleCloseHelp} /> : null}
     </main>
   );
 }
@@ -2142,13 +2189,23 @@ function FirstLaunchWizard({
 
 function Sidebar({
   activePage,
+  collapsed,
   navItems,
-  onNavigate
+  onNavigate,
+  onOpenHelp,
+  onToggleCollapse
 }: {
   activePage: PageKey;
+  collapsed: boolean;
   navItems: Array<{ key: PageKey; label: string }>;
   onNavigate: (page: PageKey) => void;
+  onOpenHelp: () => void;
+  onToggleCollapse: () => void;
 }): ReactElement {
+  const CollapseIcon = collapsed ? PanelLeftOpen : PanelLeftClose;
+  const collapseLabel = collapsed ? 'Expand sidebar' : 'Collapse sidebar';
+  const collapseText = collapsed ? 'Expand' : 'Collapse';
+
   return (
     <aside className="sidebar" aria-label="Product">
       <div className="brand">
@@ -2162,28 +2219,93 @@ function Sidebar({
           return (
             <button
               aria-current={activePage === item.key ? 'page' : undefined}
+              aria-label={item.label}
               className={`nav-item ${activePage === item.key ? 'active' : ''}`}
               key={item.key}
               onClick={() => onNavigate(item.key)}
+              title={item.label}
               type="button"
             >
               <Icon aria-hidden="true" className="nav-icon" />
-              <span>{item.label}</span>
+              <span className="sidebar-label">{item.label}</span>
             </button>
           );
         })}
       </nav>
       <div className="sidebar-foot">
-        <button className="foot-line" type="button">
-          <PanelLeftClose aria-hidden="true" className="small-icon" />
-          Collapse
+        <button
+          aria-label={collapseLabel}
+          aria-pressed={collapsed}
+          className="foot-line"
+          onClick={onToggleCollapse}
+          title={collapseLabel}
+          type="button"
+        >
+          <CollapseIcon aria-hidden="true" className="small-icon" />
+          <span className="sidebar-label">{collapseText}</span>
         </button>
-        <button className="foot-line" type="button">
+        <button aria-label="Help" className="foot-line" onClick={onOpenHelp} title="Help" type="button">
           <HelpCircle aria-hidden="true" className="small-icon" />
-          Help
+          <span className="sidebar-label">Help</span>
         </button>
       </div>
     </aside>
+  );
+}
+
+function HelpDrawer({ onClose }: { onClose: () => void }): ReactElement {
+  const dialogRef = useRef<HTMLElement | null>(null);
+
+  useEffect(() => {
+    dialogRef.current?.focus();
+  }, []);
+
+  useEffect(() => {
+    function handleKeyDown(event: KeyboardEvent): void {
+      if (event.key === 'Escape') {
+        onClose();
+      }
+    }
+
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [onClose]);
+
+  return (
+    <div className="help-drawer">
+      <button
+        aria-label="Close workspace help"
+        className="help-drawer-backdrop"
+        onClick={onClose}
+        type="button"
+      />
+      <section
+        aria-label="Workspace help"
+        aria-modal="true"
+        className="help-drawer-panel"
+        ref={dialogRef}
+        role="dialog"
+        tabIndex={-1}
+      >
+        <header className="help-drawer-header">
+          <div>
+            <span className="eyebrow">Workspace help</span>
+            <h2>Local workflow</h2>
+          </div>
+          <button aria-label="Close" className="icon-btn help-close" onClick={onClose} type="button">
+            <X aria-hidden="true" className="small-icon" />
+          </button>
+        </header>
+        <div className="help-drawer-list">
+          {helpItems.map((item) => (
+            <article className="help-drawer-item" key={item.title}>
+              <h3>{item.title}</h3>
+              <p>{item.description}</p>
+            </article>
+          ))}
+        </div>
+      </section>
+    </div>
   );
 }
 

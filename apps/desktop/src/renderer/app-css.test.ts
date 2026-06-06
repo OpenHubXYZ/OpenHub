@@ -45,6 +45,18 @@ describe('renderer layout containment CSS', () => {
     expect(cssBlock(css, '.first-launch-frame')).toContain('overflow: hidden;');
     expect(cssBlock(css, '.first-launch-body')).toContain('overflow: auto;');
   });
+
+  it('defines the collapsed sidebar and local help drawer contracts', async () => {
+    const css = await readFile(cssPath, 'utf8');
+
+    expect(cssBlock(css, '.screen.sidebar-collapsed')).toContain('grid-template-columns: 72px minmax(0, 1fr);');
+    expect(css).toContain('.sidebar-collapsed .sidebar-label');
+    expect(css).toContain('.sidebar-collapsed .brand-title');
+    expect(cssBlock(css, '.help-drawer')).toContain('position: fixed;');
+    expect(cssBlock(css, '.help-drawer')).toContain('inset: 0;');
+    expect(cssBlock(css, '.help-drawer-backdrop')).toContain('background: rgb(15 23 42 / 36%);');
+    expect(cssBlock(css, '.help-drawer-panel')).toContain('overflow: auto;');
+  });
 });
 
 function cssBlock(css: string, selector: string): string {
