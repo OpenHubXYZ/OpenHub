@@ -107,6 +107,11 @@ describe('desktop runtime IPC dispatch', () => {
     const workspace = await tempDir();
     const homeDirectory = path.join(workspace, 'home');
     await createSkillFixture(path.join(homeDirectory, '.codex/skills/scanned-helper'), 'scanned-helper');
+    await createSkillFixture(
+      path.join(homeDirectory, '.agents/skills/chinese-novelist'),
+      'chinese-novelist',
+      '# Chinese Novelist\n\nCreates chapter hooks.'
+    );
     const runtime = createDesktopRuntime({
       dataDirectory: path.join(workspace, 'app-data'),
       homeDirectory
@@ -114,17 +119,31 @@ describe('desktop runtime IPC dispatch', () => {
 
     const scan = await runtime.dispatch('library.scan', {});
 
-    expect(scan.indexedSkills).toEqual([
+    expect(scan.indexedSkills).toEqual(expect.arrayContaining([
+      expect.objectContaining({
+        name: 'chinese-novelist',
+        agentCode: 'agents'
+      }),
       expect.objectContaining({
         name: 'scanned-helper',
         agentCode: 'codex'
       })
-    ]);
+    ]));
     await expect(runtime.dispatch('library.list', {})).resolves.toEqual([
+      expect.objectContaining({
+        name: 'chinese-novelist',
+        sourceAgent: 'Agents',
+        installStatus: 'installed'
+      }),
       expect.objectContaining({
         name: 'scanned-helper',
         sourceAgent: 'Codex',
         installStatus: 'installed'
+      })
+    ]);
+    await expect(runtime.dispatch('library.search', { query: 'chapter' })).resolves.toEqual([
+      expect.objectContaining({
+        name: 'chinese-novelist'
       })
     ]);
     await expect(runtime.dispatch('workspace.state', {})).resolves.toMatchObject({

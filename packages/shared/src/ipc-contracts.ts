@@ -1082,7 +1082,7 @@ const collectionIdRequestSchema = z.object({ collectionId: z.string().min(1) }).
 const librarySearchModeSchema = z.enum(['fts', 'semantic', 'hybrid']);
 const installTargetRequestSchema = z
   .object({
-    agentCode: z.enum(['codex', 'claude', 'gemini', 'opencode']),
+    agentCode: z.enum(['codex', 'claude', 'gemini', 'opencode', 'agents']),
     rootPath: z.string().min(1)
   })
   .strict();

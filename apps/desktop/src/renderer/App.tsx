@@ -91,6 +91,7 @@ export interface AppProps {
 
 export type ManagementFlowState = DesktopWorkspaceState['managementFlow'];
 export type GovernanceState = DesktopWorkspaceState['governance'];
+type AgentCode = 'codex' | 'claude' | 'gemini' | 'opencode' | 'agents';
 
 const navIconByPage: Record<PageKey, LucideIcon> = {
   dashboard: LayoutDashboard,
@@ -138,7 +139,7 @@ const filterSets: Partial<Record<PageKey, Array<{ label: string; value: string }
 const helpItems = [
   {
     title: 'Scan agent roots',
-    description: 'Detect Codex, Claude, Gemini, and OpenCode skill roots from local filesystem state.'
+    description: 'Detect Codex, Claude, Gemini, OpenCode, and Agents skill roots from local filesystem state.'
   },
   {
     title: 'Import skills',
@@ -294,8 +295,8 @@ export function App({
   const [discoverPreviewSkills, setDiscoverPreviewSkills] = useState<DiscoverSkillPreview[]>([]);
   const [onboardingState, setOnboardingState] = useState<OnboardingState | null>(null);
   const [onboardingChecked, setOnboardingChecked] = useState(() => !window.theOpenHub?.getOnboardingState);
-  const [projectRootAgentCode, setProjectRootAgentCode] =
-    useState<'codex' | 'claude' | 'gemini' | 'opencode'>('codex');
+  const [projectRootAgentCode, setProjectRootAgentCode] = useState<AgentCode>('codex');
+  const [librarySearchError, setLibrarySearchError] = useState('');
   const [projectRootPath, setProjectRootPath] = useState('');
   const [operationMessage, setOperationMessage] = useState('');
   const searchRef = useRef<HTMLInputElement | null>(null);
@@ -377,7 +378,12 @@ export function App({
           runtimeState.skills.length === 0 &&
           window.theOpenHub.scanAgentRoots
         ) {
-          const scan = await window.theOpenHub.scanAgentRoots();
+          let scan = null;
+          try {
+            scan = await window.theOpenHub.scanAgentRoots();
+          } catch {
+            scan = null;
+          }
           if (!scan) {
             if (!cancelled) {
               applyWorkspaceState(runtimeState);
@@ -569,6 +575,7 @@ export function App({
   async function handleSearchLibrary(): Promise<void> {
     if (!window.theOpenHub?.searchLibrary || librarySearchQuery.trim().length === 0) {
       setLibrarySearchResults([]);
+      setLibrarySearchError('');
       return;
     }
 
@@ -578,13 +585,19 @@ export function App({
       agentCode: libraryAgentFilter,
       tag: libraryTagFilter
     });
-    setLibrarySearchResults(
-      await window.theOpenHub.searchLibrary(librarySearchQuery.trim(), {
-        favoritesOnly: libraryFavoritesOnly,
-        ...(librarySearchMode === 'fts' ? {} : { mode: librarySearchMode }),
-        ...(hasLibrarySearchFilters(filters) ? { filters } : {})
-      })
-    );
+    try {
+      setLibrarySearchError('');
+      setLibrarySearchResults(
+        await window.theOpenHub.searchLibrary(librarySearchQuery.trim(), {
+          favoritesOnly: libraryFavoritesOnly,
+          ...(librarySearchMode === 'fts' ? {} : { mode: librarySearchMode }),
+          ...(hasLibrarySearchFilters(filters) ? { filters } : {})
+        })
+      );
+    } catch (error) {
+      setLibrarySearchResults([]);
+      setLibrarySearchError(`Library search failed: ${errorMessage(error)}`);
+    }
   }
 
   function handleResetLibraryFilters(): void {
@@ -594,6 +607,7 @@ export function App({
     setLibraryRiskFilter('');
     setLibraryAgentFilter('');
     setLibraryTagFilter('');
+    setLibrarySearchError('');
   }
 
   async function handleSetFavorite(skill: SkillSummary): Promise<void> {
@@ -742,9 +756,14 @@ export function App({
       return;
     }
 
-    const scan = await window.theOpenHub.scanAgentRoots();
-    const refreshed = window.theOpenHub.getWorkspaceState ? await window.theOpenHub.getWorkspaceState() : null;
-    setWorkspaceState((current) => mergeScanIntoWorkspaceState(refreshed ?? current, scan));
+    try {
+      const scan = await window.theOpenHub.scanAgentRoots();
+      const refreshed = window.theOpenHub.getWorkspaceState ? await window.theOpenHub.getWorkspaceState() : null;
+      setWorkspaceState((current) => mergeScanIntoWorkspaceState(refreshed ?? current, scan));
+      setOperationMessage(`Rescan indexed ${scan.indexedSkills.length}; errors ${scan.errors.length}`);
+    } catch (error) {
+      setOperationMessage(`Rescan failed: ${errorMessage(error)}`);
+    }
   }
 
   async function handleCreateInstallPlan(): Promise<void> {
@@ -1778,6 +1797,7 @@ export function App({
                   libraryFavoritesOnly={libraryFavoritesOnly}
                   libraryRiskFilter={libraryRiskFilter}
                   librarySearchMode={librarySearchMode}
+                  librarySearchError={librarySearchError}
                   lastInstallationId={lastInstallationId}
                   librarySearchQuery={librarySearchQuery}
                   librarySearchResults={librarySearchResults}
@@ -2155,7 +2175,7 @@ function FirstLaunchWizard({
               <Search aria-hidden="true" className="first-launch-icon blue" />
               <div>
                 <strong>{rootCount === 1 ? '1 root detected' : `${rootCount} roots detected`}</strong>
-                <span>Codex, Claude, Gemini, and OpenCode roots are checked from the local filesystem.</span>
+                <span>Codex, Claude, Gemini, OpenCode, and Agents roots are checked from the local filesystem.</span>
               </div>
             </article>
             <article className="first-launch-card">
@@ -2519,6 +2539,7 @@ type PageContentProps = {
   libraryFavoritesOnly: boolean;
   libraryRiskFilter: string;
   librarySearchMode: 'fts' | 'semantic' | 'hybrid';
+  librarySearchError: string;
   lastInstallationId: string;
   librarySearchQuery: string;
   librarySearchResults: SkillSummary[];
@@ -2656,7 +2677,7 @@ type PageContentProps = {
   onSparseGitUrlChange: (value: string) => void;
   onSyncCredentialLabelChange: (value: string) => void;
   onSyncCredentialTokenChange: (value: string) => void;
-  onProjectRootAgentCodeChange: (value: 'codex' | 'claude' | 'gemini' | 'opencode') => void;
+  onProjectRootAgentCodeChange: (value: AgentCode) => void;
   onProjectRootPathChange: (value: string) => void;
   onTarImportPathChange: (value: string) => void;
   onSyncModeChange: (value: 'shared-folder' | 'git' | 'rest' | 'mock-rest') => void;
@@ -2668,7 +2689,7 @@ type PageContentProps = {
   pluginRegistry: PluginRegistry | null;
   pluginDirectoryPath: string;
   pluginRootPath: string;
-  projectRootAgentCode: 'codex' | 'claude' | 'gemini' | 'opencode';
+  projectRootAgentCode: AgentCode;
   projectRootPath: string;
   rollbackVersionId: string;
   relinkTargetRoot: string;
@@ -2732,6 +2753,7 @@ function PageContent(props: PageContentProps): ReactElement {
     libraryFavoritesOnly,
     libraryRiskFilter,
     librarySearchMode,
+    librarySearchError,
     lastInstallationId,
     librarySearchQuery,
     librarySearchResults,
@@ -2923,6 +2945,7 @@ function PageContent(props: PageContentProps): ReactElement {
         libraryFavoritesOnly={libraryFavoritesOnly}
         libraryRiskFilter={libraryRiskFilter}
         librarySearchMode={librarySearchMode}
+        librarySearchError={librarySearchError}
         librarySearchQuery={librarySearchQuery}
         librarySearchResults={librarySearchResults}
         librarySourceFilter={librarySourceFilter}
@@ -3261,6 +3284,7 @@ type LibraryPageProps = Pick<
   | 'libraryFavoritesOnly'
   | 'libraryRiskFilter'
   | 'librarySearchMode'
+  | 'librarySearchError'
   | 'librarySearchQuery'
   | 'librarySearchResults'
   | 'librarySourceFilter'
@@ -3366,6 +3390,7 @@ function LibraryPage({
   libraryFavoritesOnly,
   libraryRiskFilter,
   librarySearchMode,
+  librarySearchError,
   librarySearchQuery,
   librarySearchResults,
   librarySourceFilter,
@@ -3575,6 +3600,7 @@ function LibraryPage({
             libraryFavoritesOnly={libraryFavoritesOnly}
             libraryRiskFilter={libraryRiskFilter}
             librarySearchMode={librarySearchMode}
+            librarySearchError={librarySearchError}
             librarySourceFilter={librarySourceFilter}
             libraryTagFilter={libraryTagFilter}
             onExportDirectoryChange={onExportDirectoryChange}
@@ -4406,7 +4432,7 @@ function SettingsPage({
   onLoadSyncConflicts: () => void;
   onPluginDirectoryPathChange: (value: string) => void;
   onPluginRootPathChange: (value: string) => void;
-  onProjectRootAgentCodeChange: (value: 'codex' | 'claude' | 'gemini' | 'opencode') => void;
+  onProjectRootAgentCodeChange: (value: AgentCode) => void;
   onProjectRootPathChange: (value: string) => void;
   onAddSettingsMirrorSource: () => void;
   onAddSettingsPluginDirectory: () => void;
@@ -4428,7 +4454,7 @@ function SettingsPage({
   pluginRegistry: PluginRegistry | null;
   pluginDirectoryPath: string;
   pluginRootPath: string;
-  projectRootAgentCode: 'codex' | 'claude' | 'gemini' | 'opencode';
+  projectRootAgentCode: AgentCode;
   projectRootPath: string;
   settingsMirrorName: string;
   settingsMirrorUrl: string;
@@ -4688,10 +4714,10 @@ function ProjectRootActions({
 }: {
   installTargets: InstallTarget[];
   onAddProjectRoot: () => void;
-  onProjectRootAgentCodeChange: (value: 'codex' | 'claude' | 'gemini' | 'opencode') => void;
+  onProjectRootAgentCodeChange: (value: AgentCode) => void;
   onProjectRootPathChange: (value: string) => void;
   operationMessage: string;
-  projectRootAgentCode: 'codex' | 'claude' | 'gemini' | 'opencode';
+  projectRootAgentCode: AgentCode;
   projectRootPath: string;
 }): ReactElement {
   const projectTargets = installTargets.filter((target) => target.rootKind === 'project' || target.scope === 'project');
@@ -4706,7 +4732,7 @@ function ProjectRootActions({
             id="project-root-agent"
             name="projectRootAgent"
             onChange={(event) =>
-              onProjectRootAgentCodeChange(event.target.value as 'codex' | 'claude' | 'gemini' | 'opencode')
+              onProjectRootAgentCodeChange(event.target.value as AgentCode)
             }
             value={projectRootAgentCode}
           >
@@ -4714,6 +4740,7 @@ function ProjectRootActions({
             <option value="claude">Claude</option>
             <option value="gemini">Gemini</option>
             <option value="opencode">OpenCode</option>
+            <option value="agents">Agents</option>
           </select>
         </label>
         <label htmlFor="project-root-path">
@@ -5629,6 +5656,7 @@ function LibrarySearchPanel({
   libraryFavoritesOnly,
   libraryRiskFilter,
   librarySearchMode,
+  librarySearchError,
   librarySearchQuery,
   librarySearchResults,
   librarySourceFilter,
@@ -5659,6 +5687,7 @@ function LibrarySearchPanel({
   libraryFavoritesOnly: boolean;
   libraryRiskFilter: string;
   librarySearchMode: 'fts' | 'semantic' | 'hybrid';
+  librarySearchError: string;
   librarySearchQuery: string;
   librarySearchResults: SkillSummary[];
   librarySourceFilter: string;
@@ -5782,6 +5811,7 @@ function LibrarySearchPanel({
             />
           </label>
         </div>
+        {librarySearchError ? <p className="empty-inline">{librarySearchError}</p> : null}
         <FacetChips facets={libraryFacets} />
         <KeyValueList
           rows={librarySearchResults.map((skill) => ({
@@ -5936,6 +5966,10 @@ function filterValues(input: string): string[] {
     .split(',')
     .map((value) => value.trim())
     .filter(Boolean);
+}
+
+function errorMessage(error: unknown): string {
+  return error instanceof Error ? error.message : 'Unknown error';
 }
 
 function currentInstallation(
@@ -7010,6 +7044,9 @@ function agentTone(agent: string): string {
     return 'gemini';
   }
   if (lower === 'opencode') {
+    return 'open';
+  }
+  if (lower === 'agents') {
     return 'open';
   }
   return '';

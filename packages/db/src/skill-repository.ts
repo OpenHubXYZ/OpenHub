@@ -41,10 +41,14 @@ export interface CreateSkillInput {
     url: string | null;
     trustLevel: string;
   };
-  files: Array<{
-    relativePath: string;
-    content: string;
-  }>;
+  files: SkillFileInput[];
+}
+
+export interface SkillFileInput {
+  relativePath: string;
+  content?: string;
+  contentBuffer?: Buffer;
+  searchableContent?: string;
 }
 
 export interface SkillRecord {
@@ -83,7 +87,7 @@ export function createSkillRepository(database: SqliteDatabase): SkillRepository
       const sourceId = randomUUID();
       const versionId = randomUUID();
       const manifest = input.files.find((file) => file.relativePath === 'SKILL.md');
-      const manifestHash = hashContent(manifest?.content ?? input.name);
+      const manifestHash = manifest ? hashContent(fileBuffer(manifest)) : hashContent(input.name);
 
       const create = database.transaction(() => {
         database
@@ -130,7 +134,8 @@ export function createSkillRepository(database: SqliteDatabase): SkillRepository
           });
 
         for (const file of input.files) {
-          const blobHash = hashContent(file.content);
+          const content = fileBuffer(file);
+          const blobHash = hashContent(content);
           const contentType = contentTypeForPath(file.relativePath);
 
           database
@@ -145,7 +150,7 @@ export function createSkillRepository(database: SqliteDatabase): SkillRepository
             .run({
               hash: blobHash,
               storagePath: storagePathForHash(blobHash),
-              size: Buffer.byteLength(file.content),
+              size: content.byteLength,
               contentType
             });
 
@@ -164,12 +169,12 @@ export function createSkillRepository(database: SqliteDatabase): SkillRepository
               relativePath: file.relativePath,
               blobHash,
               fileKind: file.relativePath === 'SKILL.md' ? 'skill_manifest' : 'support_file',
-              fileSize: Buffer.byteLength(file.content),
+              fileSize: content.byteLength,
               contentType
             });
         }
 
-        refreshSkillSearchIndexes(database, skillId, input.files.map((file) => file.content).join('\n'));
+        refreshSkillSearchIndexes(database, skillId, searchableFileContent(input.files));
       });
 
       create();
@@ -472,11 +477,10 @@ function searchSemantic(
 
   return listSearchCandidates(database, options.filters, options.favoritesOnly)
     .map((candidate) => {
+      const documentVector = candidate.tokensJson ? parseSimilarityTokens(candidate.tokensJson) : null;
       return {
         skill: candidate.skill,
-        score: candidate.tokensJson
-          ? similarityScore(queryVector, JSON.parse(candidate.tokensJson) as Array<[string, number]>)
-          : 0
+        score: documentVector ? similarityScore(queryVector, documentVector) : 0
       };
     })
     .filter((result) => result.score > 0)
@@ -623,6 +627,30 @@ function splitCsv(input: string | null): string[] {
   return input?.split(',').filter(Boolean) ?? [];
 }
 
+function parseSimilarityTokens(tokensJson: string): Array<[string, number]> | null {
+  try {
+    const parsed = JSON.parse(tokensJson) as unknown;
+    if (!Array.isArray(parsed)) {
+      return null;
+    }
+
+    const tokens: Array<[string, number]> = [];
+    for (const entry of parsed) {
+      if (
+        Array.isArray(entry) &&
+        entry.length === 2 &&
+        typeof entry[0] === 'string' &&
+        typeof entry[1] === 'number'
+      ) {
+        tokens.push([entry[0], entry[1]]);
+      }
+    }
+    return tokens;
+  } catch {
+    return null;
+  }
+}
+
 function skillRow(row: unknown): SkillRecord {
   const typed = row as {
     id: string;
@@ -663,8 +691,27 @@ function searchRow(row: unknown): {
   };
 }
 
-function hashContent(content: string): string {
+function hashContent(content: string | Buffer): string {
   return createHash('sha256').update(content).digest('hex');
+}
+
+function fileBuffer(file: SkillFileInput): Buffer {
+  if (file.contentBuffer) {
+    return file.contentBuffer;
+  }
+
+  if (file.content !== undefined) {
+    return Buffer.from(file.content);
+  }
+
+  return Buffer.alloc(0);
+}
+
+function searchableFileContent(files: SkillFileInput[]): string {
+  return files
+    .map((file) => file.searchableContent ?? file.content ?? '')
+    .filter((content) => content.length > 0)
+    .join('\n');
 }
 
 function storagePathForHash(hash: string): string {
@@ -672,7 +719,30 @@ function storagePathForHash(hash: string): string {
 }
 
 function contentTypeForPath(relativePath: string): string {
-  return relativePath.endsWith('.md') ? 'text/markdown' : 'text/plain';
+  const extension = relativePath.toLowerCase().split('.').pop() ?? '';
+  const contentTypes: Record<string, string> = {
+    md: 'text/markdown',
+    markdown: 'text/markdown',
+    txt: 'text/plain',
+    json: 'application/json',
+    yaml: 'application/yaml',
+    yml: 'application/yaml',
+    js: 'text/javascript',
+    cjs: 'text/javascript',
+    mjs: 'text/javascript',
+    ts: 'text/typescript',
+    tsx: 'text/typescript',
+    jsx: 'text/javascript',
+    py: 'text/x-python',
+    sh: 'text/x-shellscript',
+    png: 'image/png',
+    jpg: 'image/jpeg',
+    jpeg: 'image/jpeg',
+    gif: 'image/gif',
+    webp: 'image/webp',
+    svg: 'image/svg+xml'
+  };
+  return contentTypes[extension] ?? 'application/octet-stream';
 }
 
 function toFtsQuery(query: string): string {

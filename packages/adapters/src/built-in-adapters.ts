@@ -20,7 +20,8 @@ const builtInConfigs: BuiltInAdapterConfig[] = [
   { id: 'codex', displayName: 'Codex', relativeRoot: '.codex/skills' },
   { id: 'claude', displayName: 'Claude', relativeRoot: '.claude/skills' },
   { id: 'gemini', displayName: 'Gemini', relativeRoot: '.gemini/skills' },
-  { id: 'opencode', displayName: 'OpenCode', relativeRoot: '.opencode/skills' }
+  { id: 'opencode', displayName: 'OpenCode', relativeRoot: '.opencode/skills' },
+  { id: 'agents', displayName: 'Agents', relativeRoot: '.agents/skills' }
 ];
 
 export function createBuiltInAgentAdapters(options: BuiltInAdapterOptions = {}): AgentAdapter[] {

@@ -30,6 +30,7 @@ export type {
   SkillSearchFilters,
   SkillSearchMode,
   SkillSearchOptions,
+  SkillFileInput,
   SkillRecord,
   SkillRepository,
   UpdateSkillMetadataInput

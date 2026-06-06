@@ -159,6 +159,84 @@ describe('skill repository', () => {
     fetchSpy.mockRestore();
   });
 
+  it('indexes text files and paths without indexing binary payload bytes', () => {
+    const db = createMemoryDatabase();
+    runMigrations(db);
+    const repository = createSkillRepository(db);
+    const binaryPayload = Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x00, ...Buffer.from('binary-secret-token')]);
+
+    const skill = repository.createSkill({
+      slug: 'chinese-novelist',
+      name: 'chinese-novelist',
+      description: 'Chapter writing helper.',
+      tags: ['writing'],
+      source: {
+        type: 'agent-root',
+        url: '/tmp/.agents/skills/chinese-novelist',
+        trustLevel: 'agents'
+      },
+      files: [
+        {
+          relativePath: 'SKILL.md',
+          content: '# Chinese Novelist\n\nUses chapter hooks.'
+        },
+        {
+          relativePath: 'scripts/write.py',
+          contentBuffer: Buffer.from('def outline_engine():\n    return "chapter-hook"\n'),
+          searchableContent: 'def outline_engine():\n    return "chapter-hook"\n'
+        },
+        {
+          relativePath: 'assets/cover.png',
+          contentBuffer: binaryPayload
+        }
+      ]
+    });
+
+    expect(repository.searchSkills('chapter')).toEqual([
+      expect.objectContaining({ id: skill.id, name: 'chinese-novelist' })
+    ]);
+    expect(repository.searchSkills('cover')).toEqual([
+      expect.objectContaining({ id: skill.id, name: 'chinese-novelist' })
+    ]);
+    expect(repository.searchSkills('binary')).toEqual([]);
+  });
+
+  it('skips corrupt local semantic index JSON without throwing', () => {
+    const db = createMemoryDatabase();
+    runMigrations(db);
+    const repository = createSkillRepository(db);
+    const healthy = repository.createSkill({
+      slug: 'healthy-search',
+      name: 'Healthy Search',
+      description: 'Database helper.',
+      tags: ['sqlite'],
+      source: {
+        type: 'local',
+        url: null,
+        trustLevel: 'user'
+      },
+      files: [{ relativePath: 'SKILL.md', content: '# Healthy Search' }]
+    });
+    const corrupt = repository.createSkill({
+      slug: 'corrupt-search',
+      name: 'Corrupt Search',
+      description: 'Database helper.',
+      tags: ['sqlite'],
+      source: {
+        type: 'local',
+        url: null,
+        trustLevel: 'user'
+      },
+      files: [{ relativePath: 'SKILL.md', content: '# Corrupt Search' }]
+    });
+    db.prepare('update skill_similarity_index set tokens_json = ? where skill_id = ?').run('{bad json', corrupt.id);
+
+    expect(() => repository.searchSkills('db', { mode: 'semantic' })).not.toThrow();
+    expect(repository.searchSkills('db', { mode: 'semantic' })).toEqual([
+      expect.objectContaining({ id: healthy.id })
+    ]);
+  });
+
   it('filters library search by source, risk, agent, tags, and favorites while returning facet counts', () => {
     const db = createMemoryDatabase();
     runMigrations(db);

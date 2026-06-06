@@ -150,6 +150,12 @@ describe('desktop shell IPC contract', () => {
         scope: 'user'
       })
     ).toMatchObject({ skillId: 'skill-1', agentCode: 'codex' });
+    expect(
+      desktopShellContract.agentRootsAddProject.request.parse({
+        agentCode: 'agents',
+        rootPath: '/tmp/.agents/skills'
+      })
+    ).toEqual({ agentCode: 'agents', rootPath: '/tmp/.agents/skills' });
   });
 
   it('defines the deep research workflow IPC channels with strict request validation', () => {

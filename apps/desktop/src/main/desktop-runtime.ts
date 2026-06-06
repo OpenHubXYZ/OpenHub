@@ -1543,7 +1543,8 @@ function agentMetadata(agentCode: string): Pick<
     codex: 'Codex',
     claude: 'Claude',
     gemini: 'Gemini',
-    opencode: 'OpenCode'
+    opencode: 'OpenCode',
+    agents: 'Agents'
   };
   const agentDisplayName = displayNames[agentCode];
   if (!agentDisplayName) {

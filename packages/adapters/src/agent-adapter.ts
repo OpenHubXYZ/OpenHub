@@ -1,4 +1,4 @@
-export type AgentCode = 'codex' | 'claude' | 'gemini' | 'opencode';
+export type AgentCode = 'codex' | 'claude' | 'gemini' | 'opencode' | 'agents';
 export type AgentRootScope = 'user' | 'project';
 
 export interface AgentRoot {

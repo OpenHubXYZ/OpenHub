@@ -77,7 +77,8 @@ export async function scanAgentLibraries(
             },
             files: files.map((file) => ({
               relativePath: file.relativePath,
-              content: file.content
+              contentBuffer: file.content,
+              ...(file.searchableContent === null ? {} : { searchableContent: file.searchableContent })
             }))
           });
 
@@ -154,9 +155,9 @@ async function collectSkillCandidates(directoryPath: string): Promise<string[]> 
 async function collectSkillFiles(
   skillPath: string,
   basePath = skillPath
-): Promise<Array<{ relativePath: string; content: string; size: number }>> {
+): Promise<Array<{ relativePath: string; content: Buffer; searchableContent: string | null; size: number }>> {
   const entries = await readdir(skillPath, { withFileTypes: true });
-  const files: Array<{ relativePath: string; content: string; size: number }> = [];
+  const files: Array<{ relativePath: string; content: Buffer; searchableContent: string | null; size: number }> = [];
 
   for (const entry of entries) {
     const entryPath = path.join(skillPath, entry.name);
@@ -170,15 +171,47 @@ async function collectSkillFiles(
       continue;
     }
 
-    const content = await readFile(entryPath, 'utf8');
+    const content = await readFile(entryPath);
+    const relativePath = toPosixPath(path.relative(basePath, entryPath));
     files.push({
-      relativePath: path.relative(basePath, entryPath),
+      relativePath,
       content,
-      size: Buffer.byteLength(content)
+      searchableContent: searchableContentForFile(relativePath, content),
+      size: content.byteLength
     });
   }
 
   return files.sort((left, right) => left.relativePath.localeCompare(right.relativePath));
+}
+
+function searchableContentForFile(relativePath: string, content: Buffer): string | null {
+  if (isKnownBinaryPath(relativePath) || content.includes(0)) {
+    return null;
+  }
+
+  const decoded = content.toString('utf8');
+  if (decoded.includes('\uFFFD') || hasHighControlCharacterRatio(decoded)) {
+    return null;
+  }
+
+  return decoded;
+}
+
+function isKnownBinaryPath(relativePath: string): boolean {
+  return /\.(?:png|jpe?g|gif|webp|ico|pdf|zip|tar|gz|tgz|wasm|exe|dll|dylib|so)$/i.test(relativePath);
+}
+
+function hasHighControlCharacterRatio(input: string): boolean {
+  if (input.length === 0) {
+    return false;
+  }
+
+  const controlCharacters = input.match(/[\x01-\x08\x0B\x0C\x0E-\x1F]/g)?.length ?? 0;
+  return controlCharacters / input.length > 0.05;
+}
+
+function toPosixPath(relativePath: string): string {
+  return relativePath.split(path.sep).join(path.posix.sep);
 }
 
 async function fileExists(filePath: string): Promise<boolean> {

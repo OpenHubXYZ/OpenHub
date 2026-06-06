@@ -1970,6 +1970,116 @@ describe('desktop app shell', () => {
     await waitFor(() => expect(api.searchLibrary).toHaveBeenLastCalledWith('runtime', { favoritesOnly: true }));
   });
 
+  it('renders library search failures without unmounting the renderer', async () => {
+    const runtimeSkill = {
+      id: 'skill-runtime',
+      versionId: 'version-runtime',
+      name: 'Runtime Helper',
+      description: 'Searchable runtime helper',
+      versionNo: 1
+    };
+    const api = {
+      getWorkspaceState: vi.fn().mockResolvedValue(workspaceState({ skills: [runtimeSkill] })),
+      searchLibrary: vi.fn().mockRejectedValue(new Error('bad semantic index')),
+      getPluginCenterState: vi.fn()
+    };
+    window.theOpenHub = api as unknown as NonNullable<typeof window.theOpenHub>;
+
+    render(<App />);
+
+    await waitFor(() => expect(api.getWorkspaceState).toHaveBeenCalled());
+    fireEvent.click(screen.getByRole('button', { name: 'Library' }));
+    fireEvent.change(screen.getByLabelText('Library search query'), {
+      target: { value: 'runtime' }
+    });
+    fireEvent.click(screen.getByRole('button', { name: 'Search library' }));
+
+    await waitFor(() => expect(api.searchLibrary).toHaveBeenCalledWith('runtime', { favoritesOnly: false }));
+    expect(screen.getByText('Library search failed: bad semantic index')).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: 'Library' })).toBeInTheDocument();
+  });
+
+  it('shows a visible library rescan summary after manual rescan', async () => {
+    const existingSkill = {
+      id: 'skill-existing',
+      versionId: 'version-existing',
+      name: 'Existing Helper',
+      description: 'Already indexed',
+      versionNo: 1
+    };
+    const agentsSkill = {
+      id: 'skill-agents',
+      versionId: 'version-agents',
+      name: 'chinese-novelist',
+      description: 'Creates chapter hooks.',
+      versionNo: 1
+    };
+    const api = {
+      getWorkspaceState: vi
+        .fn()
+        .mockResolvedValueOnce(
+          workspaceState({
+            librarySkills: [
+              {
+                id: existingSkill.id,
+                name: existingSkill.name,
+                sourceAgent: 'Codex',
+                path: '/tmp/.codex/skills/existing-helper',
+                installStatus: 'installed'
+              }
+            ],
+            skills: [existingSkill]
+          })
+        )
+        .mockResolvedValueOnce(
+          workspaceState({
+            librarySkills: [
+              {
+                id: agentsSkill.id,
+                name: agentsSkill.name,
+                sourceAgent: 'Agents',
+                path: '/tmp/.agents/skills/chinese-novelist',
+                installStatus: 'installed'
+              }
+            ],
+            skills: [agentsSkill]
+          })
+        ),
+      scanAgentRoots: vi.fn().mockResolvedValue({
+        indexedSkills: [
+          {
+            id: agentsSkill.id,
+            name: agentsSkill.name,
+            agentCode: 'agents',
+            path: '/tmp/.agents/skills/chinese-novelist',
+            files: [{ relativePath: 'SKILL.md', size: 128 }]
+          }
+        ],
+        errors: [
+          {
+            agentCode: 'codex',
+            code: 'missing_manifest',
+            skillPath: '/tmp/.codex/skills/bad-helper',
+            message: 'Skill directory is missing SKILL.md'
+          }
+        ]
+      }),
+      getPluginCenterState: vi.fn()
+    };
+    window.theOpenHub = api as unknown as NonNullable<typeof window.theOpenHub>;
+
+    render(<App />);
+
+    await waitFor(() => expect(api.getWorkspaceState).toHaveBeenCalledTimes(1));
+    fireEvent.click(screen.getByRole('button', { name: 'Library' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Scan agent roots' }));
+
+    await waitFor(() => expect(api.scanAgentRoots).toHaveBeenCalledTimes(1));
+    await waitFor(() => expect(api.getWorkspaceState).toHaveBeenCalledTimes(2));
+    expect(screen.getByText('Rescan indexed 1; errors 1')).toBeInTheDocument();
+    expect(screen.getByText('chinese-novelist')).toBeInTheDocument();
+  });
+
   it('adds project roots from Settings and exposes them as install targets', async () => {
     const api = {
       getAppInfo: vi.fn(),

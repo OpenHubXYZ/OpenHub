@@ -59,7 +59,7 @@ declare global {
       getOnboardingState(): Promise<OnboardingState>;
       completeOnboarding(completed?: boolean): Promise<OnboardingState>;
       addProjectRoot(input: {
-        agentCode: 'codex' | 'claude' | 'gemini' | 'opencode';
+        agentCode: 'codex' | 'claude' | 'gemini' | 'opencode' | 'agents';
         rootPath: string;
       }): Promise<InstallTarget>;
       listAgentRoots(): Promise<InstallTarget[]>;

@@ -63,7 +63,8 @@ interface StagedImportInput {
 
 interface CollectedSkillFile {
   relativePath: string;
-  content: string;
+  content: Buffer;
+  searchableContent: string | null;
   size: number;
 }
 
@@ -222,7 +223,8 @@ async function importFromStage(
     },
     files: files.map((file) => ({
       relativePath: file.relativePath,
-      content: file.content
+      contentBuffer: file.content,
+      ...(file.searchableContent === null ? {} : { searchableContent: file.searchableContent })
     }))
   });
 
@@ -380,16 +382,43 @@ async function collectSkillFiles(
       continue;
     }
 
-    const content = await readFile(entryPath, 'utf8');
+    const content = await readFile(entryPath);
     const relativePath = toPosixPath(path.relative(baseDirectory, entryPath));
     files.push({
       relativePath,
+      searchableContent: searchableContentForFile(relativePath, content),
       content,
-      size: Buffer.byteLength(content)
+      size: content.byteLength
     });
   }
 
   return files.sort(compareSkillFiles);
+}
+
+function searchableContentForFile(relativePath: string, content: Buffer): string | null {
+  if (isKnownBinaryPath(relativePath) || content.includes(0)) {
+    return null;
+  }
+
+  const decoded = content.toString('utf8');
+  if (decoded.includes('\uFFFD') || hasHighControlCharacterRatio(decoded)) {
+    return null;
+  }
+
+  return decoded;
+}
+
+function isKnownBinaryPath(relativePath: string): boolean {
+  return /\.(?:png|jpe?g|gif|webp|ico|pdf|zip|tar|gz|tgz|wasm|exe|dll|dylib|so)$/i.test(relativePath);
+}
+
+function hasHighControlCharacterRatio(input: string): boolean {
+  if (input.length === 0) {
+    return false;
+  }
+
+  const controlCharacters = input.match(/[\x01-\x08\x0B\x0C\x0E-\x1F]/g)?.length ?? 0;
+  return controlCharacters / input.length > 0.05;
 }
 
 function slugify(name: string): string {

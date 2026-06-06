@@ -13,11 +13,17 @@ describe('built-in agent adapters', () => {
     await Promise.all(tempDirectories.splice(0).map((directory) => rm(directory, { recursive: true })));
   });
 
-  it('detects common local skill roots for Codex, Claude, Gemini, and OpenCode', async () => {
+  it('detects common local skill roots for Codex, Claude, Gemini, OpenCode, and Agents', async () => {
     const homeDirectory = await mkdtemp(path.join(tmpdir(), 'theopenhub-adapters-'));
     tempDirectories.push(homeDirectory);
 
-    for (const root of ['.codex/skills', '.claude/skills', '.gemini/skills', '.opencode/skills']) {
+    for (const root of [
+      '.codex/skills',
+      '.claude/skills',
+      '.gemini/skills',
+      '.opencode/skills',
+      '.agents/skills'
+    ]) {
       await mkdir(path.join(homeDirectory, root), { recursive: true });
     }
 
@@ -28,7 +34,8 @@ describe('built-in agent adapters', () => {
       ['codex', path.join(homeDirectory, '.codex/skills')],
       ['claude', path.join(homeDirectory, '.claude/skills')],
       ['gemini', path.join(homeDirectory, '.gemini/skills')],
-      ['opencode', path.join(homeDirectory, '.opencode/skills')]
+      ['opencode', path.join(homeDirectory, '.opencode/skills')],
+      ['agents', path.join(homeDirectory, '.agents/skills')]
     ]);
   });
 

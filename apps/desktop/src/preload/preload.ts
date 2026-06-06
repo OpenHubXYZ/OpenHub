@@ -70,7 +70,7 @@ const api = {
   },
 
   async addProjectRoot(input: {
-    agentCode: 'codex' | 'claude' | 'gemini' | 'opencode';
+    agentCode: 'codex' | 'claude' | 'gemini' | 'opencode' | 'agents';
     rootPath: string;
   }): Promise<InstallTarget> {
     const payload = await ipcRenderer.invoke(desktopShellContract.agentRootsAddProject.channel, input);

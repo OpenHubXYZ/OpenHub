@@ -438,7 +438,7 @@ function createActionSteps(input: WorkspaceUxModelInput): ActionStep[] {
   const rawSteps: Array<Omit<ActionStep, 'status'>> = [
     {
       label: 'Detect agent roots',
-      description: 'Find Codex, Claude, Gemini, and OpenCode skill roots on this machine.',
+      description: 'Find Codex, Claude, Gemini, OpenCode, and Agents skill roots on this machine.',
       provenance: hasRoots ? 'runtime' : 'not scanned',
       targetPage: 'settings'
     },
@@ -655,6 +655,15 @@ function createCompatibilityRows(detail: SkillDetail | null, installTargets: Ins
             adapterVersion: 'builtin',
             agentCode: 'opencode',
             agentDisplayName: 'OpenCode',
+            rootPath: 'not detected',
+            scope: 'user',
+            writable: false,
+            isDefault: false
+          },
+          {
+            adapterVersion: 'builtin',
+            agentCode: 'agents',
+            agentDisplayName: 'Agents',
             rootPath: 'not detected',
             scope: 'user',
             writable: false,
