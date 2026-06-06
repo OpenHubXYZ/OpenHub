@@ -1,5 +1,13 @@
 import { appInfo } from '@theopenhub/shared';
-import type { DesktopWorkspaceState, LibraryScanResult, LibrarySkillSummary } from '@theopenhub/shared';
+import type {
+  DesktopWorkspaceState,
+  DiscoverSkillPreview,
+  InstallPlan,
+  InstallTarget,
+  LibraryScanResult,
+  LibrarySkillSummary,
+  SkillDetail
+} from '@theopenhub/shared';
 
 export const pageOrder = [
   'dashboard',
@@ -123,6 +131,68 @@ export interface WorkspaceViewModel {
     defaults: KeyValueRow[];
     syncPreview: KeyValueRow[];
   };
+}
+
+export interface ProvenanceChip {
+  label: string;
+  tone: Tone;
+}
+
+export interface ActionStep {
+  label: string;
+  description: string;
+  status: 'current' | 'done' | 'pending' | 'blocked';
+  provenance: string;
+  targetPage: PageKey;
+}
+
+export interface EmptyStateModel {
+  title: string;
+  text: string;
+  actionLabel: string;
+  provenance: string;
+}
+
+export interface TrustImpactModel {
+  title: string;
+  subtitle: string;
+  provenanceChips: ProvenanceChip[];
+  rows: KeyValueRow[];
+  nextAction: string;
+}
+
+export interface CompatibilityRow {
+  agent: string;
+  root: string;
+  scope: string;
+  status: 'visible' | 'compatible' | 'incompatible' | 'manual' | 'not checked';
+  detail: string;
+  tone: Tone;
+}
+
+export interface DiagnosticItem {
+  title: string;
+  detail: string;
+  action: string;
+  tone: Tone;
+}
+
+export interface WorkspaceUxModel {
+  actionSteps: ActionStep[];
+  compatibilityRows: CompatibilityRow[];
+  diagnostics: DiagnosticItem[];
+  emptyStates: Record<PageKey, EmptyStateModel>;
+  provenanceChips: ProvenanceChip[];
+  trustImpact: TrustImpactModel;
+}
+
+export interface WorkspaceUxModelInput {
+  activeInstallPlan: InstallPlan | null;
+  activePage: PageKey;
+  discoverPreviewSkills: DiscoverSkillPreview[];
+  installTargets: InstallTarget[];
+  selectedSkillDetail: SkillDetail | null;
+  state: DesktopWorkspaceState;
 }
 
 export function createEmptyWorkspaceState(): DesktopWorkspaceState {
@@ -303,6 +373,20 @@ export function createWorkspaceViewModel(state: DesktopWorkspaceState): Workspac
   };
 }
 
+export function createWorkspaceUxModel(input: WorkspaceUxModelInput): WorkspaceUxModel {
+  const provenanceChips = createProvenanceChips(input.state);
+  const compatibilityRows = createCompatibilityRows(input.selectedSkillDetail, input.installTargets);
+
+  return {
+    actionSteps: createActionSteps(input),
+    compatibilityRows,
+    diagnostics: createDiagnostics(input, compatibilityRows),
+    emptyStates: createEmptyStates(),
+    provenanceChips,
+    trustImpact: createTrustImpact(input, provenanceChips)
+  };
+}
+
 export function mergeScanIntoWorkspaceState(
   state: DesktopWorkspaceState,
   scan: LibraryScanResult
@@ -339,6 +423,337 @@ function metric(label: string, value: number | string, detail: string): MetricCa
     value: typeof value === 'number' ? new Intl.NumberFormat('en-US').format(value) : value,
     detail
   };
+}
+
+function createActionSteps(input: WorkspaceUxModelInput): ActionStep[] {
+  const hasRoots = input.installTargets.length > 0 || input.state.librarySkills.length > 0;
+  const hasScan = input.state.librarySkills.length > 0 || input.state.managementFlow.importItems.length > 0;
+  const hasPreview = input.discoverPreviewSkills.length > 0;
+  const hasTrustReview =
+    input.state.securityCenter.findings.length > 0 ||
+    input.state.securityCenter.queue.length > 0 ||
+    Boolean(input.selectedSkillDetail?.latestScan);
+  const hasInstallPlan = Boolean(input.activeInstallPlan || input.state.managementFlow.installPlan);
+
+  const rawSteps: Array<Omit<ActionStep, 'status'>> = [
+    {
+      label: 'Detect agent roots',
+      description: 'Find Codex, Claude, Gemini, and OpenCode skill roots on this machine.',
+      provenance: hasRoots ? 'runtime' : 'not scanned',
+      targetPage: 'settings'
+    },
+    {
+      label: 'Run local scan',
+      description: 'Index installed projections into local SQLite before planning changes.',
+      provenance: hasScan ? 'SQLite' : 'not scanned',
+      targetPage: 'dashboard'
+    },
+    {
+      label: 'Preview a source',
+      description: 'Add a local folder or Git URL and inspect candidates before import.',
+      provenance: hasPreview ? 'source preview' : 'network off',
+      targetPage: 'discover'
+    },
+    {
+      label: 'Review trust',
+      description: 'Read scan findings, source provenance, and review queue state.',
+      provenance: hasTrustReview ? 'SQLite' : 'not scanned',
+      targetPage: 'security'
+    },
+    {
+      label: 'Create install plan',
+      description: 'Review exact writes and conflicts before any agent-root change.',
+      provenance: hasInstallPlan ? 'runtime' : 'not planned',
+      targetPage: 'installs'
+    }
+  ];
+  const done = [hasRoots, hasScan, hasPreview, hasTrustReview, hasInstallPlan];
+  const currentIndex = Math.max(0, done.findIndex((value) => !value));
+
+  return rawSteps.map((step, index) => ({
+    ...step,
+    status: done[index] ? 'done' : index === currentIndex ? 'current' : 'pending'
+  }));
+}
+
+function createEmptyStates(): Record<PageKey, EmptyStateModel> {
+  return {
+    dashboard: {
+      title: 'No local scan yet',
+      text: 'Run a local scan to populate health, agent coverage, and readiness evidence.',
+      actionLabel: 'Run local scan',
+      provenance: 'not scanned'
+    },
+    library: {
+      title: 'No skills indexed',
+      text: 'Scan agent roots or import a local skill before creating install plans.',
+      actionLabel: 'Scan or import',
+      provenance: 'SQLite'
+    },
+    discover: {
+      title: 'No sources previewed',
+      text: 'Add a local folder or Git URL to preview candidates. No files are written during preview.',
+      actionLabel: 'Add local or Git source',
+      provenance: 'source preview'
+    },
+    installs: {
+      title: 'No install plan visible',
+      text: 'Select a skill and create a plan before applying changes to any agent root.',
+      actionLabel: 'Create install plan',
+      provenance: 'not planned'
+    },
+    usage: {
+      title: 'No local usage events',
+      text: 'Usage appears only after local scans, imports, installs, exports, or security actions.',
+      actionLabel: 'Run a local action',
+      provenance: 'SQLite'
+    },
+    reviews: {
+      title: 'No review items',
+      text: 'Security findings, install conflicts, and changed versions create review items when they exist.',
+      actionLabel: 'Review security',
+      provenance: 'SQLite'
+    },
+    security: {
+      title: 'No security scan yet',
+      text: 'Import or select a skill, then run a local scan to create policy evidence.',
+      actionLabel: 'Run security scan',
+      provenance: 'not scanned'
+    },
+    settings: {
+      title: 'No manual setting selected',
+      text: 'Local-first defaults are active until you opt into sync, plugins, or project roots.',
+      actionLabel: 'Review defaults',
+      provenance: 'runtime'
+    }
+  };
+}
+
+function createProvenanceChips(state: DesktopWorkspaceState): ProvenanceChip[] {
+  const chips: ProvenanceChip[] = [
+    { label: 'SQLite', tone: 'blue' },
+    { label: 'network off', tone: 'neutral' },
+    { label: state.syncCenter.profiles.length > 0 ? 'sync configured' : 'sync disabled', tone: 'neutral' }
+  ];
+
+  if (state.librarySkills.length === 0 && state.managementFlow.importItems.length === 0) {
+    chips.push({ label: 'not scanned', tone: 'medium' });
+  } else {
+    chips.push({ label: 'runtime', tone: 'green' });
+  }
+
+  return chips;
+}
+
+function createTrustImpact(input: WorkspaceUxModelInput, provenanceChips: ProvenanceChip[]): TrustImpactModel {
+  const selectedSkill = input.selectedSkillDetail;
+  const firstPreview = input.discoverPreviewSkills[0];
+  const activePlan = input.activeInstallPlan;
+
+  if (activePlan) {
+    return {
+      title: activePlan.skillName,
+      subtitle: 'Install transaction',
+      provenanceChips: [{ label: 'runtime', tone: 'green' }, { label: activePlan.conflictState, tone: activePlan.conflictState === 'clean' ? 'green' : 'red' }],
+      rows: [
+        { label: 'Target agent', value: activePlan.agentDisplayName },
+        { label: 'Target root', value: activePlan.targetRoot },
+        { label: 'Writes planned', value: String(activePlan.writes.length) },
+        { label: 'Conflict', value: titleCase(activePlan.conflictState) },
+        { label: 'Projection', value: activePlan.projectionMode }
+      ],
+      nextAction: activePlan.conflictState === 'clean' ? 'Apply only after reviewing writes' : 'Resolve conflicts before applying'
+    };
+  }
+
+  if (selectedSkill) {
+    const securityValue = selectedSkill.latestScan?.blocked
+      ? 'blocked'
+      : selectedSkill.latestScan?.level ?? selectedSkill.riskStatus;
+    return {
+      title: selectedSkill.skill.name,
+      subtitle: 'Skill trust and impact',
+      provenanceChips: [
+        { label: selectedSkill.source.type, tone: 'blue' },
+        { label: selectedSkill.source.trustLevel, tone: selectedSkill.source.trustLevel === 'verified' ? 'green' : 'medium' },
+        { label: selectedSkill.latestScan ? 'scanned' : 'not scanned', tone: selectedSkill.latestScan ? 'green' : 'medium' }
+      ],
+      rows: [
+        { label: 'Source', value: selectedSkill.source.url ?? selectedSkill.source.type },
+        { label: 'Security', value: securityValue },
+        { label: 'Files', value: String(selectedSkill.files.length) },
+        { label: 'Versions', value: String(selectedSkill.versions.length) },
+        { label: 'Installed', value: selectedSkill.installations.length > 0 ? `${selectedSkill.installations.length} roots` : 'not installed' }
+      ],
+      nextAction: selectedSkill.latestScan?.blocked ? 'Open Security or Reviews before applying' : 'Create an install plan before writing files'
+    };
+  }
+
+  if (firstPreview) {
+    return {
+      title: firstPreview.name,
+      subtitle: 'Source preview candidate',
+      provenanceChips: [{ label: 'source preview', tone: 'blue' }, { label: 'writes false', tone: 'green' }],
+      rows: [
+        { label: 'Risk', value: firstPreview.riskStatus },
+        { label: 'Path', value: firstPreview.path },
+        { label: 'Warnings', value: String(firstPreview.warnings?.length ?? 0) },
+        { label: 'Writes planned', value: 'false' }
+      ],
+      nextAction: 'Review candidates before import'
+    };
+  }
+
+  return {
+    title: 'Workspace evidence',
+    subtitle: 'No object selected',
+    provenanceChips,
+    rows: [
+      { label: 'Indexed skills', value: String(input.state.librarySkills.length) },
+      { label: 'Security findings', value: String(input.state.securityCenter.findings.length) },
+      { label: 'Open reviews', value: String(input.state.reviewCenter.queue.length) },
+      { label: 'Install plan', value: input.state.managementFlow.installPlan ? 'visible' : 'not planned' }
+    ],
+    nextAction: 'Use Start here to create local evidence'
+  };
+}
+
+function createCompatibilityRows(detail: SkillDetail | null, installTargets: InstallTarget[]): CompatibilityRow[] {
+  const installationByAgent = new Map((detail?.installations ?? []).map((installation) => [installation.agent.toLowerCase(), installation]));
+  const targets =
+    installTargets.length > 0
+      ? installTargets
+      : [
+          {
+            adapterVersion: 'builtin',
+            agentCode: 'codex',
+            agentDisplayName: 'Codex',
+            rootPath: 'not detected',
+            scope: 'user',
+            writable: false,
+            isDefault: false
+          },
+          {
+            adapterVersion: 'builtin',
+            agentCode: 'claude',
+            agentDisplayName: 'Claude',
+            rootPath: 'not detected',
+            scope: 'user',
+            writable: false,
+            isDefault: false
+          },
+          {
+            adapterVersion: 'builtin',
+            agentCode: 'gemini',
+            agentDisplayName: 'Gemini',
+            rootPath: 'not detected',
+            scope: 'user',
+            writable: false,
+            isDefault: false
+          },
+          {
+            adapterVersion: 'builtin',
+            agentCode: 'opencode',
+            agentDisplayName: 'OpenCode',
+            rootPath: 'not detected',
+            scope: 'user',
+            writable: false,
+            isDefault: false
+          }
+        ];
+
+  return targets.map((target) => {
+    const installation = installationByAgent.get(target.agentDisplayName.toLowerCase()) ?? installationByAgent.get(target.agentCode.toLowerCase());
+    if (installation) {
+      return {
+        agent: target.agentDisplayName,
+        root: target.rootPath,
+        scope: target.scope,
+        status: 'visible',
+        detail: `installed v${installation.versionNo}`,
+        tone: 'green'
+      };
+    }
+
+    return {
+      agent: target.agentDisplayName,
+      root: target.rootPath,
+      scope: target.scope,
+      status: target.rootPath === 'not detected' ? 'manual' : 'not checked',
+      detail: target.rootPath === 'not detected' ? 'root not detected' : 'run compatibility check before apply',
+      tone: target.rootPath === 'not detected' ? 'medium' : 'neutral'
+    };
+  });
+}
+
+function createDiagnostics(input: WorkspaceUxModelInput, compatibilityRows: CompatibilityRow[]): DiagnosticItem[] {
+  const diagnostics: DiagnosticItem[] = [];
+  const blocked = input.state.securityCenter.queue.find((item) => item.status.toLowerCase().includes('blocked'));
+  if (blocked || input.selectedSkillDetail?.latestScan?.blocked) {
+    diagnostics.push({
+      title: 'Blocked install',
+      detail: blocked ? `${blocked.skillName} is blocked by policy.` : `${input.selectedSkillDetail?.skill.name ?? 'Selected skill'} is blocked by policy.`,
+      action: 'Open Security or Reviews before applying',
+      tone: 'red'
+    });
+  }
+
+  if (input.state.reviewCenter.queue.some((item) => item.status.toLowerCase() === 'open')) {
+    diagnostics.push({
+      title: 'Governance review open',
+      detail: `${input.state.reviewCenter.queue.filter((item) => item.status.toLowerCase() === 'open').length} review item needs an explicit decision.`,
+      action: 'Resolve review without applying installs',
+      tone: 'medium'
+    });
+  }
+
+  if (input.discoverPreviewSkills.length > 0) {
+    diagnostics.push({
+      title: 'Source preview ready',
+      detail: `${input.discoverPreviewSkills.length} candidate skill${input.discoverPreviewSkills.length === 1 ? '' : 's'} can be inspected before import.`,
+      action: 'Review candidates before import',
+      tone: 'blue'
+    });
+  }
+
+  if (compatibilityRows.some((row) => row.status === 'manual')) {
+    diagnostics.push({
+      title: 'Manual root required',
+      detail: 'One or more agents do not have detected skill roots yet.',
+      action: 'Open Settings and add roots manually',
+      tone: 'medium'
+    });
+  }
+
+  if (input.state.syncCenter.conflicts.length > 0) {
+    diagnostics.push({
+      title: 'Sync conflict',
+      detail: `${input.state.syncCenter.conflicts.length} local conflict${input.state.syncCenter.conflicts.length === 1 ? '' : 's'} need resolution.`,
+      action: 'Open Settings sync conflict center',
+      tone: 'red'
+    });
+  }
+
+  const disabledPlugin = input.state.plugins.plugins.find((plugin) => plugin.status.toLowerCase().includes('disabled'));
+  if (disabledPlugin) {
+    diagnostics.push({
+      title: 'Plugin disabled',
+      detail: `${disabledPlugin.name} is installed but not enabled.`,
+      action: 'Authorize permissions before enabling',
+      tone: 'medium'
+    });
+  }
+
+  if (diagnostics.length === 0) {
+    diagnostics.push({
+      title: 'Local workflow ready',
+      detail: 'No blocked installs, open reviews, or sync conflicts are currently visible.',
+      action: 'Use Start here for the next local action',
+      tone: 'green'
+    });
+  }
+
+  return diagnostics;
 }
 
 function createReadinessRows(state: DesktopWorkspaceState): TableRow[] {

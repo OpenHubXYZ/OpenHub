@@ -787,6 +787,7 @@ p {
 .panel,
 .flow-panel,
 .rail-card,
+.context-empty,
 .empty-state,
 .skill-row {
   border: 1px solid var(--line);
@@ -898,6 +899,193 @@ p {
 .dark {
   color: #ffffff;
   background: #111827;
+}
+
+.chip-row {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 6px;
+  min-width: 0;
+  margin-bottom: 12px;
+}
+
+.provenance-chip {
+  display: inline-grid;
+  place-items: center;
+  min-height: 22px;
+  max-width: 100%;
+  padding: 0 8px;
+  overflow: hidden;
+  border-radius: 5px;
+  font-size: 11px;
+  font-weight: 720;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.action-funnel {
+  margin-bottom: 14px;
+}
+
+.action-step-grid {
+  display: grid;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  gap: 8px;
+  min-width: 0;
+}
+
+.action-step {
+  display: grid;
+  grid-template-columns: 26px minmax(0, 1fr);
+  gap: 8px;
+  min-width: 0;
+  padding: 10px;
+  border: 1px solid #dde4ee;
+  border-radius: 7px;
+  background: #fbfcfe;
+}
+
+.action-step.current {
+  border-color: #bdd7ff;
+  background: var(--blue-50);
+}
+
+.action-step.done {
+  border-color: #bfe7ce;
+  background: var(--green-50);
+}
+
+.action-step-index {
+  display: grid;
+  place-items: center;
+  width: 26px;
+  height: 26px;
+  border-radius: 999px;
+  color: #1f2937;
+  background: #ffffff;
+  font-size: 12px;
+  font-weight: 780;
+}
+
+.action-step h3,
+.trust-impact h3,
+.compatibility-matrix h3,
+.diagnostic-item h3 {
+  min-width: 0;
+  overflow: hidden;
+  color: #151b26;
+  font-size: 13px;
+  font-weight: 760;
+  line-height: 1.2;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.action-step p,
+.trust-impact p,
+.compatibility-matrix small,
+.diagnostic-item p,
+.transaction-steps p {
+  color: #586272;
+  font-size: 12px;
+  line-height: 1.45;
+}
+
+.context-empty {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto auto;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+  padding: 11px;
+  border-style: dashed;
+  background: #fbfcfe;
+}
+
+.context-empty strong {
+  display: block;
+  min-width: 0;
+  overflow: hidden;
+  color: #1f2937;
+  font-size: 13px;
+  font-weight: 760;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.trust-impact,
+.compatibility-matrix {
+  display: grid;
+  gap: 10px;
+  min-width: 0;
+  padding-top: 10px;
+  border-top: 1px solid var(--line);
+}
+
+.trust-impact header,
+.compatibility-matrix header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  min-width: 0;
+}
+
+.compatibility-grid,
+.diagnostics-list,
+.transaction-steps {
+  display: grid;
+  gap: 8px;
+  min-width: 0;
+}
+
+.compatibility-row {
+  display: grid;
+  grid-template-columns: minmax(80px, 0.7fr) minmax(0, 1.5fr) minmax(54px, 0.5fr) auto minmax(0, 1fr);
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+  padding: 8px;
+  border: 1px solid #dde4ee;
+  border-radius: 6px;
+  background: #fbfcfe;
+}
+
+.compatibility-row strong,
+.compatibility-row span,
+.compatibility-row small {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.diagnostic-item,
+.transaction-steps article {
+  display: grid;
+  gap: 6px;
+  min-width: 0;
+  padding: 9px;
+  border: 1px solid #dde4ee;
+  border-radius: 6px;
+  background: #fbfcfe;
+}
+
+.diagnostic-item header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  min-width: 0;
+}
+
+.install-transaction {
+  margin-bottom: 14px;
+}
+
+.transaction-steps {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
 }
 
 .card-grid {

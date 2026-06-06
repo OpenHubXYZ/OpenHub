@@ -48,15 +48,24 @@ panel, bottom status bar, and primary navigation treatment.
 - `workspace.state` is the renderer contract for local library rows, management
   flow, security center, usage center, review center, sync center, plugin state,
   and app metadata.
+- The Discover navigation target is framed in runtime as Source Preview. It
+  leads with local/Git source configuration, preview candidates, provenance,
+  freshness, trust state, and `writesPlanned=false`; marketplace language is
+  deferred until live trusted source/reputation data exists.
+- Data-heavy runtime panels show compact provenance chips such as `SQLite`,
+  `runtime`, `source preview`, `not scanned`, `sync disabled`, `network off`,
+  and `manual root`.
+- Runtime operational empty states must be domain-specific and action-oriented;
+  generic `No records yet.` copy is not acceptable for tables or panels that
+  drive scans, previews, reviews, installs, sync, or security decisions.
 - `usage_events`, `review_items`, and `review_notes` are durable SQLite state.
   Import, agent scan, install plan creation, install application, and security
   scan actions append local-only usage records.
 - High and medium security scan findings can create review queue items, but
   opening or updating review state does not approve or apply an install plan.
-- Source catalog cards, source updates, community signal, and no-preload visual
-  samples remain fixture-backed until a separate local source-sync feature is
-  approved. These fixtures are isolated in the renderer view model so they can
-  be removed without changing page components.
+- Static mockups can remain illustrative, but runtime renderer state must not
+  expose source catalog, ratings, trending, community signal, or visual sample
+  fixture rows from empty local state.
 
 ## Artifacts
 

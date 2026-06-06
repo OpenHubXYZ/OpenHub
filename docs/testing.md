@@ -104,6 +104,9 @@ CI must run the same gates.
 
 ## Discover Source And Root Detection Coverage
 
+- Discover is rendered as Source Preview, not a marketplace. Runtime UI must not
+  show ratings, trending, community reputation, or source catalog fixture rows
+  unless live trusted source/reputation data exists.
 - Adding a local or Git source records source metadata without importing skills
   or fetching a remote catalog by default.
 - Source preview scans the configured source and caches candidate rows before
@@ -112,6 +115,8 @@ CI must run the same gates.
   roots are shown before the workspace opens.
 - Preview operations report candidate names, paths, tags, and risk status and
   do not write agent-root files.
+- Source Preview surfaces provenance and `writesPlanned=false` evidence before
+  import or install planning.
 - Renderer tests cover source add and source preview actions through preload
   IPC. Non-standard directories are covered by ordinary import flows.
 
@@ -182,10 +187,16 @@ CI must run the same gates.
 ## Mockup Renderer Coverage
 
 - Renderer tests cover the shared desktop shell, primary page navigation,
-  Dashboard, Library, Discover, Installs, Usage, Reviews, Security, and
+  Dashboard, Library, Source Preview, Installs, Usage, Reviews, Security, and
   Settings headings plus right rails.
+- Dashboard first-run coverage requires a stateful `Start here` funnel and
+  provenance chips such as `SQLite`, `not scanned`, `network off`, and
+  `sync disabled`.
+- Operational tables and panels must use page-specific empty states with a next
+  action and provenance label. `No records yet.` is not acceptable for runtime
+  operational surfaces.
 - Browser verification uses the local renderer target at 1487 x 1058 and checks
-  Dashboard, Discover, Usage, Reviews, and Security screenshots for visible
+  Dashboard, Source Preview, Usage, Reviews, and Security screenshots for visible
   shell structure, first-screen content, status bar overflow, and console/network
   health.
 - `usage_events`, `review_items`, and `review_notes` are SQLite-backed local
@@ -195,10 +206,9 @@ CI must run the same gates.
 - High and medium security scan findings generate review queue items without
   applying or approving install plans. Review status transitions are explicit
   repository calls.
-- In the web-only renderer target, source catalog, community signal, visual
-  usage samples, and mockup source rows remain fixture-backed so the static
-  mockup pages can be visually verified without live network, user home scans,
-  or Electron preload APIs.
+- Static design mockups may include illustrative source layouts, but runtime
+  renderer tests must not expose marketplace, source catalog, community signal,
+  or usage fixture rows from empty local state.
 
 ## Unit Test Targets
 

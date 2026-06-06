@@ -56,16 +56,24 @@ import type {
 import {
   createEmptyWorkspaceState,
   createWorkspaceViewModel,
+  createWorkspaceUxModel,
   mergeScanIntoWorkspaceState,
   type AgentRootView,
+  type ActionStep,
+  type CompatibilityRow,
+  type DiagnosticItem,
+  type EmptyStateModel,
   type KeyValueRow,
   type MetricCard,
   type PageKey,
   type PanelModel,
+  type ProvenanceChip,
   type SourceCard,
   type TableCell,
   type TableColumn,
-  type TableRow
+  type TableRow,
+  type TrustImpactModel,
+  type WorkspaceUxModel
 } from './workspace-view-model';
 import './app.css';
 
@@ -98,7 +106,7 @@ const navIconByPage: Record<PageKey, LucideIcon> = {
 const pageTabs: Record<PageKey, string[]> = {
   dashboard: ['Overview', 'Agent roots', 'Activity', 'Readiness'],
   library: ['Indexed skills', 'Imports', 'Governance', 'Collections'],
-  discover: ['Featured', 'Trending', 'Verified sources', 'New', 'Collections'],
+  discover: ['Preview', 'Verified sources', 'Configured sources', 'Warnings', 'Collections'],
   installs: ['Install plans', 'Installed', 'Conflicts', 'Exports', 'Uninstalls'],
   usage: ['30 days', 'Agents', 'Skills', 'Sources', 'Exports'],
   reviews: ['Needs review', 'My queue', 'Approved', 'Rejected', 'Community'],
@@ -292,6 +300,18 @@ export function App({
   const [operationMessage, setOperationMessage] = useState('');
   const searchRef = useRef<HTMLInputElement | null>(null);
   const viewModel = useMemo(() => createWorkspaceViewModel(workspaceState), [workspaceState]);
+  const uxModel = useMemo(
+    () =>
+      createWorkspaceUxModel({
+        activeInstallPlan,
+        activePage,
+        discoverPreviewSkills,
+        installTargets,
+        selectedSkillDetail,
+        state: workspaceState
+      }),
+    [activeInstallPlan, activePage, discoverPreviewSkills, installTargets, selectedSkillDetail, workspaceState]
+  );
 
   const applyWorkspaceState = useCallback((state: DesktopWorkspaceState) => {
     setWorkspaceState({
@@ -2042,13 +2062,14 @@ export function App({
                   syncProfile={syncProfile}
                   syncRemoteUrl={syncRemoteUrl}
                   tarImportPath={tarImportPath}
+                  uxModel={uxModel}
                   viewModel={viewModel}
                   workspaceState={workspaceState}
                   zipImportPath={zipImportPath}
                 />
               </div>
             </section>
-            <RightRail activePage={activePage} viewModel={viewModel} />
+            <RightRail activePage={activePage} uxModel={uxModel} viewModel={viewModel} />
           </div>
         </section>
         <Statusbar
@@ -2057,7 +2078,7 @@ export function App({
           lastScanLabel={viewModel.lastScanLabel}
         />
       </section>
-      {helpOpen ? <HelpDrawer onClose={handleCloseHelp} /> : null}
+      {helpOpen ? <HelpDrawer diagnostics={uxModel.diagnostics} onClose={handleCloseHelp} /> : null}
     </main>
   );
 }
@@ -2253,7 +2274,13 @@ function Sidebar({
   );
 }
 
-function HelpDrawer({ onClose }: { onClose: () => void }): ReactElement {
+function HelpDrawer({
+  diagnostics,
+  onClose
+}: {
+  diagnostics: DiagnosticItem[];
+  onClose: () => void;
+}): ReactElement {
   const dialogRef = useRef<HTMLElement | null>(null);
 
   useEffect(() => {
@@ -2290,13 +2317,20 @@ function HelpDrawer({ onClose }: { onClose: () => void }): ReactElement {
         <header className="help-drawer-header">
           <div>
             <span className="eyebrow">Workspace help</span>
-            <h2>Local workflow</h2>
+            <h2>Diagnostics</h2>
           </div>
           <button aria-label="Close" className="icon-btn help-close" onClick={onClose} type="button">
             <X aria-hidden="true" className="small-icon" />
           </button>
         </header>
         <div className="help-drawer-list">
+          {diagnostics.map((item) => (
+            <article className="help-drawer-item" key={item.title}>
+              <h3>{item.title}</h3>
+              <p>{item.detail}</p>
+              <span className={`status ${item.tone}`}>{item.action}</span>
+            </article>
+          ))}
           {helpItems.map((item) => (
             <article className="help-drawer-item" key={item.title}>
               <h3>{item.title}</h3>
@@ -2649,6 +2683,7 @@ type PageContentProps = {
   syncProfile: SyncProfile | null;
   syncRemoteUrl: string;
   versionComparison: VersionComparisonReport | null;
+  uxModel: WorkspaceUxModel;
   viewModel: ReturnType<typeof createWorkspaceViewModel>;
   workspaceState: DesktopWorkspaceState;
   tarImportPath: string;
@@ -2852,6 +2887,7 @@ function PageContent(props: PageContentProps): ReactElement {
     syncProfile,
     syncRemoteUrl,
     versionComparison,
+    uxModel,
     viewModel,
     workspaceState,
     tarImportPath,
@@ -2957,6 +2993,7 @@ function PageContent(props: PageContentProps): ReactElement {
         sparseGitSubpath={sparseGitSubpath}
         sparseGitUrl={sparseGitUrl}
         tarImportPath={tarImportPath}
+        uxModel={uxModel}
         versionComparison={versionComparison}
         viewModel={viewModel}
         workspaceState={workspaceState}
@@ -2978,6 +3015,7 @@ function PageContent(props: PageContentProps): ReactElement {
         onDiscoverSourceUrlChange={onDiscoverSourceUrlChange}
         onPreviewDiscoverSource={onPreviewDiscoverSource}
         operationMessage={operationMessage}
+        uxModel={uxModel}
         viewModel={viewModel}
       />
     );
@@ -2986,8 +3024,10 @@ function PageContent(props: PageContentProps): ReactElement {
   if (activePage === 'installs') {
     return (
       <InstallsPage
+        activeInstallPlan={activeInstallPlan}
         activeTab={activeTab}
         lastInstallationId={lastInstallationId}
+        onApplyInstallPlan={onApplyInstallPlan}
         onRelink={onRelink}
         onRelinkTargetRootChange={onRelinkTargetRootChange}
         onReinstall={onReinstall}
@@ -2999,6 +3039,7 @@ function PageContent(props: PageContentProps): ReactElement {
         rollbackVersionId={rollbackVersionId}
         relinkTargetRoot={relinkTargetRoot}
         selectedSkillDetail={selectedSkillDetail}
+        uxModel={uxModel}
         viewModel={viewModel}
       />
     );
@@ -3009,7 +3050,7 @@ function PageContent(props: PageContentProps): ReactElement {
   }
 
   if (activePage === 'reviews') {
-    return <ReviewsPage activeTab={activeTab} viewModel={viewModel} />;
+    return <ReviewsPage activeTab={activeTab} uxModel={uxModel} viewModel={viewModel} />;
   }
 
   if (activePage === 'security') {
@@ -3113,18 +3154,28 @@ function PageContent(props: PageContentProps): ReactElement {
     );
   }
 
-  return <DashboardPage activeTab={activeTab} hasScanBridge={hasScanBridge} onScanAgentRoots={onScanAgentRoots} viewModel={viewModel} />;
+  return (
+    <DashboardPage
+      activeTab={activeTab}
+      hasScanBridge={hasScanBridge}
+      onScanAgentRoots={onScanAgentRoots}
+      uxModel={uxModel}
+      viewModel={viewModel}
+    />
+  );
 }
 
 function DashboardPage({
   activeTab,
   hasScanBridge,
   onScanAgentRoots,
+  uxModel,
   viewModel
 }: {
   activeTab: string;
   hasScanBridge: boolean;
   onScanAgentRoots: () => void;
+  uxModel: WorkspaceUxModel;
   viewModel: ReturnType<typeof createWorkspaceViewModel>;
 }): ReactElement {
   return (
@@ -3148,20 +3199,33 @@ function DashboardPage({
           title="Activity log"
           tag="SQLite source of truth"
           rows={viewModel.dashboard.activity}
+          emptyState={uxModel.emptyStates.dashboard}
         />
       ) : activeTab === 'Readiness' ? (
-        <ReadinessTable rows={viewModel.dashboard.readinessRows} title="Readiness actions" />
+        <ReadinessTable emptyState={uxModel.emptyStates.dashboard} rows={viewModel.dashboard.readinessRows} title="Readiness actions" />
       ) : (
         <>
+          <ActionFunnel onRunScan={onScanAgentRoots} scanDisabled={!hasScanBridge} steps={uxModel.actionSteps} />
+          <ProvenanceChips chips={uxModel.provenanceChips} />
           <MetricGrid metrics={viewModel.dashboard.metrics} />
           <div className="section-grid">
-            <Panel title="Recent activity" tag="SQLite source of truth" rows={viewModel.dashboard.activity} />
+            <Panel
+              title="Recent activity"
+              tag="SQLite source of truth"
+              rows={viewModel.dashboard.activity}
+              emptyState={uxModel.emptyStates.dashboard}
+            />
             <section className="panel" aria-label="Agent coverage">
               <PanelHeader tag={`${viewModel.dashboard.agentRoots.length} indexed`} title="Agent coverage" />
               <BarChart values={viewModel.dashboard.agentCoverageBars} />
             </section>
           </div>
-          <ReadinessTable className="panel panel-spaced" rows={viewModel.dashboard.readinessRows} title="Readiness queue" />
+          <ReadinessTable
+            className="panel panel-spaced"
+            emptyState={uxModel.emptyStates.dashboard}
+            rows={viewModel.dashboard.readinessRows}
+            title="Readiness queue"
+          />
         </>
       )}
     </>
@@ -3267,6 +3331,7 @@ type LibraryPageProps = Pick<
   | 'sparseGitSubpath'
   | 'sparseGitUrl'
   | 'tarImportPath'
+  | 'uxModel'
   | 'versionComparison'
   | 'viewModel'
   | 'workspaceState'
@@ -3371,6 +3436,7 @@ function LibraryPage({
   sparseGitSubpath,
   sparseGitUrl,
   tarImportPath,
+  uxModel,
   versionComparison,
   viewModel,
   workspaceState,
@@ -3529,6 +3595,7 @@ function LibraryPage({
             operationMessage={operationMessage}
             selectedSkillDetail={selectedSkillDetail}
             signedExportSigner={signedExportSigner}
+            uxModel={uxModel}
           />
           <LibrarySkillList onSelectSkill={onSelectSkill} skills={viewModel.librarySkills} />
         </>
@@ -3548,6 +3615,7 @@ function DiscoverPage({
   onDiscoverSourceUrlChange,
   onPreviewDiscoverSource,
   operationMessage,
+  uxModel,
   viewModel
 }: {
   activeTab: string;
@@ -3560,21 +3628,26 @@ function DiscoverPage({
   onDiscoverSourceUrlChange: (value: string) => void;
   onPreviewDiscoverSource: () => void;
   operationMessage: string;
+  uxModel: WorkspaceUxModel;
   viewModel: ReturnType<typeof createWorkspaceViewModel>;
 }): ReactElement {
   return (
     <>
       <PageTitle
         action={<span className="tag">{viewModel.discover.sources.length} sources</span>}
-        description="Browse trusted local and remote skill sources before importing."
-        title="Discover"
+        description="Configure local or Git sources, preview candidates, and import only after review."
+        title="Source Preview"
       />
       {activeTab === 'Verified sources' ? (
-        <SourceUpdatesTable rows={viewModel.discover.sourceUpdates} title="Verified source updates" />
-      ) : activeTab === 'Trending' ? (
-        <EmptyPanel title="Trending sources" text="No local source activity has been recorded yet." />
-      ) : activeTab === 'New' ? (
-        <EmptyPanel title="New sources" text="No newly configured sources are available yet." />
+        <SourceUpdatesTable
+          emptyState={uxModel.emptyStates.discover}
+          rows={viewModel.discover.sourceUpdates}
+          title="Source freshness"
+        />
+      ) : activeTab === 'Configured sources' ? (
+        <EmptyPanel title="Configured sources" text="No local or Git sources are configured until a source preview is added." />
+      ) : activeTab === 'Warnings' ? (
+        <EmptyPanel title="Preview warnings" text="Warnings appear only after a local or Git source preview returns candidate evidence." />
       ) : activeTab === 'Collections' ? (
         <EmptyPanel title="Source collections" text="No source collections have been configured yet." />
       ) : (
@@ -3590,8 +3663,21 @@ function DiscoverPage({
             onPreviewDiscoverSource={onPreviewDiscoverSource}
             operationMessage={operationMessage}
           />
-          <SourceCards sources={viewModel.discover.sources} />
-          <SourceUpdatesTable className="panel panel-spaced" rows={viewModel.discover.sourceUpdates} title="Source updates" />
+          <ProvenanceChips chips={[{ label: 'source preview', tone: 'blue' }, { label: 'writesPlanned=false', tone: 'green' }]} />
+          {discoverPreviewSkills.length > 0 ? (
+            <SourcePreviewCandidates skills={discoverPreviewSkills} />
+          ) : (
+            <ContextualEmpty empty={uxModel.emptyStates.discover} />
+          )}
+          {viewModel.discover.sources.length > 0 ? <SourceCards sources={viewModel.discover.sources} /> : null}
+          {viewModel.discover.sourceUpdates.length > 0 ? (
+            <SourceUpdatesTable
+              className="panel panel-spaced"
+              emptyState={uxModel.emptyStates.discover}
+              rows={viewModel.discover.sourceUpdates}
+              title="Source freshness"
+            />
+          ) : null}
         </>
       )}
     </>
@@ -3599,8 +3685,10 @@ function DiscoverPage({
 }
 
 function InstallsPage({
+  activeInstallPlan,
   activeTab,
   lastInstallationId,
+  onApplyInstallPlan,
   onRelink,
   onRelinkTargetRootChange,
   onReinstall,
@@ -3612,10 +3700,13 @@ function InstallsPage({
   rollbackVersionId,
   relinkTargetRoot,
   selectedSkillDetail,
+  uxModel,
   viewModel
 }: {
+  activeInstallPlan: InstallPlan | null;
   activeTab: string;
   lastInstallationId: string;
+  onApplyInstallPlan: () => void;
   onRelink: () => void;
   onRelinkTargetRootChange: (value: string) => void;
   onReinstall: () => void;
@@ -3627,6 +3718,7 @@ function InstallsPage({
   rollbackVersionId: string;
   relinkTargetRoot: string;
   selectedSkillDetail: SkillDetail | null;
+  uxModel: WorkspaceUxModel;
   viewModel: ReturnType<typeof createWorkspaceViewModel>;
 }): ReactElement {
   const versionRows =
@@ -3667,10 +3759,26 @@ function InstallsPage({
         />
       ) : (
         <>
-          <InstallPlansTable rows={viewModel.installs.plans} title="Pending install plans" />
+          <InstallTransactionPanel
+            activePlan={activeInstallPlan}
+            compatibilityRows={uxModel.compatibilityRows}
+            emptyState={uxModel.emptyStates.installs}
+            onApplyInstallPlan={onApplyInstallPlan}
+          />
+          <InstallPlansTable emptyState={uxModel.emptyStates.installs} rows={viewModel.installs.plans} title="Pending install plans" />
           <div className="split-two panel-spaced">
-            <Panel title="Install result stream" tag={`${viewModel.installs.resultStream.length} events`} rows={viewModel.installs.resultStream} />
-            <Panel title="Export packages" tag={`${viewModel.installs.exportPackages.length} packages`} rows={viewModel.installs.exportPackages} />
+            <Panel
+              title="Install result stream"
+              tag={`${viewModel.installs.resultStream.length} events`}
+              rows={viewModel.installs.resultStream}
+              emptyState={uxModel.emptyStates.installs}
+            />
+            <Panel
+              title="Export packages"
+              tag={`${viewModel.installs.exportPackages.length} packages`}
+              rows={viewModel.installs.exportPackages}
+              emptyState={uxModel.emptyStates.installs}
+            />
           </div>
         </>
       )}
@@ -3798,9 +3906,11 @@ function UsagePage({
 
 function ReviewsPage({
   activeTab,
+  uxModel,
   viewModel
 }: {
   activeTab: string;
+  uxModel: WorkspaceUxModel;
   viewModel: ReturnType<typeof createWorkspaceViewModel>;
 }): ReactElement {
   const reviewRows =
@@ -3826,7 +3936,7 @@ function ReviewsPage({
           <ReviewQueueTable rows={reviewRows} title={activeTab === 'Approved' || activeTab === 'Rejected' ? `${activeTab} reviews` : 'Review queue'} />
           <div className="split-two panel-spaced">
             <Panel title="Review notes" tag={`${viewModel.reviews.notes.length} notes`} rows={viewModel.reviews.notes} />
-            <Panel title="Community signal" tag={`${viewModel.reviews.communitySignal.length} rows`} rows={viewModel.reviews.communitySignal} />
+            <DiagnosticsList diagnostics={uxModel.diagnostics} title="Governance links" />
           </div>
         </>
       )}
@@ -4951,13 +5061,15 @@ function PluginActions({
 
 function RightRail({
   activePage,
+  uxModel,
   viewModel
 }: {
   activePage: PageKey;
+  uxModel: WorkspaceUxModel;
   viewModel: ReturnType<typeof createWorkspaceViewModel>;
 }): ReactElement {
   const label = labelForPage(activePage);
-  const config = railConfig(activePage, viewModel);
+  const config = railConfig(activePage, viewModel, uxModel);
 
   return (
     <aside aria-label={`${label} details`} className="right-pane">
@@ -4972,19 +5084,22 @@ function RightRail({
         <Panel
           ariaLabel={panel.title}
           className="rail-card"
+          emptyState={uxModel.emptyStates[activePage]}
           key={panel.title}
           rows={panel.rows}
           text={panel.text}
           title={panel.title}
         />
       ))}
+      <DiagnosticsList className="rail-card" diagnostics={uxModel.diagnostics} title="Diagnostics" />
     </aside>
   );
 }
 
 function railConfig(
   activePage: PageKey,
-  viewModel: ReturnType<typeof createWorkspaceViewModel>
+  viewModel: ReturnType<typeof createWorkspaceViewModel>,
+  uxModel: WorkspaceUxModel
 ): {
   title: string;
   subtitle: string;
@@ -4997,8 +5112,13 @@ function railConfig(
   if (activePage === 'library') {
     return {
       title: 'Library selection',
-      subtitle: 'Indexed local state',
+      subtitle: uxModel.trustImpact.title,
       panels: [
+        {
+          title: 'Trust and impact',
+          rows: uxModel.trustImpact.rows,
+          text: uxModel.trustImpact.nextAction
+        },
         {
           title: 'Library summary',
           rows: [
@@ -5018,8 +5138,13 @@ function railConfig(
   if (activePage === 'discover') {
     return {
       title: 'Discover sources',
-      subtitle: `${viewModel.discover.sources.length} configured`,
+      subtitle: uxModel.trustImpact.title,
       panels: [
+        {
+          title: 'Trust and impact',
+          rows: uxModel.trustImpact.rows,
+          text: uxModel.trustImpact.nextAction
+        },
         {
           title: 'Source summary',
           rows: [
@@ -5039,8 +5164,13 @@ function railConfig(
   if (activePage === 'installs') {
     return {
       title: firstInstallPlan ? tableCellLabel(firstInstallPlan, 0) : 'Install planning',
-      subtitle: firstInstallPlan ? tableCellLabel(firstInstallPlan, 5) : 'No pending install plan',
+      subtitle: uxModel.trustImpact.title,
       panels: [
+        {
+          title: 'Trust and impact',
+          rows: uxModel.trustImpact.rows,
+          text: uxModel.trustImpact.nextAction
+        },
         {
           title: 'Plan summary',
           rows: firstInstallPlan
@@ -5092,8 +5222,13 @@ function railConfig(
   if (activePage === 'reviews') {
     return {
       title: 'Review decisions',
-      subtitle: firstReview ? tableCellLabel(firstReview, 5) : 'No open review item',
+      subtitle: firstReview ? tableCellLabel(firstReview, 5) : uxModel.trustImpact.title,
       panels: [
+        {
+          title: 'Trust and impact',
+          rows: uxModel.trustImpact.rows,
+          text: uxModel.trustImpact.nextAction
+        },
         {
           title: 'Decision checklist',
           rows: firstReview
@@ -5121,8 +5256,13 @@ function railConfig(
   if (activePage === 'security') {
     return {
       title: 'Current posture',
-      subtitle: `${viewModel.security.queue.length} queued scans`,
+      subtitle: uxModel.trustImpact.title,
       panels: [
+        {
+          title: 'Trust and impact',
+          rows: uxModel.trustImpact.rows,
+          text: uxModel.trustImpact.nextAction
+        },
         {
           title: 'Policy summary',
           rows: [
@@ -5178,8 +5318,13 @@ function railConfig(
 
   return {
     title: 'Workspace health',
-    subtitle: 'Phase 10 maintainer operations',
+    subtitle: uxModel.trustImpact.title,
     panels: [
+      {
+        title: 'Trust and impact',
+        rows: uxModel.trustImpact.rows,
+        text: uxModel.trustImpact.nextAction
+      },
       {
         title: "Today's focus",
         rows: viewModel.dashboard.metrics.map((metricItem) => ({ label: metricItem.label, value: metricItem.value }))
@@ -5227,6 +5372,212 @@ function PageTitle({
   );
 }
 
+function ProvenanceChips({ chips }: { chips: ProvenanceChip[] }): ReactElement {
+  return (
+    <div className="chip-row" aria-label="Provenance">
+      {chips.map((chip) => (
+        <span className={`provenance-chip ${chip.tone}`} key={`${chip.label}:${chip.tone}`}>
+          {chip.label}
+        </span>
+      ))}
+    </div>
+  );
+}
+
+function ActionFunnel({
+  onRunScan,
+  scanDisabled,
+  steps
+}: {
+  onRunScan: () => void;
+  scanDisabled: boolean;
+  steps: ActionStep[];
+}): ReactElement {
+  return (
+    <section className="panel action-funnel" aria-label="Start here">
+      <PanelHeader tag="first use" title="Start here" />
+      <div className="action-step-grid">
+        {steps.map((step, index) => (
+          <article className={`action-step ${step.status}`} key={step.label}>
+            <div className="action-step-index">{index + 1}</div>
+            <div>
+              <h3>{step.label}</h3>
+              <p>{step.description}</p>
+              <span className={`provenance-chip ${step.status === 'done' ? 'green' : 'medium'}`}>{step.provenance}</span>
+            </div>
+          </article>
+        ))}
+      </div>
+      <div className="flow-actions">
+        <button className="filter blue" disabled={scanDisabled} onClick={onRunScan} type="button">
+          Run local scan
+        </button>
+      </div>
+    </section>
+  );
+}
+
+function ContextualEmpty({ empty }: { empty: EmptyStateModel }): ReactElement {
+  return (
+    <div className="context-empty" role="status">
+      <div>
+        <strong>{empty.title}</strong>
+        <p>{empty.text}</p>
+      </div>
+      <span className="provenance-chip medium">{empty.provenance}</span>
+      <span className="tag">{empty.actionLabel}</span>
+    </div>
+  );
+}
+
+function TrustImpactPanel({ model }: { model: TrustImpactModel }): ReactElement {
+  return (
+    <div className="trust-impact">
+      <header>
+        <div>
+          <h3>{model.title}</h3>
+          <p>{model.subtitle}</p>
+        </div>
+      </header>
+      <ProvenanceChips chips={model.provenanceChips} />
+      <KeyValueList rows={model.rows} />
+      <p>{model.nextAction}</p>
+    </div>
+  );
+}
+
+function CompatibilityMatrix({ rows }: { rows: CompatibilityRow[] }): ReactElement {
+  return (
+    <div className="compatibility-matrix" aria-label="Compatibility matrix">
+      <header>
+        <h3>Compatibility Matrix</h3>
+        <span className="tag">Codex / Claude / Gemini / OpenCode</span>
+      </header>
+      <div className="compatibility-grid">
+        {rows.map((row) => (
+          <div className="compatibility-row" key={`${row.agent}:${row.root}`}>
+            <strong>{row.agent}</strong>
+            <small>{row.root}</small>
+            <span>{row.scope}</span>
+            <span className={`status ${row.tone}`}>{row.status}</span>
+            <small>{row.detail}</small>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+function DiagnosticsList({
+  className = 'panel',
+  diagnostics,
+  title
+}: {
+  className?: string;
+  diagnostics: DiagnosticItem[];
+  title: string;
+}): ReactElement {
+  return (
+    <section className={className} aria-label={title}>
+      <PanelHeader tag={`${diagnostics.length} signals`} title={title} />
+      <div className="diagnostics-list">
+        {diagnostics.map((item) => (
+          <article className="diagnostic-item" key={item.title}>
+            <header>
+              <h3>{item.title}</h3>
+              <span className={`status ${item.tone}`}>{item.action}</span>
+            </header>
+            <p>{item.detail}</p>
+          </article>
+        ))}
+      </div>
+    </section>
+  );
+}
+
+function SourcePreviewCandidates({ skills }: { skills: DiscoverSkillPreview[] }): ReactElement {
+  const rows: TableRow[] = skills.map((skill) => ({
+    id: skill.path,
+    selected: Boolean(skill.selected),
+    cells: [
+      { label: skill.name, detail: skill.description, avatar: skill.name.slice(0, 1).toUpperCase() },
+      { label: skill.path },
+      { label: skill.riskStatus, tone: skill.riskStatus.toLowerCase().includes('safe') ? 'low' : 'medium' },
+      { label: String(skill.warnings?.length ?? 0) },
+      { label: 'false', tone: 'low' }
+    ]
+  }));
+
+  return (
+    <section className="panel" aria-label="Source preview candidates">
+      <PanelHeader tag={`${skills.length} candidates`} title="Preview candidates" />
+      <DataTable
+        columns={[
+          { key: 'skill', label: 'Skill', width: '28%' },
+          { key: 'path', label: 'Path', width: '30%' },
+          { key: 'risk', label: 'Risk', width: '14%' },
+          { key: 'warnings', label: 'Warnings', width: '14%' },
+          { key: 'writesPlanned', label: 'Writes planned', width: '14%' }
+        ]}
+        rows={rows}
+      />
+    </section>
+  );
+}
+
+function InstallTransactionPanel({
+  activePlan,
+  compatibilityRows,
+  emptyState,
+  onApplyInstallPlan
+}: {
+  activePlan: InstallPlan | null;
+  compatibilityRows: CompatibilityRow[];
+  emptyState: EmptyStateModel;
+  onApplyInstallPlan: () => void;
+}): ReactElement {
+  const planRows: KeyValueRow[] = activePlan
+    ? [
+        { label: 'Skill', value: activePlan.skillName },
+        { label: 'Target', value: `${activePlan.agentDisplayName} ${activePlan.scope}` },
+        { label: 'Target root', value: activePlan.targetRoot },
+        { label: 'Writes planned', value: String(activePlan.writes.length) },
+        { label: 'Conflict', value: activePlan.conflictState },
+        { label: 'Rollback point', value: activePlan.versionId }
+      ]
+    : [];
+
+  return (
+    <section className="panel install-transaction" aria-label="Install transaction">
+      <PanelHeader tag={activePlan ? activePlan.conflictState : 'not planned'} title="Install transaction" />
+      <div className="transaction-steps">
+        <article>
+          <strong>1. Choose target</strong>
+          <p>{activePlan ? activePlan.targetRoot : 'Select a skill and target root before planning.'}</p>
+        </article>
+        <article>
+          <strong>2. Review writes</strong>
+          <p>{activePlan ? `${activePlan.writes.length} writes visible in the plan.` : 'No write list is visible yet.'}</p>
+        </article>
+        <article>
+          <strong>3. Apply or cancel</strong>
+          <p>{activePlan ? 'Apply only after conflicts and security state are reviewed.' : 'Apply is disabled until a visible plan exists.'}</p>
+        </article>
+      </div>
+      {activePlan ? <KeyValueList rows={planRows} /> : <ContextualEmpty empty={emptyState} />}
+      <CompatibilityMatrix rows={compatibilityRows} />
+      <div className="flow-actions">
+        <button disabled={!activePlan || activePlan.conflictState !== 'clean'} onClick={onApplyInstallPlan} type="button">
+          Apply install plan
+        </button>
+        <button disabled={!activePlan} type="button">
+          Cancel
+        </button>
+      </div>
+    </section>
+  );
+}
+
 function MetricGrid({ metrics }: { metrics: MetricCard[] }): ReactElement {
   return (
     <div className="metric-grid">
@@ -5244,17 +5595,20 @@ function MetricGrid({ metrics }: { metrics: MetricCard[] }): ReactElement {
 function Panel({
   ariaLabel,
   className = 'panel',
+  emptyState,
   rows = [],
   tag,
   text,
   title
-}: PanelModel & { ariaLabel?: string; className?: string }): ReactElement {
+}: PanelModel & { ariaLabel?: string; className?: string; emptyState?: EmptyStateModel | undefined }): ReactElement {
   return (
     <section aria-label={ariaLabel ?? title} className={className}>
       <PanelHeader tag={tag} title={title} />
       {text ? <p>{text}</p> : null}
       {rows.length > 0 ? <KeyValueList rows={rows} /> : null}
-      {!text && rows.length === 0 ? <p>No records yet.</p> : null}
+      {!text && rows.length === 0 ? (
+        emptyState ? <ContextualEmpty empty={emptyState} /> : <p className="empty-inline">No local evidence yet.</p>
+      ) : null}
     </section>
   );
 }
@@ -5296,7 +5650,8 @@ function LibrarySearchPanel({
   onSignedExportSignerChange,
   operationMessage,
   selectedSkillDetail,
-  signedExportSigner
+  signedExportSigner,
+  uxModel
 }: {
   exportDirectory: string;
   libraryAgentFilter: string;
@@ -5326,6 +5681,7 @@ function LibrarySearchPanel({
   operationMessage: string;
   selectedSkillDetail: SkillDetail | null;
   signedExportSigner: string;
+  uxModel: WorkspaceUxModel;
 }): ReactElement {
   return (
     <section className="management-flow" aria-label="Library search and detail">
@@ -5475,9 +5831,11 @@ function LibrarySearchPanel({
                 value: file.kind
               }))}
             />
+            <TrustImpactPanel model={uxModel.trustImpact} />
+            <CompatibilityMatrix rows={uxModel.compatibilityRows} />
           </>
         ) : (
-          <p>Select a skill to inspect files, source, versions, install status, and risk state.</p>
+          <ContextualEmpty empty={uxModel.emptyStates.library} />
         )}
       </article>
 
@@ -6038,10 +6396,12 @@ function EmptyPanel({ text, title }: { text: string; title: string }): ReactElem
 
 function ReadinessTable({
   className = 'panel',
+  emptyState,
   rows,
   title
 }: {
   className?: string;
+  emptyState?: EmptyStateModel | undefined;
   rows: TableRow[];
   title: string;
 }): ReactElement {
@@ -6056,6 +6416,7 @@ function ReadinessTable({
           { key: 'lastCheck', label: 'Last check', width: '18%' },
           { key: 'status', label: 'Status', width: '16%' }
         ]}
+        emptyState={emptyState}
         rows={rows}
       />
     </section>
@@ -6064,10 +6425,12 @@ function ReadinessTable({
 
 function SourceUpdatesTable({
   className = 'panel',
+  emptyState,
   rows,
   title
 }: {
   className?: string;
+  emptyState?: EmptyStateModel | undefined;
   rows: TableRow[];
   title: string;
 }): ReactElement {
@@ -6082,13 +6445,22 @@ function SourceUpdatesTable({
           { key: 'lastChecked', label: 'Last checked', width: '17%' },
           { key: 'status', label: 'Status', width: '15%' }
         ]}
+        emptyState={emptyState}
         rows={rows}
       />
     </section>
   );
 }
 
-function InstallPlansTable({ rows, title }: { rows: TableRow[]; title: string }): ReactElement {
+function InstallPlansTable({
+  emptyState,
+  rows,
+  title
+}: {
+  emptyState?: EmptyStateModel | undefined;
+  rows: TableRow[];
+  title: string;
+}): ReactElement {
   return (
     <section className="panel" aria-label={title}>
       <PanelHeader tag={`${rows.length} plans`} title={title} />
@@ -6101,6 +6473,7 @@ function InstallPlansTable({ rows, title }: { rows: TableRow[]; title: string })
           { key: 'conflict', label: 'Conflict', width: '11%' },
           { key: 'status', label: 'Status', width: '9%' }
         ]}
+        emptyState={emptyState}
         rows={rows}
       />
     </section>
@@ -6198,25 +6571,33 @@ function SourceCardView({ source }: { source: SourceCard }): ReactElement {
   );
 }
 
-function DataTable({ columns, rows }: { columns: TableColumn[]; rows: TableRow[] }): ReactElement {
+function DataTable({
+  columns,
+  emptyState,
+  rows
+}: {
+  columns: TableColumn[];
+  emptyState?: EmptyStateModel | undefined;
+  rows: TableRow[];
+}): ReactElement {
   return (
     <table>
       <colgroup>
-        {columns.map((column) => (
-          <col key={column.key} style={column.width ? { width: column.width } : undefined} />
+        {columns.map((column, index) => (
+          <col key={`${column.key}:${index}`} style={column.width ? { width: column.width } : undefined} />
         ))}
       </colgroup>
       <thead>
         <tr>
-          {columns.map((column) => (
-            <th key={column.key}>{column.label}</th>
+          {columns.map((column, index) => (
+            <th key={`${column.key}:${index}`}>{column.label}</th>
           ))}
         </tr>
       </thead>
       <tbody>
         {rows.length > 0 ? (
-          rows.map((row) => (
-            <tr className={row.selected ? 'selected' : ''} key={row.id}>
+          rows.map((row, rowIndex) => (
+            <tr className={row.selected ? 'selected' : ''} key={`${row.id}:${rowIndex}`}>
               {row.cells.map((cell, index) => (
                 <td key={`${row.id}:${index}`}>
                   <TableCellView cell={cell} />
@@ -6227,7 +6608,7 @@ function DataTable({ columns, rows }: { columns: TableColumn[]; rows: TableRow[]
         ) : (
           <tr>
             <td className="empty-cell" colSpan={columns.length}>
-              No records yet.
+              {emptyState ? <ContextualEmpty empty={emptyState} /> : 'No local evidence yet.'}
             </td>
           </tr>
         )}

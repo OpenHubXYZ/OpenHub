@@ -34,21 +34,21 @@ describe('desktop app shell', () => {
 
   it('navigates all primary pages without reloading the renderer', () => {
     render(<App />);
-    const pages: Array<[PageKey, string, string]> = [
-      ['dashboard', 'Dashboard', 'Workspace health'],
-      ['library', 'Library', 'Library selection'],
-      ['discover', 'Discover', 'Discover sources'],
-      ['installs', 'Installs', 'Install planning'],
-      ['usage', 'Usage', 'Usage insight'],
-      ['reviews', 'Reviews', 'Review decisions'],
-      ['security', 'Security', 'Current posture'],
-      ['settings', 'Settings', 'Workspace settings']
+    const pages: Array<[PageKey, string, string, string]> = [
+      ['dashboard', 'Dashboard', 'Dashboard', 'Workspace health'],
+      ['library', 'Library', 'Library', 'Library selection'],
+      ['discover', 'Discover', 'Source Preview', 'Discover sources'],
+      ['installs', 'Installs', 'Installs', 'Install planning'],
+      ['usage', 'Usage', 'Usage', 'Usage insight'],
+      ['reviews', 'Reviews', 'Reviews', 'Review decisions'],
+      ['security', 'Security', 'Security', 'Current posture'],
+      ['settings', 'Settings', 'Settings', 'Workspace settings']
     ];
 
-    for (const [, label, railHeading] of pages) {
+    for (const [, label, pageHeading, railHeading] of pages) {
       fireEvent.click(screen.getByRole('button', { name: label }));
 
-      expect(screen.getByRole('heading', { name: label })).toBeInTheDocument();
+      expect(screen.getByRole('heading', { name: pageHeading })).toBeInTheDocument();
       expect(screen.getByRole('button', { name: label })).toHaveAttribute('aria-current', 'page');
       expect(screen.getByRole('complementary', { name: `${label} details` })).toHaveTextContent(railHeading);
     }
@@ -100,6 +100,82 @@ describe('desktop app shell', () => {
     expect(screen.getByRole('dialog', { name: 'Workspace help' })).toBeInTheDocument();
     fireEvent.keyDown(window, { key: 'Escape' });
     expect(screen.queryByRole('dialog', { name: 'Workspace help' })).not.toBeInTheDocument();
+  });
+
+  it('renders a first-run task funnel with evidence provenance instead of generic empty records', () => {
+    render(<App />);
+
+    expect(screen.getByRole('heading', { name: 'Start here' })).toBeInTheDocument();
+    expect(screen.getByText('Detect agent roots')).toBeInTheDocument();
+    expect(screen.getAllByText('Run local scan').length).toBeGreaterThan(0);
+    expect(screen.getByText('Preview a source')).toBeInTheDocument();
+    expect(screen.getAllByText('not scanned').length).toBeGreaterThan(0);
+    expect(screen.getAllByText('SQLite').length).toBeGreaterThan(0);
+    expect(screen.queryByText('No records yet.')).not.toBeInTheDocument();
+  });
+
+  it('frames Discover as Source Preview and avoids marketplace-style evidence when empty', () => {
+    render(<App />);
+
+    fireEvent.click(screen.getByRole('button', { name: 'Discover' }));
+
+    expect(screen.getByRole('heading', { name: 'Source Preview' })).toBeInTheDocument();
+    expect(screen.getByText('Configure local or Git sources, preview candidates, and import only after review.')).toBeInTheDocument();
+    expect(screen.getByText('No sources previewed')).toBeInTheDocument();
+    expect(screen.getByText(/No files are written during preview/)).toBeInTheDocument();
+    expect(screen.queryByText(/5\.0 \/ 5/)).not.toBeInTheDocument();
+    expect(screen.queryByText('Trending sources')).not.toBeInTheDocument();
+  });
+
+  it('shows install planning as a transaction and keeps apply disabled without a visible plan', () => {
+    render(<App />);
+
+    fireEvent.click(screen.getByRole('button', { name: 'Installs' }));
+
+    expect(screen.getByRole('heading', { name: 'Install transaction' })).toBeInTheDocument();
+    expect(screen.getByText('1. Choose target')).toBeInTheDocument();
+    expect(screen.getByText('2. Review writes')).toBeInTheDocument();
+    expect(screen.getByText('3. Apply or cancel')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Apply install plan' })).toBeDisabled();
+  });
+
+  it('opens contextual help diagnostics for blocked governance state', () => {
+    render(
+      <App
+        initialSecurityCenter={{
+          queue: [{ skillName: 'Runtime Helper', status: 'blocked' }],
+          riskScore: 88,
+          level: 'high',
+          findings: [{ ruleName: 'Dangerous shell command', severity: 'high' }],
+          history: [],
+          exemptions: []
+        }}
+        initialReviewCenter={{
+          queue: [
+            {
+              id: 'review-runtime',
+              title: 'Runtime Helper security review',
+              detail: 'blocked scan',
+              reason: 'Dangerous shell command',
+              source: 'Security scan',
+              reviewer: 'Maintainer',
+              risk: 'High',
+              status: 'Open',
+              skillName: 'Runtime Helper'
+            }
+          ],
+          notes: []
+        }}
+      />
+    );
+
+    fireEvent.click(screen.getByRole('button', { name: 'Security' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Help' }));
+    const dialog = screen.getByRole('dialog', { name: 'Workspace help' });
+
+    expect(within(dialog).getByText('Blocked install')).toBeInTheDocument();
+    expect(within(dialog).getByText('Open Security or Reviews before applying')).toBeInTheDocument();
+    expect(within(dialog).getByText('Governance review open')).toBeInTheDocument();
   });
 
   it('switches dashboard section tabs to runtime-backed content', () => {
@@ -1449,7 +1525,7 @@ describe('desktop app shell', () => {
     );
     fireEvent.click(screen.getByRole('button', { name: 'Preview source' }));
     await waitFor(() => expect(api.previewDiscoverSource).toHaveBeenCalledWith('source-local'));
-    expect(screen.getByText('Curated Helper')).toBeInTheDocument();
+    expect(screen.getAllByText('Curated Helper').length).toBeGreaterThan(0);
 
     fireEvent.click(screen.getByRole('button', { name: 'Settings' }));
     fireEvent.click(screen.getByRole('tab', { name: 'Sync' }));
@@ -1998,8 +2074,8 @@ describe('desktop app shell', () => {
     render(<App />);
 
     fireEvent.click(screen.getByRole('button', { name: 'Discover' }));
-    expect(screen.getByText('Browse trusted local and remote skill sources before importing.')).toBeInTheDocument();
-    expect(screen.getByText('No files are written to agent roots until an install plan is reviewed.')).toBeInTheDocument();
+    expect(screen.getByText('Configure local or Git sources, preview candidates, and import only after review.')).toBeInTheDocument();
+    expect(screen.getByText(/No files are written during preview/)).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Source filter: All' })).toHaveAttribute('aria-pressed', 'true');
 
     fireEvent.click(screen.getByRole('button', { name: 'Usage' }));
