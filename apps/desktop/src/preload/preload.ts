@@ -24,7 +24,6 @@ import type {
   LibraryScanResult,
   LibrarySearchFilters,
   LibrarySkillSummary,
-  MigrationPreviewResult,
   MultiTargetInstallResult,
   OnboardingState,
   BaselineExportResult,
@@ -68,16 +67,6 @@ const api = {
   async completeOnboarding(completed = true): Promise<OnboardingState> {
     const payload = await ipcRenderer.invoke(desktopShellContract.onboardingComplete.channel, { completed });
     return parseIpcResponse(desktopShellContract.onboardingComplete.channel, payload);
-  },
-
-  async importMigration(input: {
-    adapter: 'openskills' | 'skills-manager' | 'skillhub' | 'skills-manager-client';
-    sourcePath: string;
-    paths?: string[];
-    items?: Array<{ path: string; selected?: boolean; importLabel?: string }>;
-  }): Promise<ImportedSkillResult[]> {
-    const payload = await ipcRenderer.invoke(desktopShellContract.onboardingImportMigration.channel, input);
-    return parseIpcResponse(desktopShellContract.onboardingImportMigration.channel, payload);
   },
 
   async addProjectRoot(input: {
@@ -649,14 +638,6 @@ const api = {
   async previewDiscoverSource(sourceId: string): Promise<DiscoverPreviewResult> {
     const payload = await ipcRenderer.invoke(desktopShellContract.discoverPreviewSource.channel, { sourceId });
     return parseIpcResponse(desktopShellContract.discoverPreviewSource.channel, payload);
-  },
-
-  async previewMigration(input: {
-    adapter: 'openskills' | 'skills-manager' | 'skillhub' | 'skills-manager-client';
-    sourcePath: string;
-  }): Promise<MigrationPreviewResult> {
-    const payload = await ipcRenderer.invoke(desktopShellContract.discoverMigrationPreview.channel, input);
-    return parseIpcResponse(desktopShellContract.discoverMigrationPreview.channel, payload);
   }
 };
 

@@ -146,9 +146,8 @@ Runtime channels currently cover:
   `plugins.enable`, `plugins.disable`, and `plugins.registry`: install plugin
   folders, authorize declared permissions, enable/disable plugins, and inspect
   registered capabilities.
-- `discover.addSource`, `discover.previewSource`, and
-  `discover.migrationPreview`: configure local/Git sources and preview source
-  or migration imports before writing skills.
+- `discover.addSource` and `discover.previewSource`: configure local/Git sources
+  and preview source candidates before writing skills.
 
 The preload bridge validates every response before exposing it to the renderer.
 Renderer code still has no direct Node, filesystem, SQLite, or `ipcRenderer`
@@ -262,7 +261,7 @@ content-addressed blob store:
 - The renderer can display History, Diff, and Collections state without
   privileged access.
 
-## Discover Sources And Migration
+## Discover Sources And Root Detection
 
 The Discover layer is intentionally local-first and preview-oriented:
 
@@ -272,12 +271,12 @@ The Discover layer is intentionally local-first and preview-oriented:
   tags, path, and risk status.
 - Adding a source records metadata only; Git or local reads happen when the user
   explicitly asks to preview.
-- Migration preview adapters conservatively scan OpenSkills agent directories,
-  Skills-Manager config paths, SkillHub local state, and skills-manager-client
-  metadata. They report what would be imported and do not write skill records or
-  agent-root files.
-- The renderer exposes configured source, preview, and migration actions through
-  preload IPC only.
+- First launch reads common Codex, Claude, Gemini, and OpenCode roots through
+  the built-in adapters and presents them before opening the workspace.
+- Non-standard directories use ordinary local folder, Git, ZIP, TAR, sparse-Git,
+  or mirror import flows instead of a dedicated first-launch wizard.
+- The renderer exposes configured source and preview actions through preload IPC
+  only.
 
 ## Phase 7 Offline-First Sync
 

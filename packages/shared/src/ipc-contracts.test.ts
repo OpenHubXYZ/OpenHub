@@ -153,7 +153,9 @@ describe('desktop shell IPC contract', () => {
   });
 
   it('defines the deep research workflow IPC channels with strict request validation', () => {
-    expect(Object.values(desktopShellContract).map((contract) => contract.channel)).toEqual(
+    const channels = Object.values(desktopShellContract).map((contract) => contract.channel);
+
+    expect(channels).toEqual(
       expect.arrayContaining([
         'import.git',
         'import.zip',
@@ -209,10 +211,13 @@ describe('desktop shell IPC contract', () => {
         'settings.listPluginDirectories',
         'settings.removePluginDirectory',
         'discover.addSource',
-        'discover.previewSource',
-        'discover.migrationPreview'
+        'discover.previewSource'
       ])
     );
+    expect(channels).not.toContain('onboarding.importMigration');
+    expect(channels).not.toContain('discover.migrationPreview');
+    expect(() => parseIpcRequest('onboarding.importMigration', {})).toThrow(/Unknown IPC channel/);
+    expect(() => parseIpcRequest('discover.migrationPreview', {})).toThrow(/Unknown IPC channel/);
 
     expect(parseIpcRequest('import.git', { gitUrl: 'file:///tmp/skill-repo' })).toEqual({
       gitUrl: 'file:///tmp/skill-repo'
@@ -422,24 +427,6 @@ describe('desktop shell IPC contract', () => {
       url: '/tmp/source',
       trustLevel: 'verified'
     })).toMatchObject({ sourceType: 'local' });
-    expect(
-      desktopShellContract.discoverMigrationPreview.response.parse({
-        adapter: 'openskills',
-        sourcePath: '/tmp/source',
-        writesPlanned: false,
-        skills: [
-          {
-            name: 'Migration Helper',
-            description: '',
-            tags: ['migration'],
-            path: '/tmp/source/migration-helper',
-            riskStatus: 'unscanned',
-            selected: true,
-            importLabel: 'migration-helper',
-            warnings: []
-          }
-        ]
-      }).skills[0]
-    ).toMatchObject({ selected: true, importLabel: 'migration-helper' });
+    expect('discoverMigrationPreview' in desktopShellContract).toBe(false);
   });
 });

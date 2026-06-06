@@ -9,7 +9,8 @@ Use semantic versioning after the first release:
 
 - Patch: compatible bug fix.
 - Minor: compatible feature.
-- Major: breaking public contract, migration, plugin API, or storage change.
+- Major: breaking public contract, schema migration, plugin API, or storage
+  change.
 
 ## Release Checklist
 
@@ -19,8 +20,8 @@ Before a release:
 - Run `pnpm package:desktop` and `pnpm release:smoke` on the current platform.
 - Verify packaged main startup under the Electron runtime.
 - Verify database migrations from empty and previous supported versions.
-- Verify first launch wizard, skip, migration preview, and explicit migration
-  import paths.
+- Verify first launch root detection, `Open workspace`, and ordinary import
+  paths.
 - Verify Phase 4 import/install/uninstall smoke flow plus TAR, sparse Git,
   mirror import, and signed export controls.
 - Verify optional sync remains disabled until a profile is enabled.
@@ -95,7 +96,7 @@ Release validation must confirm:
 Every release should include:
 
 - previous version download link
-- migration rollback notes or forward-fix plan
+- schema migration rollback notes or forward-fix plan
 - known incompatible data changes
 - support window for security fixes
 

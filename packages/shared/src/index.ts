@@ -70,7 +70,6 @@ export type {
   LibrarySearchFilters,
   LibrarySkillSummary,
   ManagementFlowState,
-  MigrationPreviewResult,
   MultiTargetInstallResult,
   OnboardingState,
   PolicyEvaluation,

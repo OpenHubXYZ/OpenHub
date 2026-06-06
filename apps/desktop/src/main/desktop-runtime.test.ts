@@ -598,107 +598,54 @@ describe('desktop runtime IPC dispatch', () => {
     ).resolves.toMatchObject({ signatureStatus: 'signed', networkUpload: false });
   });
 
-  it('persists onboarding completion, imports explicit migration selections, and leaves preview read-only', async () => {
+  it('persists onboarding completion and returns detected roots without migration previews', async () => {
     const workspace = await tempDir();
-    const sourcePath = path.join(workspace, 'openskills');
-    await createSkillFixture(path.join(sourcePath, 'migration-helper'), 'Migration Helper');
+    const homeDirectory = path.join(workspace, 'home');
+    await createSkillFixture(path.join(homeDirectory, '.codex/skills/root-helper'), 'Root Helper');
+    await mkdir(path.join(homeDirectory, '.claude/skills'), { recursive: true });
     const runtime = createDesktopRuntime({
       dataDirectory: path.join(workspace, 'app-data'),
-      homeDirectory: path.join(workspace, 'home')
+      homeDirectory
     });
 
-    await expect(runtime.dispatch('onboarding.state', {})).resolves.toMatchObject({
+    const initial = await runtime.dispatch('onboarding.state', {});
+
+    expect(initial).toMatchObject({
       completed: false,
-      migrationPreviews: []
+      detectedRoots: expect.arrayContaining([
+        expect.objectContaining({ agentCode: 'codex', rootPath: path.join(homeDirectory, '.codex/skills') }),
+        expect.objectContaining({ agentCode: 'claude', rootPath: path.join(homeDirectory, '.claude/skills') })
+      ])
     });
-
-    const preview = await runtime.dispatch('discover.migrationPreview', {
-      adapter: 'openskills',
-      sourcePath
-    });
-    await expect(runtime.dispatch('workspace.state', {})).resolves.toMatchObject({ skills: [] });
-
-    const imported = await runtime.dispatch('onboarding.importMigration', {
-      adapter: 'openskills',
-      sourcePath,
-      paths: preview.skills.map((skill) => skill.path)
-    });
-    expect(imported.map((item) => item.skill.name)).toEqual(['Migration Helper']);
+    expect(initial).not.toHaveProperty('migrationPreviews');
 
     await runtime.dispatch('onboarding.complete', { completed: true });
     await expect(runtime.dispatch('onboarding.state', {})).resolves.toMatchObject({
       completed: true
     });
-    await expect(runtime.dispatch('workspace.state', {})).resolves.toMatchObject({
-      skills: [expect.objectContaining({ name: 'Migration Helper' })]
-    });
   });
 
-  it('persists migration wizard selection and mapping state while blocking invalid mappings', async () => {
+  it('rejects removed migration IPC channels', async () => {
     const workspace = await tempDir();
-    const sourcePath = path.join(workspace, 'openskills-selective');
-    await createSkillFixture(path.join(sourcePath, 'keep-helper'), 'Keep Helper');
-    await createSkillFixture(path.join(sourcePath, 'skip-helper'), 'Skip Helper');
     const runtime = createDesktopRuntime({
       dataDirectory: path.join(workspace, 'app-data'),
       homeDirectory: path.join(workspace, 'home')
     });
+    const dispatch = runtime.dispatch as unknown as (channel: string, payload: unknown) => Promise<unknown>;
 
-    const preview = await runtime.dispatch('discover.migrationPreview', {
-      adapter: 'openskills',
-      sourcePath
-    });
     await expect(
-      runtime.dispatch('onboarding.importMigration', {
+      dispatch('discover.migrationPreview', {
         adapter: 'openskills',
-        sourcePath,
-        items: [
-          {
-            path: preview.skills[0]!.path,
-            selected: true,
-            importLabel: '../bad'
-          }
-        ]
+        sourcePath: workspace
       })
-    ).rejects.toThrow(/Invalid migration import label/);
-
-    const imported = await runtime.dispatch('onboarding.importMigration', {
+    ).rejects.toThrow(/Unknown IPC channel/);
+    await expect(
+      dispatch('onboarding.importMigration', {
       adapter: 'openskills',
-      sourcePath,
-      items: [
-        {
-          path: preview.skills[0]!.path,
-          selected: true,
-          importLabel: 'custom-keep'
-        },
-        {
-          path: preview.skills[1]!.path,
-          selected: false,
-          importLabel: 'skip-helper'
-        }
-      ]
-    });
-    const resumed = await runtime.dispatch('onboarding.state', {});
-
-    expect(imported.map((item) => item.skill.name)).toEqual(['Keep Helper']);
-    expect(resumed.migrationPreviews).toEqual([
-      expect.objectContaining({
-        adapter: 'openskills',
-        sourcePath,
-        skills: [
-          expect.objectContaining({
-            path: preview.skills[0]!.path,
-            selected: true,
-            importLabel: 'custom-keep'
-          }),
-          expect.objectContaining({
-            path: preview.skills[1]!.path,
-            selected: false,
-            importLabel: 'skip-helper'
-          })
-        ]
+        sourcePath: workspace,
+        paths: [workspace]
       })
-    ]);
+    ).rejects.toThrow(/Unknown IPC channel/);
   });
 
   it('persists project roots, lists them as install targets, applies clean multi-target plans, and reports conflicts', async () => {
@@ -1230,10 +1177,6 @@ describe('desktop runtime IPC dispatch', () => {
       trustLevel: 'verified'
     });
     const preview = await runtime.dispatch('discover.previewSource', { sourceId: source.id });
-    const migration = await runtime.dispatch('discover.migrationPreview', {
-      adapter: 'openskills',
-      sourcePath
-    });
 
     expect(outbox.status).toBe('queued');
     await expect(readFile(path.join(sharedDirectory, 'outbox', `${outbox.id}.json`), 'utf8')).resolves.toContain(
@@ -1253,11 +1196,6 @@ describe('desktop runtime IPC dispatch', () => {
     expect(disabledRegistry.agentAdapters).toEqual([]);
     expect(preview).toMatchObject({
       source: { name: 'Local Discover', status: 'cached', verified: true },
-      writesPlanned: false,
-      skills: [expect.objectContaining({ name: 'Discover Helper' })]
-    });
-    expect(migration).toMatchObject({
-      adapter: 'openskills',
       writesPlanned: false,
       skills: [expect.objectContaining({ name: 'Discover Helper' })]
     });

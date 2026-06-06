@@ -1322,20 +1322,6 @@ describe('desktop app shell', () => {
           }
         ]
       }),
-      previewMigration: vi.fn().mockResolvedValue({
-        adapter: 'openskills',
-        sourcePath: '/tmp/openskills',
-        skills: [
-          {
-            name: 'Migrated Helper',
-            description: 'Preview only',
-            relativePath: 'migrated-helper',
-            tags: ['migration'],
-            riskStatus: 'safe'
-          }
-        ],
-        warnings: []
-      }),
       createSyncProfile: vi.fn().mockResolvedValue({
         id: 'sync-profile',
         mode: 'shared-folder',
@@ -1416,18 +1402,6 @@ describe('desktop app shell', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Preview source' }));
     await waitFor(() => expect(api.previewDiscoverSource).toHaveBeenCalledWith('source-local'));
     expect(screen.getByText('Curated Helper')).toBeInTheDocument();
-
-    fireEvent.change(screen.getByLabelText('Migration source path'), {
-      target: { value: '/tmp/openskills' }
-    });
-    fireEvent.click(screen.getByRole('button', { name: 'Preview migration' }));
-    await waitFor(() =>
-      expect(api.previewMigration).toHaveBeenCalledWith({
-        adapter: 'openskills',
-        sourcePath: '/tmp/openskills'
-      })
-    );
-    expect(screen.getByText('Migrated Helper')).toBeInTheDocument();
 
     fireEvent.click(screen.getByRole('button', { name: 'Settings' }));
     fireEvent.click(screen.getByRole('tab', { name: 'Sync' }));
@@ -1759,17 +1733,47 @@ describe('desktop app shell', () => {
     expect(screen.getByText('writesAgentRoots:false')).toBeInTheDocument();
   });
 
-  it('shows a first-launch wizard before the dashboard and can skip onboarding', async () => {
+  it('shows detected agent roots before the dashboard and opens the workspace without migration controls', async () => {
+    const detectedRoots = [
+      {
+        agentCode: 'claude',
+        agentDisplayName: 'Claude',
+        adapterVersion: 'builtin',
+        rootPath: '/Users/test/.claude/skills',
+        scope: 'user',
+        rootKind: 'user',
+        writable: true,
+        isDefault: true
+      },
+      {
+        agentCode: 'codex',
+        agentDisplayName: 'Codex',
+        adapterVersion: 'builtin',
+        rootPath: '/Users/test/.codex/skills',
+        scope: 'user',
+        rootKind: 'user',
+        writable: true,
+        isDefault: true
+      },
+      {
+        agentCode: 'gemini',
+        agentDisplayName: 'Gemini',
+        adapterVersion: 'builtin',
+        rootPath: '/Users/test/.gemini/skills',
+        scope: 'user',
+        rootKind: 'user',
+        writable: false,
+        isDefault: true
+      }
+    ];
     const api = {
       getOnboardingState: vi.fn().mockResolvedValue({
         completed: false,
-        detectedRoots: [],
-        migrationPreviews: []
+        detectedRoots
       }),
       completeOnboarding: vi.fn().mockResolvedValue({
         completed: true,
-        detectedRoots: [],
-        migrationPreviews: []
+        detectedRoots
       }),
       getWorkspaceState: vi.fn().mockResolvedValue(workspaceState()),
       listInstallTargets: vi.fn().mockResolvedValue([]),
@@ -1781,181 +1785,24 @@ describe('desktop app shell', () => {
 
     render(<App />);
 
-    expect(await screen.findByRole('heading', { name: 'First launch setup' })).toBeInTheDocument();
+    expect(await screen.findByRole('heading', { name: '3 skills roots detected' })).toBeInTheDocument();
+    expect(screen.getByText('Local-first desktop setup')).toBeInTheDocument();
+    expect(screen.getByLabelText('OpenHub first launch')).toHaveClass('first-launch-frame');
+    expect(document.querySelector('.first-launch-screen')).toBeInTheDocument();
+    expect(screen.getByText('Codex')).toBeInTheDocument();
+    expect(screen.getByText('/Users/test/.codex/skills')).toBeInTheDocument();
+    expect(screen.getByText('Claude')).toBeInTheDocument();
+    expect(screen.getByText('/Users/test/.claude/skills')).toBeInTheDocument();
+    expect(screen.getByText('Gemini')).toBeInTheDocument();
+    expect(screen.getByText('Read-only')).toBeInTheDocument();
+    expect(screen.queryByText('Migration preview')).not.toBeInTheDocument();
+    expect(screen.queryByLabelText('Migration source path')).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Import selected migration' })).not.toBeInTheDocument();
     expect(screen.queryByRole('heading', { name: 'Dashboard' })).not.toBeInTheDocument();
 
-    fireEvent.click(screen.getByRole('button', { name: 'Skip setup' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Open workspace' }));
     await waitFor(() => expect(api.completeOnboarding).toHaveBeenCalledWith(true));
     expect(await screen.findByRole('heading', { name: 'Dashboard' })).toBeInTheDocument();
-  });
-
-  it('previews and explicitly imports migration selections from the first-launch wizard', async () => {
-    const migratedSkill = {
-      id: 'skill-migrated',
-      versionId: 'version-migrated',
-      name: 'Migrated Helper',
-      description: 'Imported through migration',
-      versionNo: 1,
-      favorite: false
-    };
-    const api = {
-      getOnboardingState: vi.fn().mockResolvedValue({
-        completed: false,
-        detectedRoots: [],
-        migrationPreviews: []
-      }),
-      completeOnboarding: vi.fn(),
-      getWorkspaceState: vi.fn().mockResolvedValue(workspaceState()),
-      listInstallTargets: vi.fn().mockResolvedValue([]),
-      previewMigration: vi.fn().mockResolvedValue({
-        adapter: 'skillhub',
-        sourcePath: '/tmp/skillhub',
-        writesPlanned: false,
-        skills: [
-          {
-            name: 'Migrated Helper',
-            description: 'Preview only',
-            tags: ['migration'],
-            path: '/tmp/skillhub/skills/migrated-helper',
-            riskStatus: 'unscanned'
-          }
-        ]
-      }),
-      importMigration: vi.fn().mockResolvedValue([
-        {
-          skill: migratedSkill,
-          files: [{ relativePath: 'SKILL.md', hash: 'hash-migrated', size: 120 }],
-          stagedFrom: '/tmp/staging/migrated'
-        }
-      ]),
-      scanAgentRoots: vi.fn(),
-      getSyncStartupPlan: vi.fn(),
-      getPluginCenterState: vi.fn()
-    };
-    window.theOpenHub = api as unknown as NonNullable<typeof window.theOpenHub>;
-
-    render(<App />);
-
-    await screen.findByRole('heading', { name: 'First launch setup' });
-    fireEvent.change(screen.getByLabelText('Migration adapter'), {
-      target: { value: 'skillhub' }
-    });
-    fireEvent.change(screen.getByLabelText('Migration source path'), {
-      target: { value: '/tmp/skillhub' }
-    });
-    fireEvent.click(screen.getByRole('button', { name: 'Preview migration' }));
-
-    await waitFor(() =>
-      expect(api.previewMigration).toHaveBeenCalledWith({
-        adapter: 'skillhub',
-        sourcePath: '/tmp/skillhub'
-      })
-    );
-    expect(api.importMigration).not.toHaveBeenCalled();
-    expect(screen.getByText('Migrated Helper')).toBeInTheDocument();
-
-    fireEvent.click(screen.getByRole('button', { name: 'Import selected migration' }));
-    await waitFor(() =>
-      expect(api.importMigration).toHaveBeenCalledWith({
-        adapter: 'skillhub',
-        sourcePath: '/tmp/skillhub',
-        paths: ['/tmp/skillhub/skills/migrated-helper']
-      })
-    );
-    expect(screen.getByText('Imported Migrated Helper')).toBeInTheDocument();
-  });
-
-  it('selects individual migration items, maps import labels, and surfaces duplicate warnings', async () => {
-    const migratedSkill = {
-      id: 'skill-keep',
-      versionId: 'version-keep',
-      name: 'Keep Helper',
-      description: 'Imported through migration',
-      versionNo: 1,
-      favorite: false
-    };
-    const api = {
-      getOnboardingState: vi.fn().mockResolvedValue({
-        completed: false,
-        detectedRoots: [],
-        migrationPreviews: []
-      }),
-      completeOnboarding: vi.fn(),
-      previewMigration: vi.fn().mockResolvedValue({
-        adapter: 'openskills',
-        sourcePath: '/tmp/openskills',
-        writesPlanned: false,
-        skills: [
-          {
-            name: 'Keep Helper',
-            description: 'Preview keep',
-            tags: ['migration'],
-            path: '/tmp/openskills/keep-helper',
-            riskStatus: 'unscanned',
-            selected: true,
-            importLabel: 'duplicate-helper',
-            warnings: ['duplicate-import-label']
-          },
-          {
-            name: 'Skip Helper',
-            description: 'Preview skip',
-            tags: ['migration'],
-            path: '/tmp/openskills/skip-helper',
-            riskStatus: 'unscanned',
-            selected: true,
-            importLabel: 'duplicate-helper',
-            warnings: ['duplicate-import-label']
-          }
-        ]
-      }),
-      importMigration: vi.fn().mockResolvedValue([
-        {
-          skill: migratedSkill,
-          files: [{ relativePath: 'SKILL.md', hash: 'hash-keep', size: 120 }],
-          stagedFrom: '/tmp/staging/keep'
-        }
-      ]),
-      getPluginCenterState: vi.fn()
-    };
-    window.theOpenHub = api as unknown as NonNullable<typeof window.theOpenHub>;
-
-    render(<App />);
-
-    await screen.findByRole('heading', { name: 'First launch setup' });
-    fireEvent.change(screen.getByLabelText('Migration source path'), {
-      target: { value: '/tmp/openskills' }
-    });
-    fireEvent.click(screen.getByRole('button', { name: 'Preview migration' }));
-    await waitFor(() => expect(api.previewMigration).toHaveBeenCalled());
-    expect(screen.getAllByText('duplicate-import-label').length).toBeGreaterThan(0);
-
-    fireEvent.click(screen.getByRole('button', { name: 'Select none migration items' }));
-    expect(screen.getByLabelText('Select Keep Helper')).not.toBeChecked();
-    fireEvent.click(screen.getByLabelText('Select Keep Helper'));
-    fireEvent.change(screen.getByLabelText('Import label for Keep Helper'), {
-      target: { value: 'custom-keep' }
-    });
-    fireEvent.click(screen.getByRole('button', { name: 'Import selected migration' }));
-
-    await waitFor(() =>
-      expect(api.importMigration).toHaveBeenCalledWith({
-        adapter: 'openskills',
-        sourcePath: '/tmp/openskills',
-        items: [
-          {
-            path: '/tmp/openskills/keep-helper',
-            selected: true,
-            importLabel: 'custom-keep'
-          },
-          {
-            path: '/tmp/openskills/skip-helper',
-            selected: false,
-            importLabel: 'duplicate-helper'
-          }
-        ]
-      })
-    );
-    expect(screen.getByText('Imported Keep Helper')).toBeInTheDocument();
   });
 
   it('lets the user favorite skills and search only favorites', async () => {

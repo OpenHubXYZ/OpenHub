@@ -11,7 +11,6 @@ import { parseSkillManifest } from './skill-parser';
 const execFileAsync = promisify(execFile);
 
 export type DiscoverSourceType = 'local' | 'git';
-export type MigrationAdapter = 'openskills' | 'skills-manager' | 'skillhub' | 'skills-manager-client';
 
 export interface DiscoverSource {
   id: string;
@@ -41,13 +40,6 @@ export interface DiscoverPreviewResult {
   writesPlanned: false;
 }
 
-export interface MigrationPreviewResult {
-  adapter: MigrationAdapter;
-  sourcePath: string;
-  skills: DiscoverSkillPreview[];
-  writesPlanned: false;
-}
-
 export interface CreateDiscoverServiceInput {
   database: SqliteDatabase;
   cacheDirectory: string;
@@ -62,7 +54,6 @@ export interface DiscoverService {
   }): DiscoverSource;
   listSources(): DiscoverSource[];
   previewSource(input: { sourceId: string }): Promise<DiscoverPreviewResult>;
-  previewMigration(input: { adapter: MigrationAdapter; sourcePath: string }): Promise<MigrationPreviewResult>;
 }
 
 interface DiscoverSourceRow {
@@ -139,44 +130,8 @@ export function createDiscoverService(input: CreateDiscoverServiceInput): Discov
         skills,
         writesPlanned: false
       };
-    },
-
-    async previewMigration({ adapter, sourcePath }) {
-      const roots = await migrationRoots(adapter, sourcePath);
-      const skills = addMigrationSelectionMetadata(
-        await Promise.all(roots.map((root) => previewSkillDirectory(root)))
-      );
-
-      return {
-        adapter,
-        sourcePath,
-        skills,
-        writesPlanned: false
-      };
     }
   };
-}
-
-function addMigrationSelectionMetadata(
-  previewGroups: DiscoverSkillPreview[][]
-): DiscoverSkillPreview[] {
-  const skills = previewGroups.flat().sort((left, right) => left.name.localeCompare(right.name));
-  const labelCounts = new Map<string, number>();
-  for (const skill of skills) {
-    const label = slugify(skill.name);
-    labelCounts.set(label, (labelCounts.get(label) ?? 0) + 1);
-  }
-
-  return skills.map((skill) => {
-    const importLabel = slugify(skill.name);
-    const warnings = labelCounts.get(importLabel)! > 1 ? ['duplicate-import-label'] : [];
-    return {
-      ...skill,
-      selected: true,
-      importLabel,
-      warnings
-    };
-  });
 }
 
 async function cloneGitSource(input: {
@@ -188,61 +143,6 @@ async function cloneGitSource(input: {
   await mkdir(input.cacheDirectory, { recursive: true });
   await execFileAsync('git', ['clone', '--depth', '1', input.source.url, targetDirectory]);
   return targetDirectory;
-}
-
-async function migrationRoots(adapter: MigrationAdapter, sourcePath: string): Promise<string[]> {
-  if (adapter === 'skillhub') {
-    const skillsDirectory = path.join(sourcePath, 'skills');
-    return (await pathExists(skillsDirectory)) ? [skillsDirectory] : [sourcePath];
-  }
-
-  if (adapter === 'skills-manager' || adapter === 'skills-manager-client') {
-    return configuredSkillPaths(sourcePath);
-  }
-
-  return [sourcePath];
-}
-
-async function configuredSkillPaths(sourcePath: string): Promise<string[]> {
-  const stats = await stat(sourcePath);
-  if (stats.isDirectory()) {
-    return [sourcePath];
-  }
-
-  const content = JSON.parse(await readFile(sourcePath, 'utf8')) as unknown;
-  const paths = extractPathList(content);
-  return paths.length > 0 ? paths : [path.dirname(sourcePath)];
-}
-
-function extractPathList(input: unknown): string[] {
-  if (Array.isArray(input)) {
-    return input.flatMap(extractPathValue);
-  }
-
-  if (!input || typeof input !== 'object') {
-    return [];
-  }
-
-  const record = input as Record<string, unknown>;
-  return ['skillPaths', 'paths', 'skills', 'directories']
-    .flatMap((key) => {
-      const value = record[key];
-      return Array.isArray(value) ? value.flatMap(extractPathValue) : [];
-    })
-    .filter((candidate, index, values) => values.indexOf(candidate) === index);
-}
-
-function extractPathValue(input: unknown): string[] {
-  if (typeof input === 'string' && input.trim().length > 0) {
-    return [input];
-  }
-
-  if (!input || typeof input !== 'object') {
-    return [];
-  }
-
-  const record = input as Record<string, unknown>;
-  return typeof record.path === 'string' && record.path.trim().length > 0 ? [record.path] : [];
 }
 
 async function previewSkillDirectory(rootDirectory: string): Promise<DiscoverSkillPreview[]> {
@@ -376,15 +276,6 @@ function discoverSourceRow(row: unknown): DiscoverSource {
     status: source.status,
     cachedAt: source.cachedAt
   };
-}
-
-function slugify(input: string): string {
-  const slug = input
-    .trim()
-    .toLowerCase()
-    .replace(/[^a-z0-9]+/g, '-')
-    .replace(/^-+|-+$/g, '');
-  return slug || 'skill';
 }
 
 async function pathExists(targetPath: string): Promise<boolean> {

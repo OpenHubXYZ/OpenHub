@@ -23,7 +23,6 @@ import type {
   LibraryScanResult,
   LibrarySearchFilters,
   LibrarySkillSummary,
-  MigrationPreviewResult,
   MultiTargetInstallResult,
   OnboardingState,
   BaselineExportResult,
@@ -59,12 +58,6 @@ declare global {
       getAppInfo(): Promise<AppInfo>;
       getOnboardingState(): Promise<OnboardingState>;
       completeOnboarding(completed?: boolean): Promise<OnboardingState>;
-      importMigration(input: {
-        adapter: 'openskills' | 'skills-manager' | 'skillhub' | 'skills-manager-client';
-        sourcePath: string;
-        paths?: string[];
-        items?: Array<{ path: string; selected?: boolean; importLabel?: string }>;
-      }): Promise<ImportedSkillResult[]>;
       addProjectRoot(input: {
         agentCode: 'codex' | 'claude' | 'gemini' | 'opencode';
         rootPath: string;
@@ -275,10 +268,6 @@ declare global {
         trustLevel: string;
       }): Promise<DiscoverSource>;
       previewDiscoverSource(sourceId: string): Promise<DiscoverPreviewResult>;
-      previewMigration(input: {
-        adapter: 'openskills' | 'skills-manager' | 'skillhub' | 'skills-manager-client';
-        sourcePath: string;
-      }): Promise<MigrationPreviewResult>;
     };
   }
 }

@@ -102,18 +102,18 @@ CI must run the same gates.
   fresh database.
 - Renderer tests cover History, Diff, and Collections state.
 
-## Discover Source And Migration Coverage
+## Discover Source And Root Detection Coverage
 
 - Adding a local or Git source records source metadata without importing skills
   or fetching a remote catalog by default.
 - Source preview scans the configured source and caches candidate rows before
   import.
-- Migration preview fixtures cover OpenSkills, Skills-Manager, SkillHub, and
-  skills-manager-client layouts.
+- First-launch coverage confirms detected Codex, Claude, Gemini, and OpenCode
+  roots are shown before the workspace opens.
 - Preview operations report candidate names, paths, tags, and risk status and
   do not write agent-root files.
-- Renderer tests cover source add, source preview, and migration preview
-  actions through preload IPC.
+- Renderer tests cover source add and source preview actions through preload
+  IPC. Non-standard directories are covered by ordinary import flows.
 
 ## Phase 7 Offline-First Sync Coverage
 
@@ -226,7 +226,7 @@ CI must run the same gates.
 - FTS library search and skill detail aggregation.
 - Install and uninstall safety.
 - Export and re-import.
-- Discover source preview and migration preview.
+- Discover source preview and first-launch root detection.
 - Rollback.
 - Optional sync push/pull.
 - Plugin enable/disable with fixture roots.

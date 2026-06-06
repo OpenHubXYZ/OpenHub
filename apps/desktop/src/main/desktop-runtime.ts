@@ -82,7 +82,6 @@ import {
   type LibraryFacets,
   type LibrarySearchFilters,
   type LibrarySkillSummary,
-  type MigrationPreviewResult,
   type MultiTargetInstallResult,
   type OnboardingState,
   type BaselineExportResult,
@@ -131,9 +130,7 @@ type RuntimeDispatchResult<C extends IpcChannel> = C extends typeof desktopShell
     ? OnboardingState
     : C extends typeof desktopShellContract.onboardingComplete.channel
       ? OnboardingState
-      : C extends typeof desktopShellContract.onboardingImportMigration.channel
-        ? ImportedSkillResult[]
-        : C extends typeof desktopShellContract.agentRootsAddProject.channel
+      : C extends typeof desktopShellContract.agentRootsAddProject.channel
           ? InstallTarget
           : C extends typeof desktopShellContract.agentRootsList.channel
             ? InstallTarget[]
@@ -297,22 +294,14 @@ type RuntimeDispatchResult<C extends IpcChannel> = C extends typeof desktopShell
                                                                                             ? BaselinePreview
                                                                                             : C extends typeof desktopShellContract.discoverAddSource.channel
                                                                                               ? DiscoverSource
-                                                                                              : C extends typeof desktopShellContract.discoverPreviewSource.channel
+                                                                                                : C extends typeof desktopShellContract.discoverPreviewSource.channel
                                                                                                 ? DiscoverPreviewResult
-                                                                                                : C extends typeof desktopShellContract.discoverMigrationPreview.channel
-                                                                                                  ? MigrationPreviewResult
-                                                                                                  : never;
+                                                                                                : never;
 
 interface RuntimeMemory {
   importItems: Array<{ label: string; status: string }>;
   installPlan: DesktopWorkspaceState['managementFlow']['installPlan'];
   installResult: DesktopWorkspaceState['managementFlow']['installResult'];
-}
-
-interface MigrationImportItem {
-  path: string;
-  selected?: boolean;
-  importLabel?: string;
 }
 
 export function createDesktopRuntime(input: CreateDesktopRuntimeInput): DesktopRuntime {
@@ -375,47 +364,6 @@ export function createDesktopRuntime(input: CreateDesktopRuntimeInput): DesktopR
         setAppSetting(database, 'onboarding.completed', (request as { completed: boolean }).completed);
         const result = await onboardingState({ database, adapters });
         return parseIpcResponse(channel, result) as RuntimeDispatchResult<C>;
-      }
-
-      if (channel === desktopShellContract.onboardingImportMigration.channel) {
-        const importRequest = request as {
-          adapter: 'openskills' | 'skills-manager' | 'skillhub' | 'skills-manager-client';
-          sourcePath: string;
-          paths?: string[];
-          items?: MigrationImportItem[];
-        };
-        const preview = await discover.previewMigration({
-          adapter: importRequest.adapter,
-          sourcePath: importRequest.sourcePath
-        });
-        const selectedItems = resolveMigrationImportItems(preview, importRequest);
-        persistMigrationWizardState(database, {
-          ...preview,
-          skills: preview.skills.map((skill) => {
-            const item = selectedItems.allByPath.get(skill.path);
-            return {
-              ...skill,
-              selected: item?.selected ?? false,
-              importLabel: item?.importLabel ?? skill.importLabel
-            };
-          })
-        });
-        const results: ImportedSkillResult[] = [];
-        for (const skill of preview.skills) {
-          const item = selectedItems.selectedByPath.get(skill.path);
-          if (!item) {
-            continue;
-          }
-
-          const imported = await importer.importLocalFolder({ folderPath: skill.path });
-          const result = toImportedSkillResult(imported);
-          results.push(result);
-          memory.importItems = [
-            { label: item.importLabel ?? result.skill.name, status: 'migration imported' },
-            ...memory.importItems
-          ].slice(0, 5);
-        }
-        return parseIpcResponse(channel, results) as RuntimeDispatchResult<C>;
       }
 
       if (channel === desktopShellContract.agentRootsAddProject.channel) {
@@ -1286,17 +1234,6 @@ export function createDesktopRuntime(input: CreateDesktopRuntimeInput): DesktopR
         return parseIpcResponse(channel, result) as RuntimeDispatchResult<C>;
       }
 
-      if (channel === desktopShellContract.discoverMigrationPreview.channel) {
-        const result = await discover.previewMigration(
-          request as {
-            adapter: 'openskills' | 'skills-manager' | 'skillhub' | 'skills-manager-client';
-            sourcePath: string;
-          }
-        );
-        persistMigrationWizardState(database, result);
-        return parseIpcResponse(channel, result) as RuntimeDispatchResult<C>;
-      }
-
       throw new Error(`Unhandled IPC channel: ${channel}`);
     }
   };
@@ -1308,8 +1245,7 @@ async function onboardingState(input: {
 }): Promise<OnboardingState> {
   return {
     completed: getBooleanAppSetting(input.database, 'onboarding.completed'),
-    detectedRoots: await listInstallTargets(input.database, input.adapters),
-    migrationPreviews: getJsonAppSetting<MigrationPreviewResult[]>(input.database, 'migration.wizard.previews') ?? []
+    detectedRoots: await listInstallTargets(input.database, input.adapters)
   };
 }
 
@@ -1347,69 +1283,6 @@ function getStringAppSetting(database: SqliteDatabase, key: string): string | nu
     | undefined;
   const value = row ? JSON.parse(row.valueJson) : null;
   return typeof value === 'string' ? value : null;
-}
-
-function getJsonAppSetting<T>(database: SqliteDatabase, key: string): T | null {
-  const row = database.prepare('select value_json as valueJson from app_settings where key = ?').get(key) as
-    | { valueJson: string }
-    | undefined;
-  return row ? (JSON.parse(row.valueJson) as T) : null;
-}
-
-function persistMigrationWizardState(database: SqliteDatabase, preview: MigrationPreviewResult): void {
-  setAppSetting(database, 'migration.wizard.previews', [preview]);
-}
-
-function resolveMigrationImportItems(
-  preview: MigrationPreviewResult,
-  request: { paths?: string[]; items?: MigrationImportItem[] }
-): {
-  allByPath: Map<string, Required<MigrationImportItem>>;
-  selectedByPath: Map<string, Required<MigrationImportItem>>;
-} {
-  const previewPaths = new Set(preview.skills.map((skill) => skill.path));
-  const allItems = request.items
-    ? request.items.map((item) => ({
-        path: item.path,
-        selected: item.selected ?? true,
-        importLabel: item.importLabel ?? importLabelForPreview(preview, item.path)
-      }))
-    : preview.skills.map((skill) => ({
-        path: skill.path,
-        selected: Boolean(request.paths?.includes(skill.path)),
-        importLabel: skill.importLabel ?? skill.name
-      }));
-
-  const allByPath = new Map<string, Required<MigrationImportItem>>();
-  const selectedByPath = new Map<string, Required<MigrationImportItem>>();
-  for (const item of allItems) {
-    if (!previewPaths.has(item.path)) {
-      throw new Error(`Migration path is not in preview: ${item.path}`);
-    }
-    assertValidMigrationImportLabel(item.importLabel);
-    allByPath.set(item.path, item);
-    if (item.selected) {
-      selectedByPath.set(item.path, item);
-    }
-  }
-
-  return { allByPath, selectedByPath };
-}
-
-function importLabelForPreview(preview: MigrationPreviewResult, skillPath: string): string {
-  const skill = preview.skills.find((candidate) => candidate.path === skillPath);
-  return skill?.importLabel ?? skill?.name ?? 'skill';
-}
-
-function assertValidMigrationImportLabel(importLabel: string): void {
-  if (
-    importLabel.includes('/') ||
-    importLabel.includes('\\') ||
-    importLabel.includes('..') ||
-    !/^[a-zA-Z0-9][a-zA-Z0-9._-]*$/.test(importLabel)
-  ) {
-    throw new Error(`Invalid migration import label: ${importLabel}`);
-  }
 }
 
 function listPolicyPacks(database: SqliteDatabase): PolicyPack[] {

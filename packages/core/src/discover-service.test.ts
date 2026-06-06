@@ -66,67 +66,16 @@ describe('discover service', () => {
     expect(countRows(database, 'discover_source_cache')).toBe(2);
   });
 
-  it('previews migration adapter inputs without writing skill records', async () => {
+  it('does not expose migration preview on the discover service', async () => {
     const workspace = await tempDir();
     const database = createMemoryDatabase();
     runMigrations(database);
-    const openskillsPath = path.join(workspace, 'openskills');
-    const managerSkillPath = path.join(workspace, 'skills-manager-skill');
-    const managerConfigPath = path.join(workspace, 'skills-manager.json');
-    await createSkillFixture(path.join(openskillsPath, 'open-helper'), 'OpenSkills Helper');
-    await createSkillFixture(managerSkillPath, 'Manager Helper');
-    await writeFile(managerConfigPath, JSON.stringify({ skillPaths: [managerSkillPath] }, null, 2));
     const discover = createDiscoverService({
       database,
       cacheDirectory: path.join(workspace, 'discover-cache')
     });
 
-    const openskills = await discover.previewMigration({ adapter: 'openskills', sourcePath: openskillsPath });
-    const manager = await discover.previewMigration({
-      adapter: 'skills-manager',
-      sourcePath: managerConfigPath
-    });
-
-    expect(openskills).toMatchObject({
-      adapter: 'openskills',
-      writesPlanned: false,
-      skills: [expect.objectContaining({ name: 'OpenSkills Helper' })]
-    });
-    expect(manager.skills).toEqual([expect.objectContaining({ name: 'Manager Helper' })]);
-    expect(countRows(database, 'skills')).toBe(0);
-  });
-
-  it('adds migration selection metadata and duplicate label warnings without preview writes', async () => {
-    const workspace = await tempDir();
-    const database = createMemoryDatabase();
-    runMigrations(database);
-    const sourcePath = path.join(workspace, 'openskills');
-    await createSkillFixture(path.join(sourcePath, 'first'), 'Duplicate Helper');
-    await createSkillFixture(path.join(sourcePath, 'second'), 'Duplicate Helper');
-    const discover = createDiscoverService({
-      database,
-      cacheDirectory: path.join(workspace, 'discover-cache')
-    });
-
-    const preview = await discover.previewMigration({ adapter: 'openskills', sourcePath });
-
-    expect(preview.skills).toEqual([
-      expect.objectContaining({
-        name: 'Duplicate Helper',
-        selected: true,
-        importLabel: 'duplicate-helper',
-        warnings: ['duplicate-import-label']
-      }),
-      expect.objectContaining({
-        name: 'Duplicate Helper',
-        selected: true,
-        importLabel: 'duplicate-helper',
-        warnings: ['duplicate-import-label']
-      })
-    ]);
-    expect(preview.writesPlanned).toBe(false);
-    expect(countRows(database, 'skills')).toBe(0);
-    expect(countRows(database, 'blob_objects')).toBe(0);
+    expect('previewMigration' in discover).toBe(false);
   });
 });
 

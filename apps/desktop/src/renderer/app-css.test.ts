@@ -36,6 +36,15 @@ describe('renderer layout containment CSS', () => {
     expect(css).toContain('.split-two,\n  .section-grid,\n  .management-flow');
     expect(css).toContain('grid-template-columns: 1fr;');
   });
+
+  it('gives first launch a full-window layout instead of the desktop workbench rows', async () => {
+    const css = await readFile(cssPath, 'utf8');
+
+    expect(cssBlock(css, '.first-launch-screen')).toContain('grid-template-columns: minmax(0, 1fr);');
+    expect(cssBlock(css, '.first-launch-frame')).toContain('grid-template-rows: minmax(0, 1fr);');
+    expect(cssBlock(css, '.first-launch-frame')).toContain('overflow: hidden;');
+    expect(cssBlock(css, '.first-launch-body')).toContain('overflow: auto;');
+  });
 });
 
 function cssBlock(css: string, selector: string): string {

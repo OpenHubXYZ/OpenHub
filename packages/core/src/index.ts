@@ -50,9 +50,7 @@ export type {
   DiscoverService,
   DiscoverSkillPreview,
   DiscoverSource,
-  DiscoverSourceType,
-  MigrationAdapter,
-  MigrationPreviewResult
+  DiscoverSourceType
 } from './discover-service';
 export type {
   CreateExportServiceInput,

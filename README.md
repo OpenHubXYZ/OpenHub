@@ -17,7 +17,7 @@ import/install flow state, and Security Center state for queue, risk, findings,
 history, exemptions, version history, diffs, collections, Sync Center state, and
 Plugins state.
 The Electron main process wires typed runtime IPC to the local app data SQLite
-database and content store for first-launch onboarding, migration preview,
+database and content store for first-launch agent root detection,
 agent-root scanning, local/Git/ZIP/TAR/sparse-Git/mirror import, FTS-backed
 library search, favorites, skill detail, signed skill and collection
 export/import, project roots, multi-target install, uninstall, rollback,
@@ -48,9 +48,9 @@ permissions to be explicitly authorized, register capabilities through a
 restricted host API, contribute adapter/importer/security/sync providers only
 while enabled, and remove capabilities from the registry when disabled.
 Discover sources can be configured from local
-paths or Git URLs and previewed before import; migration previews cover
-OpenSkills, Skills-Manager, SkillHub, and skills-manager-client layouts without
-writing to agent roots. The repository now includes current-platform desktop
+paths or Git URLs and previewed before import; non-standard directories use the
+ordinary local folder import flow without writing to agent roots during preview.
+The repository now includes current-platform desktop
 packaging, release checksums, dependency inventory generation, release smoke
 checks, launch-ready contributor onboarding, maintainer triage policy, ADRs,
 dependency policy, fixture rules, security response playbook, and public roadmap
@@ -161,7 +161,7 @@ The implementation roadmap is phased:
 - Phase 2: SQLite domain foundation.
 - Phase 3: agent detection and library indexing.
 - Phase 4: import, export, install, and uninstall loop.
-- Phase 4.5: discover sources and migration previews.
+- Phase 4.5: discover sources and root-aware import previews.
 - Phase 5: security center and governance.
 - Phase 6: version history, blob store, collections.
 - Phase 7: optional offline-first sync.

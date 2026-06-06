@@ -1061,22 +1061,10 @@ const discoverPreviewResultSchema = z
 
 export type DiscoverPreviewResult = z.infer<typeof discoverPreviewResultSchema>;
 
-const migrationPreviewResultSchema = z
-  .object({
-    adapter: z.enum(['openskills', 'skills-manager', 'skillhub', 'skills-manager-client']),
-    sourcePath: z.string().min(1),
-    skills: z.array(discoverSkillPreviewSchema),
-    writesPlanned: z.literal(false)
-  })
-  .strict();
-
-export type MigrationPreviewResult = z.infer<typeof migrationPreviewResultSchema>;
-
 const onboardingStateSchema = z
   .object({
     completed: z.boolean(),
-    detectedRoots: z.array(installTargetSchema),
-    migrationPreviews: z.array(migrationPreviewResultSchema)
+    detectedRoots: z.array(installTargetSchema)
   })
   .strict();
 
@@ -1098,14 +1086,6 @@ const installTargetRequestSchema = z
     rootPath: z.string().min(1)
   })
   .strict();
-const migrationImportItemSchema = z
-  .object({
-    path: z.string().min(1),
-    selected: z.boolean().default(true),
-    importLabel: z.string().min(1).optional()
-  })
-  .strict();
-
 export const desktopShellContract = {
   appInfo: {
     channel: 'app.info',
@@ -1121,21 +1101,6 @@ export const desktopShellContract = {
     channel: 'onboarding.complete',
     request: z.object({ completed: z.boolean().default(true) }).strict(),
     response: onboardingStateSchema
-  },
-  onboardingImportMigration: {
-    channel: 'onboarding.importMigration',
-    request: z
-      .object({
-        adapter: z.enum(['openskills', 'skills-manager', 'skillhub', 'skills-manager-client']),
-        sourcePath: z.string().min(1),
-        paths: z.array(z.string().min(1)).min(1).optional(),
-        items: z.array(migrationImportItemSchema).min(1).optional()
-      })
-      .strict()
-      .refine((input) => input.paths || input.items, {
-        message: 'Either paths or items is required'
-      }),
-    response: z.array(importedSkillResultSchema)
   },
   agentRootsAddProject: {
     channel: 'agentRoots.addProject',
@@ -1737,16 +1702,6 @@ export const desktopShellContract = {
     channel: 'discover.previewSource',
     request: z.object({ sourceId: z.string().min(1) }).strict(),
     response: discoverPreviewResultSchema
-  },
-  discoverMigrationPreview: {
-    channel: 'discover.migrationPreview',
-    request: z
-      .object({
-        adapter: z.enum(['openskills', 'skills-manager', 'skillhub', 'skills-manager-client']),
-        sourcePath: z.string().min(1)
-      })
-      .strict(),
-    response: migrationPreviewResultSchema
   }
 } as const;
 
@@ -1775,10 +1730,6 @@ export function parseIpcResponse(
   channel: typeof desktopShellContract.onboardingComplete.channel,
   payload: unknown
 ): OnboardingState;
-export function parseIpcResponse(
-  channel: typeof desktopShellContract.onboardingImportMigration.channel,
-  payload: unknown
-): ImportedSkillResult[];
 export function parseIpcResponse(
   channel: typeof desktopShellContract.agentRootsAddProject.channel,
   payload: unknown
@@ -2111,10 +2062,6 @@ export function parseIpcResponse(
   channel: typeof desktopShellContract.discoverPreviewSource.channel,
   payload: unknown
 ): DiscoverPreviewResult;
-export function parseIpcResponse(
-  channel: typeof desktopShellContract.discoverMigrationPreview.channel,
-  payload: unknown
-): MigrationPreviewResult;
 export function parseIpcResponse(channel: string, payload: unknown): unknown {
   const contract = contractForChannel(channel);
   if (!contract) {

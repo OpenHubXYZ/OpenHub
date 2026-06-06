@@ -1,10 +1,12 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { ReactElement } from 'react';
 import {
+  ArrowRight,
   BarChart3,
   BookOpen,
   Box,
   ChevronDown,
+  CheckCircle2,
   Database,
   Download,
   Ellipsis,
@@ -255,9 +257,6 @@ export function App({
   const [discoverSourceUrl, setDiscoverSourceUrl] = useState('');
   const [discoverSource, setDiscoverSource] = useState<DiscoverSource | null>(null);
   const [discoverPreviewSkills, setDiscoverPreviewSkills] = useState<DiscoverSkillPreview[]>([]);
-  const [migrationSourcePath, setMigrationSourcePath] = useState('');
-  const [migrationAdapter, setMigrationAdapter] =
-    useState<'openskills' | 'skills-manager' | 'skillhub' | 'skills-manager-client'>('openskills');
   const [onboardingState, setOnboardingState] = useState<OnboardingState | null>(null);
   const [onboardingChecked, setOnboardingChecked] = useState(() => !window.theOpenHub?.getOnboardingState);
   const [projectRootAgentCode, setProjectRootAgentCode] =
@@ -1610,81 +1609,6 @@ export function App({
     setOperationMessage(`Previewed ${preview.skills.length} skills`);
   }
 
-  async function handlePreviewMigration(): Promise<void> {
-    if (!window.theOpenHub?.previewMigration || migrationSourcePath.trim().length === 0) {
-      return;
-    }
-
-    const preview = await window.theOpenHub.previewMigration({
-      adapter: migrationAdapter,
-      sourcePath: migrationSourcePath.trim()
-    });
-    setDiscoverPreviewSkills(preview.skills);
-    setOperationMessage(`Migration preview ${preview.skills.length} skills`);
-  }
-
-  function handleMigrationItemSelection(path: string, selected: boolean): void {
-    setDiscoverPreviewSkills((current) =>
-      current.map((skill) => (skill.path === path ? { ...skill, selected } : skill))
-    );
-  }
-
-  function handleMigrationImportLabelChange(path: string, importLabel: string): void {
-    setDiscoverPreviewSkills((current) =>
-      current.map((skill) => (skill.path === path ? { ...skill, importLabel } : skill))
-    );
-  }
-
-  function handleSelectAllMigrationItems(): void {
-    setDiscoverPreviewSkills((current) => current.map((skill) => ({ ...skill, selected: true })));
-  }
-
-  function handleSelectNoMigrationItems(): void {
-    setDiscoverPreviewSkills((current) => current.map((skill) => ({ ...skill, selected: false })));
-  }
-
-  async function handleImportMigration(): Promise<void> {
-    if (!window.theOpenHub?.importMigration || migrationSourcePath.trim().length === 0 || discoverPreviewSkills.length === 0) {
-      return;
-    }
-
-    const selectedSkills = discoverPreviewSkills.filter((skill) => skill.selected ?? true);
-    if (selectedSkills.length === 0) {
-      setOperationMessage('No migration imports selected');
-      return;
-    }
-
-    const mapped = discoverPreviewSkills.some(
-      (skill) => skill.selected === false || (skill.importLabel && skill.importLabel.trim().length > 0)
-    );
-    const importRequest = {
-      adapter: migrationAdapter,
-      sourcePath: migrationSourcePath.trim(),
-      ...(mapped
-        ? {
-            items: discoverPreviewSkills.map((skill) => ({
-              path: skill.path,
-              selected: skill.selected ?? true,
-              ...(skill.importLabel ? { importLabel: skill.importLabel } : {})
-            }))
-          }
-        : { paths: selectedSkills.map((skill) => skill.path) })
-    };
-    const imported = await window.theOpenHub.importMigration(importRequest);
-    setWorkspaceState((current) => ({
-      ...current,
-      skills: [...imported.map((item) => item.skill), ...current.skills],
-      managementFlow: {
-        ...current.managementFlow,
-        importItems: [
-          ...imported.map((item) => ({ label: item.skill.name, status: 'migration imported' })),
-          ...current.managementFlow.importItems
-        ].slice(0, 8)
-      }
-    }));
-    setOperationMessage(imported[0] ? `Imported ${imported[0].skill.name}` : 'No migration imports selected');
-  }
-
   async function handleCompleteOnboarding(): Promise<void> {
     if (!window.theOpenHub?.completeOnboarding) {
       setOnboardingState((current) => (current ? { ...current, completed: true } : current));
@@ -1731,25 +1655,9 @@ export function App({
     return (
       <FirstLaunchWizard
         detectedRoots={onboardingState.detectedRoots}
-        discoverPreviewSkills={discoverPreviewSkills}
-        migrationAdapter={migrationAdapter}
-        migrationSourcePath={migrationSourcePath}
         onComplete={() => {
           void handleCompleteOnboarding();
         }}
-        onImportMigration={() => {
-          void handleImportMigration();
-        }}
-        onMigrationAdapterChange={setMigrationAdapter}
-        onMigrationImportLabelChange={handleMigrationImportLabelChange}
-        onMigrationItemSelection={handleMigrationItemSelection}
-        onMigrationSourcePathChange={setMigrationSourcePath}
-        onPreviewMigration={() => {
-          void handlePreviewMigration();
-        }}
-        onSelectAllMigrationItems={handleSelectAllMigrationItems}
-        onSelectNoMigrationItems={handleSelectNoMigrationItems}
-        operationMessage={operationMessage}
       />
     );
   }
@@ -1811,7 +1719,6 @@ export function App({
                   libraryTagFilter={libraryTagFilter}
                   mirrorImportDirectory={mirrorImportDirectory}
                   mirrorSignatureStatus={mirrorSignatureStatus}
-                  migrationSourcePath={migrationSourcePath}
                   policyAllowedSources={policyAllowedSources}
                   policyApprovedPlugins={policyApprovedPlugins}
                   policyBlockedRules={policyBlockedRules}
@@ -1972,7 +1879,6 @@ export function App({
                     void handleSetUpdateChecks(enabled);
                   }}
                   onMirrorImportDirectoryChange={setMirrorImportDirectory}
-                  onMigrationSourcePathChange={setMigrationSourcePath}
                   onPluginRootPathChange={setPluginRootPath}
                   onPluginDirectoryPathChange={setPluginDirectoryPath}
                   onPreviewDiscoverSource={() => {
@@ -1980,9 +1886,6 @@ export function App({
                   }}
                   onPreviewBaseline={() => {
                     void handlePreviewBaseline();
-                  }}
-                  onPreviewMigration={() => {
-                    void handlePreviewMigration();
                   }}
                   onRemovePluginDirectory={() => {
                     void handleRemovePluginDirectory();
@@ -2148,159 +2051,89 @@ function normalizePluginsState(plugins: PluginsState): PluginsState {
 
 function FirstLaunchWizard({
   detectedRoots,
-  discoverPreviewSkills,
-  migrationAdapter,
-  migrationSourcePath,
-  onComplete,
-  onImportMigration,
-  onMigrationAdapterChange,
-  onMigrationImportLabelChange,
-  onMigrationItemSelection,
-  onMigrationSourcePathChange,
-  onPreviewMigration,
-  onSelectAllMigrationItems,
-  onSelectNoMigrationItems,
-  operationMessage
+  onComplete
 }: {
   detectedRoots: InstallTarget[];
-  discoverPreviewSkills: DiscoverSkillPreview[];
-  migrationAdapter: 'openskills' | 'skills-manager' | 'skillhub' | 'skills-manager-client';
-  migrationSourcePath: string;
   onComplete: () => void;
-  onImportMigration: () => void;
-  onMigrationAdapterChange: (value: 'openskills' | 'skills-manager' | 'skillhub' | 'skills-manager-client') => void;
-  onMigrationImportLabelChange: (path: string, value: string) => void;
-  onMigrationItemSelection: (path: string, selected: boolean) => void;
-  onMigrationSourcePathChange: (value: string) => void;
-  onPreviewMigration: () => void;
-  onSelectAllMigrationItems: () => void;
-  onSelectNoMigrationItems: () => void;
-  operationMessage: string;
 }): ReactElement {
-  const selectedCount = discoverPreviewSkills.filter((skill) => skill.selected ?? true).length;
+  const rootCount = detectedRoots.length;
+  const rootHeading =
+    rootCount === 0
+      ? 'Set up local agent roots'
+      : rootCount === 1
+        ? '1 skill root detected'
+        : `${rootCount} skills roots detected`;
 
   return (
-    <main className="screen">
-      <section className="app-frame" aria-label="OpenHub first launch">
-        <section className="content">
-          <div className="main-pad">
-            <PageTitle
-              action={
-                <button className="filter" onClick={onComplete} type="button">
-                  Skip setup
-                </button>
-              }
-              description="Detect local agent roots, preview migrations, and import only selected skill folders."
-              title="First launch setup"
-            />
-            <section className="management-flow" aria-label="First launch wizard">
-              <article className="flow-panel">
-                <header>
-                  <h2>Detected roots</h2>
-                  <span>{detectedRoots.length}</span>
-                </header>
-                <KeyValueList
-                  rows={detectedRoots.map((root) => ({
-                    label: `${root.agentDisplayName} ${root.scope}`,
-                    value: root.rootPath
-                  }))}
-                />
-              </article>
-              <article className="flow-panel">
-                <header>
-                  <h2>Migration preview</h2>
-                  <span>writes blocked</span>
-                </header>
-                <div className="flow-actions">
-                  <label htmlFor="first-launch-migration-adapter">
-                    Migration adapter
-                    <select
-                      aria-label="Migration adapter"
-                      id="first-launch-migration-adapter"
-                      name="firstLaunchMigrationAdapter"
-                      onChange={(event) =>
-                        onMigrationAdapterChange(
-                          event.target.value as 'openskills' | 'skills-manager' | 'skillhub' | 'skills-manager-client'
-                        )
-                      }
-                      value={migrationAdapter}
-                    >
-                      <option value="openskills">OpenSkills</option>
-                      <option value="skills-manager">Skills Manager</option>
-                      <option value="skillhub">SkillHub</option>
-                      <option value="skills-manager-client">skills-manager-client</option>
-                    </select>
-                  </label>
-                  <label htmlFor="first-launch-migration-source-path">
-                    Migration source path
-                    <input
-                      aria-label="Migration source path"
-                      id="first-launch-migration-source-path"
-                      name="firstLaunchMigrationSourcePath"
-                      onChange={(event) => onMigrationSourcePathChange(event.target.value)}
-                      placeholder="/path/to/skills"
-                      value={migrationSourcePath}
-                    />
-                  </label>
-                  <button disabled={migrationSourcePath.trim().length === 0} onClick={onPreviewMigration} type="button">
-                    Preview migration
-                  </button>
-                  <button disabled={selectedCount === 0} onClick={onImportMigration} type="button">
-                    Import selected migration
-                  </button>
-                  <span className="button-pair">
-                    <button disabled={discoverPreviewSkills.length === 0} onClick={onSelectAllMigrationItems} type="button">
-                      Select all migration items
-                    </button>
-                    <button disabled={discoverPreviewSkills.length === 0} onClick={onSelectNoMigrationItems} type="button">
-                      Select none migration items
-                    </button>
-                  </span>
-                </div>
-              </article>
-              <article className="flow-panel">
-                <header>
-                  <h2>Preview results</h2>
-                  <span>{operationMessage || `${discoverPreviewSkills.length} skills`}</span>
-                </header>
-                <div className="migration-items">
-                  {discoverPreviewSkills.map((skill) => (
-                    <section className="migration-item" key={skill.path}>
-                      <label className="inline-check" htmlFor={`migration-select-${safeDomId(skill.path)}`}>
-                        <input
-                          aria-label={`Select ${skill.name}`}
-                          checked={skill.selected ?? true}
-                          id={`migration-select-${safeDomId(skill.path)}`}
-                          onChange={(event) => onMigrationItemSelection(skill.path, event.target.checked)}
-                          type="checkbox"
-                        />
-                        {skill.name}
-                      </label>
-                      <label htmlFor={`migration-label-${safeDomId(skill.path)}`}>
-                        Import label
-                        <input
-                          aria-label={`Import label for ${skill.name}`}
-                          id={`migration-label-${safeDomId(skill.path)}`}
-                          onChange={(event) => onMigrationImportLabelChange(skill.path, event.target.value)}
-                          value={skill.importLabel ?? ''}
-                        />
-                      </label>
-                      <span className="path-label">{skill.path}</span>
-                      {skill.warnings && skill.warnings.length > 0 ? (
-                        <div className="tag-row">
-                          {skill.warnings.map((warning) => (
-                            <span className="tag" key={`${skill.path}:${warning}`}>
-                              {warning}
-                            </span>
-                          ))}
-                        </div>
-                      ) : null}
-                    </section>
-                  ))}
-                </div>
-              </article>
+    <main className="first-launch-screen">
+      <section className="first-launch-frame" aria-label="OpenHub first launch">
+        <section className="first-launch-body">
+          <header className="first-launch-hero">
+            <div className="first-launch-copy">
+              <span className="eyebrow">Local-first desktop setup</span>
+              <h1>{rootHeading}</h1>
+              <p>
+                OpenHub found common agent skills locations on this machine. Open the workspace to scan, manage,
+                import, and install skills without leaving local-first mode.
+              </p>
+            </div>
+            <button className="primary first-launch-primary" onClick={onComplete} type="button">
+              Open workspace
+              <ArrowRight aria-hidden="true" className="small-icon" />
+            </button>
+          </header>
+          <section className="first-launch-summary" aria-label="First launch summary">
+            <article className="first-launch-card">
+              <Search aria-hidden="true" className="first-launch-icon blue" />
+              <div>
+                <strong>{rootCount === 1 ? '1 root detected' : `${rootCount} roots detected`}</strong>
+                <span>Codex, Claude, Gemini, and OpenCode roots are checked from the local filesystem.</span>
+              </div>
+            </article>
+            <article className="first-launch-card">
+              <ShieldCheck aria-hidden="true" className="first-launch-icon green" />
+              <div>
+                <strong>Local control</strong>
+                <span>Root writes only happen when you choose an install, relink, or app-owned uninstall action.</span>
+              </div>
+            </article>
+            <article className="first-launch-card">
+              <CheckCircle2 aria-hidden="true" className="first-launch-icon amber" />
+              <div>
+                <strong>Imports stay available</strong>
+                <span>Use local folder, Git, ZIP, TAR, or mirror imports from the workspace.</span>
+              </div>
+            </article>
+          </section>
+          <section className="first-launch-workbench">
+            <section className="first-launch-roots" aria-label="Detected skills roots">
+              {detectedRoots.length > 0 ? (
+                detectedRoots.map((root) => (
+                  <article className="first-launch-root" key={`${root.agentCode}:${root.rootPath}:${root.scope}`}>
+                    <div className="first-launch-root-main">
+                      <strong>{root.agentDisplayName}</strong>
+                      <span>{root.scope} root</span>
+                    </div>
+                    <code>{root.rootPath}</code>
+                    <div className="tag-row">
+                      <span className="tag">{root.writable ? 'Writable' : 'Read-only'}</span>
+                      <span className="tag">{root.isDefault ? 'Default' : 'Added'}</span>
+                    </div>
+                  </article>
+                ))
+              ) : (
+                <article className="flow-panel">
+                  <header>
+                    <h2>Detected roots</h2>
+                    <span>0</span>
+                  </header>
+                  <p className="first-launch-empty">
+                    No agent roots detected yet. Open the workspace to scan or add project roots manually.
+                  </p>
+                </article>
+              )}
             </section>
-          </div>
+          </section>
         </section>
       </section>
     </main>
@@ -2537,7 +2370,6 @@ type PageContentProps = {
   libraryTagFilter: string;
   mirrorImportDirectory: string;
   mirrorSignatureStatus: 'unsigned' | 'signed' | 'untrusted' | '';
-  migrationSourcePath: string;
   policyAllowedSources: string;
   policyApprovedPlugins: string;
   policyBlockedRules: string;
@@ -2619,12 +2451,10 @@ type PageContentProps = {
   onLibraryTagFilterChange: (value: string) => void;
   onLoadSyncConflicts: () => void;
   onMirrorImportDirectoryChange: (value: string) => void;
-  onMigrationSourcePathChange: (value: string) => void;
   onPluginRootPathChange: (value: string) => void;
   onPluginDirectoryPathChange: (value: string) => void;
   onPreviewDiscoverSource: () => void;
   onPreviewBaseline: () => void;
-  onPreviewMigration: () => void;
   onRemovePluginDirectory: () => void;
   onRelink: () => void;
   onRelinkTargetRootChange: (value: string) => void;
@@ -2752,7 +2582,6 @@ function PageContent(props: PageContentProps): ReactElement {
     libraryTagFilter,
     mirrorImportDirectory,
     mirrorSignatureStatus,
-    migrationSourcePath,
     policyAllowedSources,
     policyApprovedPlugins,
     policyBlockedRules,
@@ -2825,12 +2654,10 @@ function PageContent(props: PageContentProps): ReactElement {
     onLibraryTagFilterChange,
     onLoadSyncConflicts,
     onMirrorImportDirectoryChange,
-    onMigrationSourcePathChange,
     onPluginDirectoryPathChange,
     onPluginRootPathChange,
     onPreviewDiscoverSource,
     onPreviewBaseline,
-    onPreviewMigration,
     onRemovePluginDirectory,
     onRelink,
     onRelinkTargetRootChange,
@@ -3024,13 +2851,10 @@ function PageContent(props: PageContentProps): ReactElement {
         discoverSource={discoverSource}
         discoverSourceName={discoverSourceName}
         discoverSourceUrl={discoverSourceUrl}
-        migrationSourcePath={migrationSourcePath}
         onAddDiscoverSource={onAddDiscoverSource}
         onDiscoverSourceNameChange={onDiscoverSourceNameChange}
         onDiscoverSourceUrlChange={onDiscoverSourceUrlChange}
-        onMigrationSourcePathChange={onMigrationSourcePathChange}
         onPreviewDiscoverSource={onPreviewDiscoverSource}
-        onPreviewMigration={onPreviewMigration}
         operationMessage={operationMessage}
         viewModel={viewModel}
       />
@@ -3597,13 +3421,10 @@ function DiscoverPage({
   discoverSource,
   discoverSourceName,
   discoverSourceUrl,
-  migrationSourcePath,
   onAddDiscoverSource,
   onDiscoverSourceNameChange,
   onDiscoverSourceUrlChange,
-  onMigrationSourcePathChange,
   onPreviewDiscoverSource,
-  onPreviewMigration,
   operationMessage,
   viewModel
 }: {
@@ -3612,13 +3433,10 @@ function DiscoverPage({
   discoverSource: DiscoverSource | null;
   discoverSourceName: string;
   discoverSourceUrl: string;
-  migrationSourcePath: string;
   onAddDiscoverSource: () => void;
   onDiscoverSourceNameChange: (value: string) => void;
   onDiscoverSourceUrlChange: (value: string) => void;
-  onMigrationSourcePathChange: (value: string) => void;
   onPreviewDiscoverSource: () => void;
-  onPreviewMigration: () => void;
   operationMessage: string;
   viewModel: ReturnType<typeof createWorkspaceViewModel>;
 }): ReactElement {
@@ -3644,13 +3462,10 @@ function DiscoverPage({
             discoverSource={discoverSource}
             discoverSourceName={discoverSourceName}
             discoverSourceUrl={discoverSourceUrl}
-            migrationSourcePath={migrationSourcePath}
             onAddDiscoverSource={onAddDiscoverSource}
             onDiscoverSourceNameChange={onDiscoverSourceNameChange}
             onDiscoverSourceUrlChange={onDiscoverSourceUrlChange}
-            onMigrationSourcePathChange={onMigrationSourcePathChange}
             onPreviewDiscoverSource={onPreviewDiscoverSource}
-            onPreviewMigration={onPreviewMigration}
             operationMessage={operationMessage}
           />
           <SourceCards sources={viewModel.discover.sources} />
@@ -5643,10 +5458,6 @@ function filterValues(input: string): string[] {
     .filter(Boolean);
 }
 
-function safeDomId(input: string): string {
-  return input.replace(/[^a-zA-Z0-9_-]+/g, '-');
-}
-
 function currentInstallation(
   detail: SkillDetail | null,
   installationId: string
@@ -6024,26 +5835,20 @@ function DiscoverActions({
   discoverSource,
   discoverSourceName,
   discoverSourceUrl,
-  migrationSourcePath,
   onAddDiscoverSource,
   onDiscoverSourceNameChange,
   onDiscoverSourceUrlChange,
-  onMigrationSourcePathChange,
   onPreviewDiscoverSource,
-  onPreviewMigration,
   operationMessage
 }: {
   discoverPreviewSkills: DiscoverSkillPreview[];
   discoverSource: DiscoverSource | null;
   discoverSourceName: string;
   discoverSourceUrl: string;
-  migrationSourcePath: string;
   onAddDiscoverSource: () => void;
   onDiscoverSourceNameChange: (value: string) => void;
   onDiscoverSourceUrlChange: (value: string) => void;
-  onMigrationSourcePathChange: (value: string) => void;
   onPreviewDiscoverSource: () => void;
-  onPreviewMigration: () => void;
   operationMessage: string;
 }): ReactElement {
   return (
@@ -6085,29 +5890,6 @@ function DiscoverActions({
           </button>
           <button disabled={!discoverSource} onClick={onPreviewDiscoverSource} type="button">
             Preview source
-          </button>
-        </div>
-      </article>
-
-      <article className="flow-panel">
-        <header>
-          <h2>Migration preview</h2>
-          <span>writes blocked</span>
-        </header>
-        <div className="flow-actions">
-          <label htmlFor="migration-source-path">
-            Migration source path
-            <input
-              aria-label="Migration source path"
-              id="migration-source-path"
-              name="migrationSourcePath"
-              onChange={(event) => onMigrationSourcePathChange(event.target.value)}
-              placeholder="/path/to/agent/skills"
-              value={migrationSourcePath}
-            />
-          </label>
-          <button disabled={migrationSourcePath.trim().length === 0} onClick={onPreviewMigration} type="button">
-            Preview migration
           </button>
         </div>
       </article>

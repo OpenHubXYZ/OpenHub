@@ -47,16 +47,19 @@ IPC library search/detail tests pass.
 Acceptance: fixture imports, security rejection fixtures, install plans,
 export packages, uninstall safety, and UI flows pass.
 
-## Phase 4.5: Discover Sources And Migration Preview
+## Phase 4.5: Discover Sources And Root-Aware Imports
 
 - Add local and Git source configuration.
 - Cache source preview listings.
-- Add conservative migration previews for OpenSkills, Skills-Manager, SkillHub,
-  and skills-manager-client local state.
+- Keep first launch focused on common Codex, Claude, Gemini, and OpenCode root
+  detection.
+- Route non-standard directories through ordinary local folder, Git, ZIP, TAR,
+  sparse-Git, or mirror imports.
 
 Acceptance: adding a source performs no network or import writes by itself,
-preview reports candidate skills before import, migration preview is read-only,
-and no account, telemetry, or remote catalog fetch is required by default.
+preview reports candidate skills before import, first-launch root detection is
+read-only, and no account, telemetry, or remote catalog fetch is required by
+default.
 
 ## Phase 5: Security Center And Governance
 
