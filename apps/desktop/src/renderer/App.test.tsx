@@ -20,6 +20,8 @@ describe('desktop app shell', () => {
 
     expect(screen.getByRole('navigation', { name: 'Primary pages' })).toBeInTheDocument();
     expect(screen.getByRole('heading', { name: 'Dashboard' })).toBeInTheDocument();
+    expect(screen.getByText('Local-first workspace')).toBeInTheDocument();
+    expect(screen.queryByText('Phase 10')).not.toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Dashboard' })).toHaveAttribute('aria-current', 'page');
     expect(screen.getByRole('button', { name: 'Skills' })).toBeInTheDocument();
     expect(screen.queryByRole('button', { name: 'Inventory' })).not.toBeInTheDocument();

@@ -634,7 +634,7 @@ export function App({
         <section className="workspace" aria-label={`${titleForPage(activePage)} workspace`}>
           <div className="page-title">
             <div>
-              <p>{state.appInfo.phase}</p>
+              <p>{state.appInfo.localFirst ? 'Local-first workspace' : state.appInfo.productName}</p>
               <h1>{titleForPage(activePage)}</h1>
             </div>
             <span className={statusTone === 'error' ? 'status status-error' : 'status'}>{status}</span>
