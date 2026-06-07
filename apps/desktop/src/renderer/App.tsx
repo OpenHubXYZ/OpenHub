@@ -1025,6 +1025,11 @@ function MarketplaceTab({
               ))}
             </select>
           </label>
+          {selectedTargetRoot ? (
+            <code className="selected-path" aria-label="Selected install target path">
+              {selectedTargetRoot}
+            </code>
+          ) : null}
           {writableRoots.length === 0 ? <p className="empty">No writable install roots</p> : null}
           <label>
             Projection mode

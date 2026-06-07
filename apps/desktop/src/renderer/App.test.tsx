@@ -849,6 +849,19 @@ describe('desktop app shell', () => {
     expect(window.theOpenHub?.applyInstallPlan).not.toHaveBeenCalled();
   });
 
+  it('shows the full selected marketplace install target path', () => {
+    const longTargetRoot = '/tmp/.codex/skills/very-long-install-target-root-that-needs-confirmation';
+
+    render(<App initialAgentRoots={[createRoot(longTargetRoot)]} />);
+    fireEvent.click(screen.getByRole('button', { name: 'Skills' }));
+    fireEvent.click(screen.getByRole('tab', { name: 'Marketplace' }));
+
+    expect(screen.queryByLabelText('Selected install target path')).not.toBeInTheDocument();
+    fireEvent.change(screen.getByLabelText('Install target root'), { target: { value: longTargetRoot } });
+
+    expect(screen.getByLabelText('Selected install target path')).toHaveTextContent(longTargetRoot);
+  });
+
   it('keeps read-only roots out of marketplace install targets', async () => {
     const readOnlyRoot = createReadOnlyRoot('/tmp/.codex/skills');
     window.theOpenHub = {

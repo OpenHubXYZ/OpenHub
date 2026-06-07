@@ -166,6 +166,16 @@ describe('renderer layout containment CSS', () => {
     expect(cssBlock(css, '.tag-row')).toContain('flex-wrap: wrap;');
   });
 
+  it('wraps the selected marketplace install target path', async () => {
+    const css = await readFile(cssPath, 'utf8');
+    const selectedPathBlock = cssBlock(css, '.selected-path');
+
+    expect(selectedPathBlock).toContain('min-width: 0;');
+    expect(selectedPathBlock).toContain('max-width: 100%;');
+    expect(selectedPathBlock).toContain('white-space: normal;');
+    expect(selectedPathBlock).toContain('overflow-wrap: anywhere;');
+  });
+
   it('keeps indexed skill row actions visible without horizontal clipping', async () => {
     const css = await readFile(cssPath, 'utf8');
 
