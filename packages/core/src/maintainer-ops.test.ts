@@ -50,7 +50,7 @@ describe('maintainer operations', () => {
   it('teaches contributors how to add extension points and keeps CI release gates visible', async () => {
     const recipes = await readFileText('docs/contributor-recipes.md');
     expect(recipes).toContain('Add an adapter');
-    expect(recipes).toContain('Add a security rule');
+    expect(recipes).toContain('Add an importer');
     expect(recipes).toContain('Add a sync driver');
     expect(recipes).toContain('Add a fixture');
 

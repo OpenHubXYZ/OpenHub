@@ -39,7 +39,7 @@ describe('built-in agent adapters', () => {
     ]);
   });
 
-  it('lists installed skill directories that contain SKILL.md files', async () => {
+  it('lists indexed skill directories that contain SKILL.md files', async () => {
     const homeDirectory = await mkdtemp(path.join(tmpdir(), 'theopenhub-adapters-'));
     tempDirectories.push(homeDirectory);
     const rootPath = path.join(homeDirectory, '.codex/skills');
@@ -56,7 +56,7 @@ describe('built-in agent adapters', () => {
     if (!codexAdapter) {
       throw new Error('Codex adapter was not created');
     }
-    const installed = await codexAdapter.listInstalled({
+    const indexed = await codexAdapter.listIndexedSkills({
       agentCode: 'codex',
       agentDisplayName: 'Codex',
       adapterVersion: 'test',
@@ -66,7 +66,7 @@ describe('built-in agent adapters', () => {
       isDefault: true
     });
 
-    expect(installed).toEqual([
+    expect(indexed).toEqual([
       {
         agentCode: 'codex',
         rootPath,

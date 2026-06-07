@@ -1,5 +1,5 @@
 import { execFile } from 'node:child_process';
-import { mkdir, readFile, writeFile } from 'node:fs/promises';
+import { mkdir, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 import { promisify } from 'node:util';
 
@@ -8,7 +8,19 @@ import { createDesktopRuntime } from './desktop-runtime';
 const smokeSkillName = 'packaged-smoke-helper';
 const gitSmokeSkillName = 'git-smoke-helper';
 const zipSmokeSkillName = 'zip-smoke-helper';
+const indexedSmokeSkillName = 'indexed-smoke-helper';
+const discoverSmokeSkillName = 'discover-smoke-helper';
 const execFileAsync = promisify(execFile);
+
+interface NamedSkill {
+  id: string;
+  name: string;
+}
+
+interface RuntimeSkillListItem {
+  name: string;
+  visibilityStatus?: string;
+}
 
 export interface DesktopReleaseSmokeInput {
   dataDirectory: string;
@@ -20,11 +32,10 @@ export interface DesktopReleaseSmokeResult {
   importedSkillName: string;
   gitImportedSkillName: string;
   zipImportedSkillName: string;
-  installedFiles: number;
+  indexedSkillName: string;
   searchCount: number;
-  exportedManifestVerified: boolean;
-  uninstalledFiles: number;
   libraryCount: number;
+  previewCount: number;
   syncStarted: boolean;
   pluginCount: number;
 }
@@ -36,7 +47,8 @@ export async function runDesktopReleaseSmoke(
   const sourceDirectory = path.join(workspaceDirectory, 'source');
   const gitSourceDirectory = path.join(workspaceDirectory, 'source-git');
   const zipPath = path.join(workspaceDirectory, 'source-zip.zip');
-  const targetRoot = path.join(workspaceDirectory, 'target/codex-skills');
+  const indexedDirectory = path.join(workspaceDirectory, 'home/.codex/skills/indexed-smoke-helper');
+  const discoverDirectory = path.join(workspaceDirectory, 'discover-source');
   const runtime = createDesktopRuntime({
     dataDirectory: input.dataDirectory,
     homeDirectory: path.join(workspaceDirectory, 'home')
@@ -45,24 +57,26 @@ export async function runDesktopReleaseSmoke(
   await createSmokeSkillFixture(sourceDirectory);
   await createGitSmokeSkillFixture(gitSourceDirectory);
   await createZipSmokeSkillFixture(zipPath);
+  await createSmokeSkillFixture(indexedDirectory, indexedSmokeSkillName);
+  await createSmokeSkillFixture(path.join(discoverDirectory, 'discover-smoke-helper'), discoverSmokeSkillName);
 
-  const imported = await runtime.dispatch('import.localFolder', { folderPath: sourceDirectory });
+  const imported = await runtime.dispatch('import.localFolder', { folderPath: sourceDirectory }) as { skill: NamedSkill };
   assertCondition(
     imported.skill.name === smokeSkillName,
     `Expected smoke import to return ${smokeSkillName}`
   );
-  const gitImported = await runtime.dispatch('import.git', { gitUrl: `file://${gitSourceDirectory}` });
+  const gitImported = await runtime.dispatch('import.git', { gitUrl: `file://${gitSourceDirectory}` }) as { skill: NamedSkill };
   assertCondition(
     gitImported.skill.name === gitSmokeSkillName,
     `Expected Git smoke import to return ${gitSmokeSkillName}`
   );
-  const zipImported = await runtime.dispatch('import.zip', { zipPath });
+  const zipImported = await runtime.dispatch('import.zip', { zipPath }) as { skill: NamedSkill };
   assertCondition(
     zipImported.skill.name === zipSmokeSkillName,
     `Expected ZIP smoke import to return ${zipSmokeSkillName}`
   );
 
-  const search = await runtime.dispatch('library.search', { query: 'smoke' });
+  const search = await runtime.dispatch('library.search', { query: 'smoke' }) as RuntimeSkillListItem[];
   assertCondition(
     search.some((skill) => skill.name === smokeSkillName) &&
       search.some((skill) => skill.name === gitSmokeSkillName) &&
@@ -70,70 +84,43 @@ export async function runDesktopReleaseSmoke(
     'Expected smoke search to find local, Git, and ZIP imported skills'
   );
 
-  const exported = await runtime.dispatch('export.skill', {
-    skillId: imported.skill.id,
-    outputDirectory: path.join(workspaceDirectory, 'exported-skill')
-  });
-  const exportedManifest = await readFile(path.join(exported.outputDirectory, 'manifest.json'), 'utf8');
+  const scan = await runtime.dispatch('library.scan', {}) as { indexedSkills: RuntimeSkillListItem[] };
   assertCondition(
-    exportedManifest.includes(smokeSkillName) && exportedManifest.includes('hash'),
-    'Expected skill export manifest to include metadata and file hashes'
+    scan.indexedSkills.some((skill) => skill.name === indexedSmokeSkillName),
+    'Expected smoke scan to index the local Codex root'
+  );
+  const library = await runtime.dispatch('library.list', {}) as RuntimeSkillListItem[];
+  assertCondition(
+    library.some((skill) => skill.name === indexedSmokeSkillName && skill.visibilityStatus === 'indexed'),
+    'Expected indexed smoke skill in library list'
   );
 
-  const plan = await runtime.dispatch('install.createPlan', {
-    skillId: imported.skill.id,
-    targetRoot,
-    agentCode: 'codex',
-    agentDisplayName: 'Codex',
-    adapterVersion: 'release-smoke',
-    scope: 'user'
-  });
-  assertCondition(plan.conflictState === 'clean', 'Expected smoke install plan to be conflict-free');
-  assertCondition(plan.writes.length === 2, 'Expected smoke install plan to include two files');
-
-  const installResult = await runtime.dispatch('install.applyPlan', { plan });
-  assertCondition(installResult.status === 'installed', 'Expected smoke install to complete');
-
-  const installedManifest = await readFile(path.join(targetRoot, `${smokeSkillName}/SKILL.md`), 'utf8');
+  const discoverSource = await runtime.dispatch('discover.addSource', {
+    name: 'Release Smoke Source',
+    sourceType: 'local',
+    url: discoverDirectory
+  }) as { id: string };
+  const preview = await runtime.dispatch('discover.previewSource', { sourceId: discoverSource.id }) as { skills: RuntimeSkillListItem[] };
   assertCondition(
-    installedManifest.includes(smokeSkillName),
-    'Expected smoke install to project SKILL.md into target root'
+    preview.skills.some((skill) => skill.name === discoverSmokeSkillName),
+    'Expected discover preview to include the smoke source skill'
   );
 
-  const library = await runtime.dispatch('library.list', {});
-  assertCondition(
-    library.some((skill) => skill.name === smokeSkillName && skill.installStatus === 'installed'),
-    'Expected installed smoke skill in library list'
-  );
-
-  const security = await runtime.dispatch('security.scan', { skillId: imported.skill.id });
-  assertCondition(!security.blocked, 'Expected smoke skill to pass security scan');
-
-  const sync = await runtime.dispatch('sync.startupPlan', {});
+  const sync = await runtime.dispatch('sync.startupPlan', {}) as { shouldStart: boolean };
   assertCondition(!sync.shouldStart, 'Expected sync to remain disabled by default');
 
-  const plugins = await runtime.dispatch('plugins.centerState', {});
+  const plugins = await runtime.dispatch('plugins.centerState', {}) as { plugins: unknown[] };
   assertCondition(plugins.plugins.length === 0, 'Expected plugins to remain disabled by default');
-
-  const uninstall = await runtime.dispatch('install.uninstall', {
-    installationId: installResult.installationId
-  });
-  assertCondition(
-    uninstall.status === 'uninstalled' && uninstall.installationId === installResult.installationId,
-    'Expected smoke uninstall to report the app-owned installation as uninstalled'
-  );
-  await assertMissing(path.join(targetRoot, `${smokeSkillName}/SKILL.md`));
 
   return {
     status: 'passed',
     importedSkillName: imported.skill.name,
     gitImportedSkillName: gitImported.skill.name,
     zipImportedSkillName: zipImported.skill.name,
-    installedFiles: plan.writes.length,
+    indexedSkillName: indexedSmokeSkillName,
     searchCount: search.length,
-    exportedManifestVerified: true,
-    uninstalledFiles: plan.writes.length,
     libraryCount: library.length,
+    previewCount: preview.skills.length,
     syncStarted: sync.shouldStart,
     pluginCount: plugins.plugins.length
   };
@@ -193,19 +180,6 @@ function assertCondition(condition: boolean, message: string): asserts condition
   if (!condition) {
     throw new Error(message);
   }
-}
-
-async function assertMissing(filePath: string): Promise<void> {
-  try {
-    await readFile(filePath, 'utf8');
-  } catch (error) {
-    if ((error as NodeJS.ErrnoException).code === 'ENOENT') {
-      return;
-    }
-    throw error;
-  }
-
-  throw new Error(`Expected file to be removed: ${filePath}`);
 }
 
 function createRawZipArchive(files: Array<{ fileName: string; content: string }>): Buffer {

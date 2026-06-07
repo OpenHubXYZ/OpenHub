@@ -72,8 +72,7 @@ export async function scanAgentLibraries(
             tags: manifest.tags,
             source: {
               type: 'agent-root',
-              url: candidate,
-              trustLevel: root.agentCode
+              url: candidate
             },
             files: files.map((file) => ({
               relativePath: file.relativePath,
@@ -82,7 +81,7 @@ export async function scanAgentLibraries(
             }))
           });
 
-          libraryRepository.recordScannedInstallation({
+          libraryRepository.recordIndexedSkillLocation({
             skillId: skill.id,
             versionId: skill.versionId,
             agentCode: root.agentCode,
@@ -93,7 +92,7 @@ export async function scanAgentLibraries(
             writable: root.writable,
             isDefault: root.isDefault,
             skillPath: candidate,
-            installStatus: 'installed'
+            visibilityStatus: 'indexed'
           });
 
           indexedSkills.push({
@@ -206,7 +205,14 @@ function hasHighControlCharacterRatio(input: string): boolean {
     return false;
   }
 
-  const controlCharacters = input.match(/[\x01-\x08\x0B\x0C\x0E-\x1F]/g)?.length ?? 0;
+  let controlCharacters = 0;
+  for (let index = 0; index < input.length; index += 1) {
+    const code = input.charCodeAt(index);
+    if ((code >= 1 && code <= 8) || code === 11 || code === 12 || (code >= 14 && code <= 31)) {
+      controlCharacters += 1;
+    }
+  }
+
   return controlCharacters / input.length > 0.05;
 }
 

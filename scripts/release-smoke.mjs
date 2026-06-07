@@ -50,7 +50,7 @@ const logContent = [
   'package_startup=verified',
   'package_window=verified',
   'database_migration=verified',
-  'phase4_import_install=verified',
+  'inventory_flow=verified',
   'desktop_runtime=verified',
   'first_launch_options=verified',
   'first_launch_wizard=verified',
@@ -59,7 +59,6 @@ const logContent = [
   'sync_disabled_default=verified',
   'plugin_disabled_default=verified',
   'sync_conflict_center=verified',
-  'policy_baseline=verified',
   'plugin_provider_workflows=verified',
   'privacy_defaults=verified',
   'renderer_privilege_boundary=verified'
@@ -92,7 +91,8 @@ async function runSmokeTests() {
     'run',
     'packages/db/src/migrations.test.ts',
     'packages/core/src/import-service.test.ts',
-    'packages/core/src/install-service.test.ts',
+    'packages/core/src/library-scanner.test.ts',
+    'packages/core/src/version-service.test.ts',
     'apps/desktop/src/main/desktop-runtime.test.ts',
     'apps/desktop/src/main/window-options.test.ts',
     'apps/desktop/src/renderer/App.test.tsx'

@@ -1,62 +1,47 @@
 # OpenHub
 
-OpenHub is an MIT-licensed, local-first desktop
-application for managing AI coding agent skills across Codex, Claude, Gemini,
-OpenCode, and other local agent environments.
+OpenHub is an MIT-licensed, local-first desktop application for indexing and
+organizing AI coding agent skills across Codex, Claude, Gemini, OpenCode, and
+other local agent environments.
 
-The product goal is not another file browser. The app treats SQLite as the
-authoritative local source of truth, keep agent skill directories as deployment
-projections, and provide import, install, uninstall, version history, security
-review, optional sync, and constrained plugin capabilities.
+The current product direction is intentionally simple: SQLite is the local
+source of truth, agent skill directories are read-only inventory inputs, and
+the app focuses on import, indexing, search, version history, collections,
+source preview, optional sync, and constrained plugin capabilities. OpenHub no
+longer deploys skills into agent roots and no longer maintains a trust,
+security-review, or policy-scoring workflow.
 
 ## Current Status
 
-This repository is in Phase 10: maintainer operations and long-term quality. The desktop
-shell renders the product name, empty/indexed library states, the P0
-import/install flow state, and Security Center state for queue, risk, findings,
-history, exemptions, version history, diffs, collections, Sync Center state, and
-Plugins state.
-The Electron main process wires typed runtime IPC to the local app data SQLite
-database and content store for first-launch agent root detection,
-agent-root scanning, local/Git/ZIP/TAR/sparse-Git/mirror import, FTS-backed
-library search, favorites, skill detail, signed skill and collection
-export/import, project roots, multi-target install, uninstall, rollback,
-security rescans and exemptions, policy packs, team baselines, opt-in sync
-operations, sync conflict resolution, plugin installation and registry state,
-plugin provider workflows, and Discover source previews.
-`packages/db` has idempotent SQLite migrations, required domain tables, FTS5
-skill search, app data directory resolution, installation file ownership
-records, security scan records, active exemption records, sync profiles,
-outbox, inbox, conflicts, events, plugin manifests, plugin permission grants,
-plugin errors, and repository tests.
-`packages/adapters` detects Codex, Claude, Gemini, and OpenCode skill roots.
-`packages/core` parses `SKILL.md`, indexes fixture roots into SQLite, and
-records explainable scan errors. It now imports local folders, Git repositories,
-and ZIP archives through isolated staging directories, writes file blobs to a
-content-addressed store, creates conflict-aware install plans, projects files by
-copy into agent roots, uninstalls only app-owned files, and exports portable
-packages with file hashes. It also scans skills before install, scores security
-findings, blocks high-risk installs by default, and allows scoped exemptions
-that can be revoked. It now creates new skill versions for content-changing
-operations, diffs version files, rolls installed projections back to older
-versions, and batch-exports/imports collections. Sync is disabled unless a user
-creates an enabled profile, stores REST credential material through OS-backed
-credential storage, supports shared-folder, Git, REST, and mock REST package
-drivers, and records conflicts for explicit resolution. Plugins are disabled by
-default, validate manifest fields and entry integrity, require declared
-permissions to be explicitly authorized, register capabilities through a
-restricted host API, contribute adapter/importer/security/sync providers only
-while enabled, and remove capabilities from the registry when disabled.
-Discover sources can be configured from local
-paths or Git URLs and previewed before import; non-standard directories use the
-ordinary local folder import flow without writing to agent roots during preview.
-The repository now includes current-platform desktop
-packaging, release checksums, dependency inventory generation, release smoke
-checks, launch-ready contributor onboarding, maintainer triage policy, ADRs,
-dependency policy, fixture rules, security response playbook, and public roadmap
-workflow.
+The desktop shell now presents four product surfaces:
 
-The tracked planning inputs are:
+- Home: local inventory metrics and the first-run path.
+- Inventory: indexed and imported skills with search.
+- Sources: local or Git source preview before import.
+- Settings: detected roots, sync status, and plugin registry state.
+
+The Electron main process wires typed runtime IPC to local app-data SQLite and a
+content store for first-launch root detection, read-only root scanning,
+local/Git/ZIP import, FTS-backed library search, favorites, skill detail,
+version list/diff/compare, collection creation, opt-in sync operations, plugin
+state, plugin provider workflows, and Discover source previews.
+
+`packages/db` contains idempotent SQLite migrations, FTS5 skill search,
+app-data directory resolution, indexed skill location records, sync profiles,
+outbox, inbox, conflicts, events, plugin manifests, permission grants, plugin
+errors, Discover sources, and repository tests.
+
+`packages/core` parses `SKILL.md`, indexes fixture roots into SQLite, imports
+local folders, Git repositories, and ZIP archives through isolated staging
+directories, writes file blobs to a content-addressed store, creates inventory
+versions, diffs version files, creates collections, keeps sync disabled by
+default, and manages the constrained plugin registry.
+
+`packages/adapters` detects Codex, Claude, Gemini, OpenCode, and Agents skill
+roots and can list `SKILL.md` directories for indexing. It does not write,
+deploy, uninstall, or verify files in agent roots.
+
+The tracked historical planning inputs are:
 
 - `references/deep-research-report.md`
 - `references/2026-06-03-electron-react-node-sqlite-development-plan.md`
@@ -96,35 +81,34 @@ Generated release artifacts are written under `out/`, which is ignored by Git.
 
 - Local-first by default: no account, cloud sync, telemetry, or remote skill
   collection is required.
-- SQLite is the local source of truth for skills, versions, scans,
-  installations, sync events, and plugin state.
-- Agent directories are projections. Install and uninstall operations must be
-  recorded and reversible through app-owned metadata.
+- SQLite is the local source of truth for skills, versions, indexed locations,
+  sync state, and plugin state.
+- Agent directories are inventory inputs. Current runtime code must not deploy
+  files into those directories.
 - The renderer must not directly access Node, the filesystem, or SQLite.
   Privileged work belongs behind typed Electron preload IPC.
 - Sync and plugins are opt-in and constrained by explicit permissions.
 - Imported folders, Git repositories, and archives must be isolated and path
-  checked before they can affect an agent directory.
+  checked before their contents enter SQLite or the content store.
+- Source preview is provenance and inventory only. Do not display ratings,
+  trust levels, reputation, or risk scoring without a new accepted spec.
 
 ## Architecture
 
-The workspace uses pnpm, TypeScript, Electron, Vite, React, Node, and
-SQLite:
+The workspace uses pnpm, TypeScript, Electron, Vite, React, Node, and SQLite:
 
 - `apps/desktop`: Electron main process, Vite React renderer, preload IPC.
 - `packages/shared`: shared types, IPC contracts, validators, constants.
-- `packages/core`: domain services for skills, versions, imports, installs,
-  security, sync, and plugins.
+- `packages/core`: domain services for skills, versions, imports, collections,
+  source preview, sync, and plugins.
 - `packages/db`: SQLite schema, migrations, repositories, fixtures.
-- `packages/adapters`: Codex, Claude, Gemini, OpenCode, and future adapters.
+- `packages/adapters`: read-only Codex, Claude, Gemini, OpenCode, and Agents
+  adapters.
 
 See `docs/architecture.md`, `docs/sync-model.md`, `docs/plugin-api.md`, and
-`docs/maintainer-guide.md` for the design baseline, sync model, plugin API,
-security boundaries, and maintainer workflow.
+`docs/maintainer-guide.md` for the current design baseline.
 
 ## Development Commands
-
-The standard commands are:
 
 ```sh
 pnpm install
@@ -144,38 +128,35 @@ commands so local and hosted verification stay aligned.
 
 ## Privacy Defaults
 
-OpenHub is designed to keep skill contents on the user's
-machine by default. Skill text, file contents, paths, tokens, and local
-configuration are not collected by the project. Network access is reserved for
-explicit user actions such as Git import, update checks, optional sync, or
-plugin installation.
+OpenHub keeps skill contents on the user's machine by default. Skill text, file
+contents, paths, tokens, and local configuration are not collected by the
+project. Network access is reserved for explicit user actions such as Git
+import, source preview, optional sync, or plugin folder workflows that declare
+the required permission.
 
-See `SECURITY.md` for vulnerability reporting and the security model baseline.
+See `SECURITY.md` for vulnerability reporting and security boundaries.
 
 ## Roadmap
 
-The implementation roadmap is phased:
+The current roadmap has been collapsed around inventory-first behavior:
 
-- Phase 0: open-source repository foundation.
-- Phase 1: workspace, Electron shell, tooling, and CI.
-- Phase 2: SQLite domain foundation.
-- Phase 3: agent detection and library indexing.
-- Phase 4: import, export, install, and uninstall loop.
-- Phase 4.5: discover sources and root-aware import previews.
-- Phase 5: security center and governance.
-- Phase 6: version history, blob store, collections.
-- Phase 7: optional offline-first sync.
-- Phase 8: constrained plugin runtime.
-- Phase 9: packaging, release, and OSS launch.
-- Phase 10: maintainer operations and long-term quality.
+- Repository foundation, tooling, and Electron shell.
+- SQLite source of truth.
+- Read-only agent root detection and skill indexing.
+- Local/Git/ZIP import into SQLite and the content-addressed store.
+- Discover source preview before import.
+- Version history, file diff, and collections.
+- Optional offline-first sync.
+- Constrained plugin runtime.
+- Packaging, release checks, and maintainer operations.
 
 See `docs/roadmap.md` for acceptance gates.
 
 ## Contributing
 
-Contributions are welcome. Please read
-`CONTRIBUTING.md`, `CODE_OF_CONDUCT.md`, `SECURITY.md`, and the docs under
-`docs/` before opening a pull request.
+Contributions are welcome. Please read `CONTRIBUTING.md`,
+`CODE_OF_CONDUCT.md`, `SECURITY.md`, and the docs under `docs/` before opening
+a pull request.
 
 ## License
 

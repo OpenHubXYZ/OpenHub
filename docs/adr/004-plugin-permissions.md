@@ -4,9 +4,8 @@ Status: accepted
 
 ## Context
 
-Plugins let contributors add adapters, importers, security rules, and sync
-drivers. They also introduce risk if they receive broad filesystem, network, or
-process access.
+Plugins let contributors add adapters, importers, and sync drivers. They also
+introduce risk if they receive broad filesystem, network, or process access.
 
 ## Decision
 
@@ -17,9 +16,9 @@ methods only.
 
 ## Consequences
 
-The Phase 8 host is a governance boundary, not a complete sandbox. Maintainers
-must review plugin code and permission requests before enabling or publishing
-plugins.
+The host is a constrained capability boundary, not a complete sandbox.
+Maintainers must review plugin code and permission requests before enabling or
+publishing plugins.
 
 ## Verification
 

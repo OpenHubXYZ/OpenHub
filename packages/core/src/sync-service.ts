@@ -357,8 +357,6 @@ export function createSyncService(input: CreateSyncServiceInput): SyncService {
             await versions.createVersion({
               skillId: conflict.entityId,
               changeSummary: `Local conflict draft ${conflict.id}`,
-              lifecycle: 'draft',
-              releaseChannel: 'local',
               files: localFiles
             })
           ).versionId
@@ -368,8 +366,6 @@ export function createSyncService(input: CreateSyncServiceInput): SyncService {
             await versions.createVersion({
               skillId: conflict.entityId,
               changeSummary: `Remote conflict draft ${conflict.id}`,
-              lifecycle: 'draft',
-              releaseChannel: 'local',
               files: remoteFiles
             })
           ).versionId

@@ -1,4 +1,4 @@
-import { readFile, rm } from 'node:fs/promises';
+import { rm } from 'node:fs/promises';
 import { mkdtemp } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
@@ -14,7 +14,7 @@ describe('desktop release smoke', () => {
     await Promise.all(tempDirectories.splice(0).map((directory) => rm(directory, { recursive: true })));
   });
 
-  it('runs the packaged startup Phase 4 core flow in isolated directories', async () => {
+  it('runs the packaged startup inventory flow in isolated directories', async () => {
     const workspace = await tempDir();
     const result = await runDesktopReleaseSmoke({
       dataDirectory: path.join(workspace, 'app-data'),
@@ -26,20 +26,13 @@ describe('desktop release smoke', () => {
       importedSkillName: 'packaged-smoke-helper',
       gitImportedSkillName: 'git-smoke-helper',
       zipImportedSkillName: 'zip-smoke-helper',
-      installedFiles: 2,
+      indexedSkillName: 'indexed-smoke-helper',
       searchCount: 3,
-      exportedManifestVerified: true,
-      uninstalledFiles: 2,
       libraryCount: 1,
+      previewCount: 1,
       syncStarted: false,
       pluginCount: 0
     });
-    await expect(
-      readFile(
-        path.join(workspace, 'workspace/target/codex-skills/packaged-smoke-helper/SKILL.md'),
-        'utf8'
-      )
-    ).rejects.toMatchObject({ code: 'ENOENT' });
   });
 });
 

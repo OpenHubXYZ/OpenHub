@@ -14,8 +14,9 @@ regressions.
 ## Triage
 
 - Confirm affected commit, versions, and reproduction.
-- Classify impact: path traversal, credential exposure, install bypass,
-  renderer privilege escape, plugin escape, sync privacy issue, or scan bypass.
+- Classify impact: path traversal, credential exposure, renderer privilege
+  escape, plugin escape, sync privacy issue, import staging bypass, or log
+  redaction failure.
 - Assign `priority:p0` for active exploitation, private data exposure, or
   release-blocking vulnerabilities.
 

@@ -1,20 +1,15 @@
 export const corePackage = {
   name: '@theopenhub/core',
-  phase: 'Phase 10 maintainer operations'
+  phase: 'Phase 10 inventory operations'
 } as const;
 
 export { createCollectionService } from './collection-service';
-export { createAuthorService } from './author-service';
 export { createContentStore } from './content-store';
 export { createDiscoverService } from './discover-service';
-export { createExportService } from './export-service';
 export { createImportService } from './import-service';
-export { InstallBlockedError, createInstallService } from './install-service';
 export { scanAgentLibraries } from './library-scanner';
 export { PathSafetyError, assertZipEntryPathSafe, ensurePathInsideRoot } from './path-safety';
-export { createPolicyService } from './policy-service';
 export { PluginHostError, PluginManifestError, createPluginService } from './plugin-service';
-export { createSecurityService, defaultSecurityRules } from './security-service';
 export { createSettingsService } from './settings-service';
 export {
   createGitSyncDriver,
@@ -29,15 +24,6 @@ export { createVersionService } from './version-service';
 export { SkillParseError, parseSkillManifest } from './skill-parser';
 
 export type {
-  AuthorPackageResult,
-  AuthorPreflightCheck,
-  AuthorPreflightResult,
-  AuthorService,
-  CreateAuthorServiceInput
-} from './author-service';
-export type {
-  CollectionExportResult,
-  CollectionImportResult,
   CollectionRecord,
   CollectionService,
   CreateCollectionInput,
@@ -53,32 +39,12 @@ export type {
   DiscoverSourceType
 } from './discover-service';
 export type {
-  CreateExportServiceInput,
-  ExportSignedSkillInput,
-  ExportService,
-  ExportSkillInput,
-  ExportSkillResult
-} from './export-service';
-export type {
   CreateImportServiceInput,
   ImportedSkillFile,
   ImportedSkillResult,
   ImportService,
-  ImportSignatureStatus,
   ImportSourceType
 } from './import-service';
-export type {
-  CreateInstallServiceInput,
-  InstallConflictState,
-  InstallProjectionMode,
-  InstallPlan,
-  InstallPlanWrite,
-  InstallResult,
-  InstallRootKind,
-  InstallService,
-  MultiTargetInstallResult,
-  InstallWriteConflict
-} from './install-service';
 export type {
   IndexedSkillResult,
   ScanAgentLibrariesInput,
@@ -86,15 +52,6 @@ export type {
   ScanErrorResult
 } from './library-scanner';
 export type { PathSafetyErrorCode } from './path-safety';
-export type {
-  CreatePolicyServiceInput,
-  PolicyEvaluation,
-  PolicyPack,
-  PolicyScanLevel,
-  PolicyService,
-  TeamBaselinePackage,
-  TeamBaselinePreview
-} from './policy-service';
 export type {
   CreatePluginServiceInput,
   InstalledPlugin,
@@ -113,24 +70,9 @@ export type {
   PluginManifestErrorCode,
   PluginPermission,
   PluginRegistry,
-  PluginSignature,
-  PluginSignatureStatus,
   PluginService,
   PluginStatus
 } from './plugin-service';
-export type {
-  CreateSecurityServiceInput,
-  InstallPolicyResult,
-  SecurityExemption,
-  SecurityFinding,
-  SecurityFindingDraft,
-  SecurityLevel,
-  SecurityRule,
-  SecurityRuleScanInput,
-  SecurityScanResult,
-  SecurityService,
-  SecuritySeverity
-} from './security-service';
 export type {
   LogLevel,
   MirrorSourceSetting,
@@ -155,9 +97,7 @@ export type {
   CreateVersionServiceInput,
   FileChangeType,
   FileDiff,
-  ReleaseChannel,
   SkillVersionSummary,
-  VersionLifecycle,
   VersionFileInput,
   VersionService
 } from './version-service';

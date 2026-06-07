@@ -4,9 +4,10 @@ Triage should produce a clear owner, severity, next action, and label set.
 
 ## Priorities
 
-- `priority:p0`: data loss, install bypass, renderer privilege escape,
-  security exposure, release blocker.
-- `priority:p1`: broken core workflow, migration defect, high-risk regression.
+- `priority:p0`: data loss, renderer privilege escape, private data exposure,
+  release blocker.
+- `priority:p1`: broken core workflow, migration defect, import-boundary
+  regression, sync privacy regression, or plugin permission regression.
 - `priority:p2`: important usability or compatibility problem.
 - `priority:p3`: polish, docs, non-blocking cleanup.
 

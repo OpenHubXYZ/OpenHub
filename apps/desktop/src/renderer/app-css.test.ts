@@ -8,54 +8,41 @@ const cssPath = path.resolve(__dirname, 'app.css');
 describe('renderer layout containment CSS', () => {
   it('keeps the desktop shell inside the viewport without document scrollbars', async () => {
     const css = await readFile(cssPath, 'utf8');
-    const shellBlock = cssBlock(css, '.screen');
 
     expect(cssBlock(css, 'html,\nbody,\n#root')).toContain('overflow: hidden;');
-    expect(shellBlock).toContain('width: 100%;');
-    expect(shellBlock).toContain('height: 100%;');
-    expect(shellBlock).toContain('min-height: 0;');
-    expect(shellBlock).not.toContain('width: 100vw;');
-    expect(shellBlock).not.toContain('min-height: 760px;');
+    expect(cssBlock(css, '.screen')).toContain('height: 100%;');
+    expect(cssBlock(css, '.screen')).toContain('grid-template-columns: 248px minmax(0, 1fr);');
+    expect(css).not.toContain('100vw');
   });
 
-  it('clips compact status pills inside their table cells', async () => {
+  it('defines the retained four-page workbench layout', async () => {
     const css = await readFile(cssPath, 'utf8');
-    const compactPillBlock = cssBlock(css, '.tag,\n.risk,\n.status');
 
-    expect(compactPillBlock).toContain('max-width: 100%;');
-    expect(compactPillBlock).toContain('overflow: hidden;');
-    expect(compactPillBlock).toContain('text-overflow: ellipsis;');
+    expect(cssBlock(css, '.app-frame')).toContain('grid-template-rows: 72px minmax(0, 1fr);');
+    expect(cssBlock(css, '.workspace')).toContain('overflow: auto;');
+    expect(cssBlock(css, '.split-two')).toContain('grid-template-columns: repeat(2, minmax(0, 1fr));');
+    expect(css).not.toContain('.right-pane');
+    expect(css).not.toContain('.statusbar');
+    expect(css).not.toMatch(/deploy|trust|install|security/i);
   });
 
-  it('lets page title actions wrap instead of squeezing buttons out of their pane', async () => {
+  it('keeps compact labels clipped inside table cells', async () => {
+    const css = await readFile(cssPath, 'utf8');
+    const tagBlock = cssBlock(css, '.tag,\n.status');
+
+    expect(tagBlock).toContain('max-width: 100%;');
+    expect(tagBlock).toContain('overflow: hidden;');
+    expect(tagBlock).toContain('text-overflow: ellipsis;');
+  });
+
+  it('collapses split layouts on narrow screens', async () => {
     const css = await readFile(cssPath, 'utf8');
 
-    expect(cssBlock(css, '.page-title')).toContain('flex-wrap: wrap;');
-    expect(cssBlock(css, '.sub-actions')).toContain('flex: 0 0 auto;');
-    expect(css).toContain('@media (max-width: 1100px)');
-    expect(css).toContain('.split-two,\n  .section-grid,\n  .management-flow');
+    expect(css).toContain('@media (max-width: 900px)');
+    expect(css).toContain('.screen {');
+    expect(css).toContain('grid-template-columns: 84px minmax(0, 1fr);');
+    expect(css).toContain('.split-two {');
     expect(css).toContain('grid-template-columns: 1fr;');
-  });
-
-  it('gives first launch a full-window layout instead of the desktop workbench rows', async () => {
-    const css = await readFile(cssPath, 'utf8');
-
-    expect(cssBlock(css, '.first-launch-screen')).toContain('grid-template-columns: minmax(0, 1fr);');
-    expect(cssBlock(css, '.first-launch-frame')).toContain('grid-template-rows: minmax(0, 1fr);');
-    expect(cssBlock(css, '.first-launch-frame')).toContain('overflow: hidden;');
-    expect(cssBlock(css, '.first-launch-body')).toContain('overflow: auto;');
-  });
-
-  it('defines the collapsed sidebar and local help drawer contracts', async () => {
-    const css = await readFile(cssPath, 'utf8');
-
-    expect(cssBlock(css, '.screen.sidebar-collapsed')).toContain('grid-template-columns: 72px minmax(0, 1fr);');
-    expect(css).toContain('.sidebar-collapsed .sidebar-label');
-    expect(css).toContain('.sidebar-collapsed .brand-title');
-    expect(cssBlock(css, '.help-drawer')).toContain('position: fixed;');
-    expect(cssBlock(css, '.help-drawer')).toContain('inset: 0;');
-    expect(cssBlock(css, '.help-drawer-backdrop')).toContain('background: rgb(15 23 42 / 36%);');
-    expect(cssBlock(css, '.help-drawer-panel')).toContain('overflow: auto;');
   });
 });
 

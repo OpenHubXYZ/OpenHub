@@ -7,16 +7,9 @@ import type { SqliteDatabase } from '@theopenhub/db';
 
 import { assertZipEntryPathSafe, ensurePathInsideRoot } from './path-safety';
 
-export type PluginCapabilityType = 'agent-adapter' | 'importer' | 'security-rule' | 'sync-driver' | 'exporter';
-export type PluginPermission =
-  | 'agent-root:read'
-  | 'agent-root:write'
-  | 'network:fetch'
-  | 'import:local'
-  | 'sync-driver'
-  | 'export:local';
+export type PluginCapabilityType = 'agent-adapter' | 'importer' | 'sync-driver';
+export type PluginPermission = 'agent-root:read' | 'network:fetch' | 'import:local' | 'sync-driver';
 export type PluginStatus = 'disabled' | 'enabled' | 'error';
-export type PluginSignatureStatus = 'unsigned' | 'trusted' | 'untrusted';
 export type PluginDirectoryStatus = 'active' | 'scanned';
 export type PluginCatalogStatus = 'available' | 'error';
 export type PluginManifestErrorCode =
@@ -43,13 +36,6 @@ export interface PluginIntegrity {
   hash: string;
 }
 
-export interface PluginSignature {
-  status: 'unsigned' | 'signed';
-  algorithm?: 'sha256';
-  signer?: string;
-  value?: string;
-}
-
 export interface PluginManifest {
   id: string;
   name: string;
@@ -59,14 +45,12 @@ export interface PluginManifest {
   capabilities: PluginCapability[];
   permissions: PluginPermission[];
   integrity: PluginIntegrity;
-  signature: PluginSignature;
 }
 
 export interface InstalledPlugin extends PluginManifest {
   rootPath: string;
   enabled: boolean;
   status: PluginStatus;
-  signatureStatus: PluginSignatureStatus;
 }
 
 export interface PluginAgentAdapterRegistration {
@@ -78,9 +62,7 @@ export interface PluginAgentAdapterRegistration {
 export interface PluginRegistry {
   agentAdapters: PluginAgentAdapterRegistration[];
   importers: Array<{ pluginId: string; id: string; name: string }>;
-  securityRules: Array<{ pluginId: string; id: string; name: string }>;
   syncDrivers: Array<{ pluginId: string; id: string; name: string }>;
-  exporters: Array<{ pluginId: string; id: string; name: string }>;
 }
 
 type PluginProvider = (input: unknown) => unknown;
@@ -95,7 +77,6 @@ export interface PluginCenterState {
     version: string;
     rootPath: string;
     status: PluginStatus;
-    signatureStatus: PluginSignatureStatus;
     capabilities: string[];
     permissions: Array<{ name: PluginPermission; status: 'declared' | 'authorized' }>;
     errors: Array<{ message: string }>;
@@ -116,7 +97,6 @@ export interface PluginCatalogEntry {
   name: string;
   version: string;
   rootPath: string;
-  signatureStatus: PluginSignatureStatus;
   installed: boolean;
   status: PluginCatalogStatus;
   errorMessage?: string | null;
@@ -174,19 +154,11 @@ export class PluginHostError extends Error {
 const SUPPORTED_API_VERSION = 1;
 const ALLOWED_PERMISSIONS = new Set<PluginPermission>([
   'agent-root:read',
-  'agent-root:write',
   'network:fetch',
   'import:local',
-  'sync-driver',
-  'export:local'
+  'sync-driver'
 ]);
-const ALLOWED_CAPABILITIES = new Set<PluginCapabilityType>([
-  'agent-adapter',
-  'importer',
-  'security-rule',
-  'sync-driver',
-  'exporter'
-]);
+const ALLOWED_CAPABILITIES = new Set<PluginCapabilityType>(['agent-adapter', 'importer', 'sync-driver']);
 const UNSAFE_ENTRY_PATTERNS = [
   /\brequire\s*\(/,
   /\bimport\s*\(/,
@@ -214,7 +186,6 @@ export function createPluginService(input: CreatePluginServiceInput): PluginServ
       const entryPath = await resolveEntryPath(rootPath, manifest.entry);
       const entrySource = await readFile(entryPath, 'utf8');
       verifyIntegrity(manifest, entrySource);
-      const signatureStatus = getPluginSignatureStatus(manifest);
 
       input.database
         .prepare(
@@ -229,8 +200,6 @@ export function createPluginService(input: CreatePluginServiceInput): PluginServ
                 capabilities_json,
                 permissions_json,
                 integrity_json,
-                signature_json,
-                signature_status,
                 root_path
               )
             values
@@ -243,8 +212,6 @@ export function createPluginService(input: CreatePluginServiceInput): PluginServ
                 @capabilitiesJson,
                 @permissionsJson,
                 @integrityJson,
-                @signatureJson,
-                @signatureStatus,
                 @rootPath
               )
           `
@@ -258,8 +225,6 @@ export function createPluginService(input: CreatePluginServiceInput): PluginServ
           capabilitiesJson: JSON.stringify(manifest.capabilities),
           permissionsJson: JSON.stringify(manifest.permissions),
           integrityJson: JSON.stringify(manifest.integrity),
-          signatureJson: JSON.stringify(manifest.signature),
-          signatureStatus,
           rootPath
         });
 
@@ -314,7 +279,6 @@ export function createPluginService(input: CreatePluginServiceInput): PluginServ
                   name,
                   version,
                   root_path,
-                  signature_status,
                   status,
                   error_message
                 )
@@ -326,7 +290,6 @@ export function createPluginService(input: CreatePluginServiceInput): PluginServ
                   @name,
                   @version,
                   @rootPath,
-                  @signatureStatus,
                   @status,
                   @errorMessage
                 )
@@ -466,8 +429,6 @@ export function createPluginService(input: CreatePluginServiceInput): PluginServ
               capabilities_json as capabilitiesJson,
               permissions_json as permissionsJson,
               integrity_json as integrityJson,
-              signature_json as signatureJson,
-              signature_status as signatureStatus,
               root_path as rootPath,
               enabled,
               status
@@ -487,7 +448,6 @@ export function createPluginService(input: CreatePluginServiceInput): PluginServ
           version: plugin.version,
           rootPath: plugin.rootPath,
           status: plugin.status,
-          signatureStatus: plugin.signatureStatus,
           capabilities: plugin.capabilities.map((capability) => capabilityKey(capability)),
           permissions: plugin.permissions.map((permission) => ({
             name: permission,
@@ -537,7 +497,6 @@ function validatePluginManifest(input: unknown): PluginManifest {
   });
 
   const integrity = validateIntegrityMetadata(manifest.integrity);
-  const signature = validateSignatureMetadata((manifest as { signature?: unknown }).signature);
 
   return {
     id,
@@ -547,8 +506,7 @@ function validatePluginManifest(input: unknown): PluginManifest {
     entry,
     capabilities,
     permissions,
-    integrity,
-    signature
+    integrity
   };
 }
 
@@ -610,35 +568,6 @@ function validateIntegrityMetadata(input: unknown): PluginIntegrity {
   }
 
   return { algorithm: 'sha256', hash: integrity.hash };
-}
-
-function validateSignatureMetadata(input: unknown): PluginSignature {
-  if (input === undefined || input === null) {
-    return { status: 'unsigned' };
-  }
-
-  const signature = input as Partial<PluginSignature> | null;
-  if (!signature || typeof signature !== 'object' || signature.status === 'unsigned') {
-    return { status: 'unsigned' };
-  }
-
-  if (
-    signature.status !== 'signed' ||
-    signature.algorithm !== 'sha256' ||
-    typeof signature.signer !== 'string' ||
-    signature.signer.trim() === '' ||
-    typeof signature.value !== 'string' ||
-    signature.value.trim() === ''
-  ) {
-    return { status: 'unsigned' };
-  }
-
-  return {
-    status: 'signed',
-    algorithm: 'sha256',
-    signer: signature.signer,
-    value: signature.value
-  };
 }
 
 async function resolveEntryPath(rootPath: string, entry: string): Promise<string> {
@@ -727,24 +656,10 @@ function createRestrictedHost(plugin: InstalledPlugin, registry: PluginRegistry,
       }
     },
 
-    registerSecurityRule(rule: { id: string; name: string; invoke?: PluginProvider }) {
-      assertNamedRegistration(plugin, registry.securityRules, 'security-rule', rule);
-      if (typeof rule.invoke === 'function') {
-        providers.set(providerKey(plugin.id, 'security-rule', rule.id), rule.invoke);
-      }
-    },
-
     registerSyncDriver(driver: { id: string; name: string; invoke?: PluginProvider }) {
       assertNamedRegistration(plugin, registry.syncDrivers, 'sync-driver', driver);
       if (typeof driver.invoke === 'function') {
         providers.set(providerKey(plugin.id, 'sync-driver', driver.id), driver.invoke);
-      }
-    },
-
-    registerExporter(exporter: { id: string; name: string; invoke?: PluginProvider }) {
-      assertNamedRegistration(plugin, registry.exporters, 'exporter', exporter);
-      if (typeof exporter.invoke === 'function') {
-        providers.set(providerKey(plugin.id, 'exporter', exporter.id), exporter.invoke);
       }
     }
   };
@@ -776,9 +691,7 @@ function assertDeclaredCapability(
 function unregisterPlugin(registry: PluginRegistry, providers: PluginProviderMap, pluginId: string): void {
   registry.agentAdapters = registry.agentAdapters.filter((adapter) => adapter.pluginId !== pluginId);
   registry.importers = registry.importers.filter((importer) => importer.pluginId !== pluginId);
-  registry.securityRules = registry.securityRules.filter((rule) => rule.pluginId !== pluginId);
   registry.syncDrivers = registry.syncDrivers.filter((driver) => driver.pluginId !== pluginId);
-  registry.exporters = registry.exporters.filter((exporter) => exporter.pluginId !== pluginId);
   for (const key of providers.keys()) {
     if (key.startsWith(`${pluginId}:`)) {
       providers.delete(key);
@@ -790,9 +703,7 @@ function emptyRegistry(): PluginRegistry {
   return {
     agentAdapters: [],
     importers: [],
-    securityRules: [],
-    syncDrivers: [],
-    exporters: []
+    syncDrivers: []
   };
 }
 
@@ -800,9 +711,7 @@ function cloneRegistry(registry: PluginRegistry): PluginRegistry {
   return {
     agentAdapters: [...registry.agentAdapters],
     importers: [...registry.importers],
-    securityRules: [...registry.securityRules],
-    syncDrivers: [...registry.syncDrivers],
-    exporters: [...registry.exporters]
+    syncDrivers: [...registry.syncDrivers]
   };
 }
 
@@ -819,8 +728,6 @@ function getInstalledPlugin(database: SqliteDatabase, pluginId: string): Install
           capabilities_json as capabilitiesJson,
           permissions_json as permissionsJson,
           integrity_json as integrityJson,
-          signature_json as signatureJson,
-          signature_status as signatureStatus,
           root_path as rootPath,
           enabled,
           status
@@ -847,8 +754,6 @@ function pluginRow(row: unknown): InstalledPlugin {
     capabilitiesJson: string;
     permissionsJson: string;
     integrityJson: string;
-    signatureJson: string;
-    signatureStatus: PluginSignatureStatus;
     rootPath: string;
     enabled: number;
     status: PluginStatus;
@@ -863,11 +768,9 @@ function pluginRow(row: unknown): InstalledPlugin {
     capabilities: JSON.parse(plugin.capabilitiesJson) as PluginCapability[],
     permissions: JSON.parse(plugin.permissionsJson) as PluginPermission[],
     integrity: JSON.parse(plugin.integrityJson) as PluginIntegrity,
-    signature: JSON.parse(plugin.signatureJson) as PluginSignature,
     rootPath: plugin.rootPath,
     enabled: plugin.enabled === 1,
-    status: plugin.status,
-    signatureStatus: plugin.signatureStatus
+    status: plugin.status
   };
 }
 
@@ -973,7 +876,6 @@ async function readPluginCatalogEntry(
   name: string;
   version: string;
   rootPath: string;
-  signatureStatus: PluginSignatureStatus;
   status: PluginCatalogStatus;
   errorMessage: string | null;
 }> {
@@ -987,7 +889,6 @@ async function readPluginCatalogEntry(
       name: manifest.name,
       version: manifest.version,
       rootPath,
-      signatureStatus: getPluginSignatureStatus(manifest),
       status: 'available',
       errorMessage: null
     };
@@ -1001,7 +902,6 @@ async function readPluginCatalogEntry(
       name: fallbackId,
       version: '0.0.0',
       rootPath,
-      signatureStatus: 'unsigned',
       status: 'error',
       errorMessage: message
     };
@@ -1020,7 +920,6 @@ function listPluginCatalog(database: SqliteDatabase, directoryId?: string): Plug
               pce.name,
               pce.version,
               pce.root_path as rootPath,
-              pce.signature_status as signatureStatus,
               pce.status,
               pce.error_message as errorMessage,
               case when pm.id is null then 0 else 1 end as installed
@@ -1041,7 +940,6 @@ function listPluginCatalog(database: SqliteDatabase, directoryId?: string): Plug
               pce.name,
               pce.version,
               pce.root_path as rootPath,
-              pce.signature_status as signatureStatus,
               pce.status,
               pce.error_message as errorMessage,
               case when pm.id is null then 0 else 1 end as installed
@@ -1063,7 +961,6 @@ function pluginCatalogRow(row: unknown): PluginCatalogEntry {
     name: string;
     version: string;
     rootPath: string;
-    signatureStatus: PluginSignatureStatus;
     installed: number;
     status: PluginCatalogStatus;
     errorMessage: string | null;
@@ -1076,7 +973,6 @@ function pluginCatalogRow(row: unknown): PluginCatalogEntry {
     name: entry.name,
     version: entry.version,
     rootPath: entry.rootPath,
-    signatureStatus: entry.signatureStatus,
     installed: entry.installed === 1,
     status: entry.status,
     errorMessage: entry.errorMessage
@@ -1110,29 +1006,6 @@ async function fileExists(filePath: string): Promise<boolean> {
   } catch {
     return false;
   }
-}
-
-function getPluginSignatureStatus(manifest: PluginManifest): PluginSignatureStatus {
-  if (manifest.signature.status !== 'signed') {
-    return 'unsigned';
-  }
-
-  const { signer, value } = manifest.signature;
-  if (!signer || !value) {
-    return 'untrusted';
-  }
-
-  if (signedPluginManifestValue(manifest, signer) !== value) {
-    return 'untrusted';
-  }
-
-  return signer.startsWith('trusted:') ? 'trusted' : 'untrusted';
-}
-
-function signedPluginManifestValue(manifest: Pick<PluginManifest, 'id' | 'name' | 'version'>, signer: string): string {
-  return createHash('sha256')
-    .update(`${JSON.stringify({ id: manifest.id, name: manifest.name, version: manifest.version })}:${signer}`)
-    .digest('hex');
 }
 
 function capabilityKey(capability: PluginCapability): string {

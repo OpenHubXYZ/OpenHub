@@ -1,9 +1,8 @@
 # Development
 
-The repository is currently in Phase 10 and contains a pnpm TypeScript
-workspace, an Electron + Vite + React desktop shell, SQLite domain storage,
-agent indexing, import/export/install core services, security governance
-services, version/collection services, optional sync state and drivers,
+The repository contains a pnpm TypeScript workspace, an Electron + Vite + React
+desktop shell, SQLite domain storage, read-only agent indexing, local/Git/ZIP
+imports, version and collection services, optional sync state and drivers,
 constrained plugin runtime services, release packaging scripts, smoke tests,
 maintainer operations docs, ADRs, typed desktop runtime IPC, linting,
 formatting, and CI.
@@ -17,8 +16,8 @@ Local development requires:
 - Git
 - A supported desktop operating system for Electron development
 
-Version requirements are declared in `package.json`. The current package manager
-is `pnpm@10.33.2`.
+Version requirements are declared in `package.json`. The current package
+manager is `pnpm@10.33.2`.
 
 ## Commands
 
@@ -36,10 +35,9 @@ pnpm release:inventory
 
 ## Repository Layout
 
-Current:
-
-- `references/`: research and implementation plans.
-- `docs/`: architecture, roadmap, development, testing, and release docs.
+- `references/`: historical research and implementation plans.
+- `docs/`: architecture, roadmap, development, testing, release, and maintainer
+  docs.
 - `.github/`: issue, pull request, and discussion templates.
 - `apps/desktop`
 - `packages/shared`
@@ -47,18 +45,16 @@ Current:
 - `packages/db`
 - `packages/adapters`
 
-## Phase Discipline
+## Scope Discipline
 
-Each phase should:
+Every non-trivial change should:
 
-- Link to the relevant spec or plan.
-- Implement only that phase's scope.
-- Update docs and tests that prove the phase behavior.
+- Link to the relevant spec, issue, or roadmap item.
+- Implement only the required scope.
+- Update docs and tests that prove current behavior.
 - Run the acceptance commands.
-- Commit only the phase work.
-
-Future work should be added through roadmap updates, ADRs when architecture is
-affected, and focused tests.
+- Avoid reintroducing deploy, source reputation, trust scoring, policy packs,
+  or review queues without a new accepted spec.
 
 ## Local Data Safety
 
@@ -69,6 +65,7 @@ and fixtures for:
 - Claude roots
 - Gemini roots
 - OpenCode roots
+- Agents roots
 - archive import fixtures
 - Git import fixtures
 - path traversal and symlink escape fixtures
@@ -79,7 +76,7 @@ test runner, never the user's application data directory.
 
 Agent indexing tests should inject a fake `homeDirectory` into
 `createBuiltInAgentAdapters()`. Do not scan real `~/.codex`, `~/.claude`,
-`~/.gemini`, or `~/.opencode` directories in automated tests.
+`~/.gemini`, `.agents`, or `~/.opencode` directories in automated tests.
 
 Import tests must stage inputs under a temp directory and must not write to real
 agent roots. ZIP slip fixtures should use raw malicious archive entries rather
@@ -91,15 +88,9 @@ Desktop runtime tests may use filesystem-backed SQLite, but only under a temp
 instead of using Electron, and should inject fake `homeDirectory` roots for
 agent detection.
 
-Security tests should use imported temp fixtures and in-memory SQLite. High-risk
-fixtures must prove install blocking before any target-root write. Exemption
-fixtures must include a concrete reason and scope, and revocation should be
-verified through policy evaluation.
-
-Version and collection tests should use temporary directories for install roots
-and exported packages. Rollback tests must verify both restored files and
-deleted app-owned files from newer versions. Collection import tests should use a
-fresh database so slug conflicts do not obscure package behavior.
+Version and collection tests should use temporary directories and in-memory or
+temp SQLite databases. Collection tests should use a fresh database when slug
+conflicts could obscure package behavior.
 
 Sync tests should use in-memory SQLite and temporary directories for
 shared-folder and Git fixtures. A test must prove the disabled-by-default
@@ -113,14 +104,13 @@ capability removal, and Plugins UI state.
 
 Release smoke tests should use generated `out/` artifacts only. They must
 verify package payload entrypoints, packaged main startup under the Electron
-runtime, database migration, the Phase 4 import/install smoke path,
-first-launch Electron window options, privacy defaults, and redacted release
-logs.
+runtime, database migration, inventory import/search/index flow, first-launch
+Electron window options, privacy defaults, and redacted release logs.
 
 ## Dependency Changes
 
 Dependency changes require a short risk note in the pull request. The lockfile
-must be committed after Phase 1 creates the workspace.
+must be committed.
 
 Native dependencies with install scripts must be listed in
 `package.json#pnpm.onlyBuiltDependencies`. Current approved native/build

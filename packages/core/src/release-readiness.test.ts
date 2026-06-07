@@ -74,7 +74,8 @@ describe('release readiness', () => {
     expect(smokeScript).toContain('sync_disabled_default=verified');
     expect(smokeScript).toContain('plugin_disabled_default=verified');
     expect(smokeScript).toContain('advanced_import=verified');
-    expect(smokeScript).toContain('policy_baseline=verified');
+    expect(smokeScript).toContain('inventory_flow=verified');
+    expect(smokeScript).not.toContain('policy_baseline=verified');
     expect(smokeScript).toContain('plugin_provider_workflows=verified');
     expect(smokeScript).toContain('runPackagedStartupSmoke');
     expect(smokeScript).toContain('runPackagedWindowSmoke');

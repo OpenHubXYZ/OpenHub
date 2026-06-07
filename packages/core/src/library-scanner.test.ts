@@ -118,25 +118,25 @@ describe('agent library scanner', () => {
         name: 'chinese-novelist',
         sourceAgent: 'Agents',
         path: agentsSkill,
-        installStatus: 'installed'
+        visibilityStatus: 'indexed'
       }),
       expect.objectContaining({
         name: 'openai-docs',
         sourceAgent: 'Codex',
         path: codexSystemSkill,
-        installStatus: 'installed'
+        visibilityStatus: 'indexed'
       }),
       expect.objectContaining({
         name: 'path-safety',
         sourceAgent: 'Codex',
         path: codexSkill,
-        installStatus: 'installed'
+        visibilityStatus: 'indexed'
       }),
       expect.objectContaining({
         name: 'story-helper',
         sourceAgent: 'OpenCode',
         path: opencodeSkill,
-        installStatus: 'installed'
+        visibilityStatus: 'indexed'
       })
     ]);
     const repository = createSkillRepository(database);

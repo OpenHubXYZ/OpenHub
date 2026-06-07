@@ -1,4 +1,4 @@
-import { mkdir, readFile, rm, stat, writeFile } from 'node:fs/promises';
+import { mkdir, rm, writeFile } from 'node:fs/promises';
 import { mkdtemp } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
@@ -8,7 +8,6 @@ import { afterEach, describe, expect, it } from 'vitest';
 
 import { createContentStore } from './content-store';
 import { createImportService } from './import-service';
-import { createInstallService } from './install-service';
 import { createVersionService } from './version-service';
 
 const tempDirectories: string[] = [];
@@ -18,7 +17,7 @@ describe('version service', () => {
     await Promise.all(tempDirectories.splice(0).map((directory) => rm(directory, { recursive: true })));
   });
 
-  it('dedupes blobs, creates versions, diffs file changes, and rolls back an installation', async () => {
+  it('dedupes blobs, creates versions, and compares file history without deploy state', async () => {
     const workspace = await tempDir();
     const source = path.join(workspace, 'source');
     await mkdir(path.join(source, 'references'), { recursive: true });
@@ -71,43 +70,30 @@ describe('version service', () => {
       expect.objectContaining({ relativePath: 'references/b.txt', changeType: 'deleted' }),
       expect.objectContaining({ relativePath: 'references/new.txt', changeType: 'added' })
     ]);
-
-    const installer = createInstallService({ database, contentStore });
-    const targetRoot = path.join(workspace, 'target-agent');
-    const plan = await installer.createInstallPlan({
-      skillId: imported.skill.id,
-      targetRoot,
-      agentCode: 'codex',
-      agentDisplayName: 'Codex',
-      adapterVersion: 'test',
-      scope: 'user'
-    });
-    const install = await installer.applyInstallPlan(plan);
-    expect(install.installationId).not.toBeNull();
-    await expect(readFile(path.join(targetRoot, 'history-helper/SKILL.md'), 'utf8')).resolves.toContain(
-      'Version Two'
-    );
-
-    await versions.rollbackInstallation({
-      installationId: install.installationId!,
-      targetVersionId: imported.skill.versionId
-    });
-
-    await expect(readFile(path.join(targetRoot, 'history-helper/SKILL.md'), 'utf8')).resolves.toContain(
-      'Version One'
-    );
-    await expect(stat(path.join(targetRoot, 'history-helper/references/new.txt'))).rejects.toMatchObject({
-      code: 'ENOENT'
+    expect('lifecycle' in versionTwo).toBe(false);
+    expect('releaseChannel' in versionTwo).toBe(false);
+    expect(versions.compareVersions({
+      fromVersionId: imported.skill.versionId,
+      toVersionId: versionTwo.versionId
+    })).toMatchObject({
+      fromVersionId: imported.skill.versionId,
+      toVersionId: versionTwo.versionId,
+      manifestHashChanged: true,
+      files: expect.arrayContaining([
+        expect.objectContaining({ relativePath: 'SKILL.md', changeType: 'modified' }),
+        expect.objectContaining({ relativePath: 'references/b.txt', changeType: 'deleted' }),
+        expect.objectContaining({ relativePath: 'references/new.txt', changeType: 'added' })
+      ])
     });
   });
 
-  it('creates draft versions and promotes them to explicit release channels', async () => {
+  it('creates additional inventory versions without promotion or rollback APIs', async () => {
     const workspace = await tempDir();
-    const source = path.join(workspace, 'source-draft');
+    const source = path.join(workspace, 'source-followup');
     await mkdir(source, { recursive: true });
     await writeFile(
       path.join(source, 'SKILL.md'),
-      ['---', 'name: channel-helper', 'description: Channel helper', '---', '# Stable'].join('\n')
+      ['---', 'name: channel-helper', 'description: Channel helper', '---', '# Original'].join('\n')
     );
     const database = createMemoryDatabase();
     runMigrations(database);
@@ -119,36 +105,34 @@ describe('version service', () => {
     }).importLocalFolder({ folderPath: source });
     const versions = createVersionService({ database, contentStore });
 
-    const draft = await versions.createVersion({
+    const followup = await versions.createVersion({
       skillId: imported.skill.id,
-      changeSummary: 'Draft beta update',
-      lifecycle: 'draft',
-      releaseChannel: 'local',
+      changeSummary: 'Follow-up update',
       files: [
-        { relativePath: 'SKILL.md', content: '# Draft beta' },
-        { relativePath: 'references/draft.md', content: 'draft notes' }
+        { relativePath: 'SKILL.md', content: '# Follow-up' },
+        { relativePath: 'references/followup.md', content: 'follow-up notes' }
       ]
     });
-    const released = versions.promoteVersion({ versionId: draft.versionId, releaseChannel: 'beta' });
     const comparison = versions.compareVersions({
       fromVersionId: imported.skill.versionId,
-      toVersionId: draft.versionId
+      toVersionId: followup.versionId
     });
 
-    expect(draft).toMatchObject({ lifecycle: 'draft', releaseChannel: 'local' });
-    expect(released).toMatchObject({ lifecycle: 'released', releaseChannel: 'beta' });
+    expect(followup.versionNo).toBe(2);
+    expect('promoteVersion' in versions).toBe(false);
+    expect('rollbackInstallation' in versions).toBe(false);
     expect(comparison).toMatchObject({
       fromVersionId: imported.skill.versionId,
-      toVersionId: draft.versionId,
+      toVersionId: followup.versionId,
       manifestHashChanged: true,
       files: expect.arrayContaining([
         expect.objectContaining({ relativePath: 'SKILL.md', changeType: 'modified' }),
-        expect.objectContaining({ relativePath: 'references/draft.md', changeType: 'added' })
+        expect.objectContaining({ relativePath: 'references/followup.md', changeType: 'added' })
       ])
     });
     expect(versions.listVersions({ skillId: imported.skill.id })[0]).toMatchObject({
-      lifecycle: 'released',
-      releaseChannel: 'beta'
+      versionNo: 2,
+      changeSummary: 'Follow-up update'
     });
   });
 });

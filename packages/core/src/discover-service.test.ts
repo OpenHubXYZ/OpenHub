@@ -33,14 +33,12 @@ describe('discover service', () => {
     const localSource = discover.addSource({
       name: 'Local curated',
       sourceType: 'local',
-      url: localSourcePath,
-      trustLevel: 'verified'
+      url: localSourcePath
     });
     const gitSource = discover.addSource({
       name: 'Git curated',
       sourceType: 'git',
-      url: `file://${gitSourcePath}`,
-      trustLevel: 'user'
+      url: `file://${gitSourcePath}`
     });
 
     const localPreview = await discover.previewSource({ sourceId: localSource.id });
@@ -50,9 +48,8 @@ describe('discover service', () => {
       source: {
         name: 'Local curated',
         status: 'cached',
-        verified: true
-      },
-      writesPlanned: false
+        verified: false
+      }
     });
     expect(localPreview.skills).toEqual([
       expect.objectContaining({

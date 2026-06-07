@@ -25,7 +25,6 @@ const migrations: Migration[] = [
           repo_owner text,
           repo_name text,
           default_branch text,
-          trust_level text not null,
           created_at text not null default current_timestamp
         );
 
@@ -50,7 +49,6 @@ const migrations: Migration[] = [
           source_ref text,
           manifest_hash text not null,
           created_at text not null default current_timestamp,
-          released integer not null default 1,
           unique(skill_id, version_no)
         );
 
@@ -92,20 +90,20 @@ const migrations: Migration[] = [
           scope text not null,
           writable integer not null default 0,
           is_default integer not null default 0,
+          root_kind text not null default 'user',
           created_at text not null default current_timestamp,
           unique(agent_id, root_path, scope)
         );
 
-        create table installations (
+        create table indexed_skill_locations (
           id text primary key,
           skill_id text not null references skills(id) on delete cascade,
           agent_root_id text not null references agent_roots(id) on delete cascade,
-          installed_version_id text not null references skill_versions(id),
-          install_scope text not null,
-          install_path text not null,
-          status text not null,
-          installed_at text not null default current_timestamp,
-          last_verified_at text
+          skill_version_id text not null references skill_versions(id) on delete cascade,
+          skill_path text not null,
+          visibility_status text not null default 'indexed',
+          last_indexed_at text not null default current_timestamp,
+          unique(skill_id, agent_root_id, skill_path)
         );
 
         create table collections (
@@ -124,31 +122,9 @@ const migrations: Migration[] = [
           primary key(collection_id, skill_id)
         );
 
-        create table security_scans (
-          id text primary key,
-          skill_version_id text not null references skill_versions(id) on delete cascade,
-          score integer not null,
-          level text not null,
-          blocked integer not null default 0,
-          ruleset_version text not null,
-          scanned_at text not null default current_timestamp
-        );
-
-        create table security_findings (
-          id text primary key,
-          scan_id text not null references security_scans(id) on delete cascade,
-          rule_id text not null,
-          severity text not null,
-          category text not null,
-          relative_path text not null,
-          line_no integer,
-          excerpt text not null
-        );
-
         create index idx_skill_versions_skill on skill_versions(skill_id, version_no desc);
         create index idx_skill_files_version on skill_files(skill_version_id);
-        create index idx_installations_skill on installations(skill_id);
-        create index idx_security_scans_version on security_scans(skill_version_id);
+        create index idx_indexed_skill_locations_skill on indexed_skill_locations(skill_id);
       `);
     }
   },
@@ -170,51 +146,7 @@ const migrations: Migration[] = [
   },
   {
     version: 3,
-    name: '003_installation_files',
-    up(database) {
-      database.exec(`
-        create table installation_files (
-          id text primary key,
-          installation_id text not null references installations(id) on delete cascade,
-          relative_path text not null,
-          target_path text not null,
-          blob_hash text not null references blob_objects(hash),
-          created_at text not null default current_timestamp,
-          unique(installation_id, relative_path)
-        );
-
-        create index idx_installation_files_installation on installation_files(installation_id);
-      `);
-    }
-  },
-  {
-    version: 4,
-    name: '004_security_exemptions',
-    up(database) {
-      database.exec(`
-        create unique index idx_security_scans_version_ruleset
-          on security_scans(skill_version_id, ruleset_version);
-
-        create table security_exemptions (
-          id text primary key,
-          skill_id text not null references skills(id) on delete cascade,
-          scope text not null,
-          reason text not null,
-          created_at text not null default current_timestamp,
-          revoked_at text
-        );
-
-        create index idx_security_exemptions_skill on security_exemptions(skill_id);
-
-        create unique index idx_security_exemptions_active_scope
-          on security_exemptions(skill_id, scope)
-          where revoked_at is null;
-      `);
-    }
-  },
-  {
-    version: 5,
-    name: '005_sync_state',
+    name: '003_sync_state',
     up(database) {
       database.exec(`
         create table sync_profiles (
@@ -283,8 +215,8 @@ const migrations: Migration[] = [
     }
   },
   {
-    version: 6,
-    name: '006_plugin_runtime',
+    version: 4,
+    name: '004_plugin_runtime',
     up(database) {
       database.exec(`
         create table plugin_manifests (
@@ -331,62 +263,8 @@ const migrations: Migration[] = [
     }
   },
   {
-    version: 7,
-    name: '007_review_usage_events',
-    up(database) {
-      database.exec(`
-        create table usage_events (
-          id text primary key,
-          event_type text not null,
-          skill_id text,
-          skill_name text,
-          agent_code text,
-          agent_display_name text,
-          subject text not null,
-          metadata_json text not null default '{}',
-          occurred_at text not null default current_timestamp
-        );
-
-        create index idx_usage_events_type_time on usage_events(event_type, occurred_at desc);
-        create index idx_usage_events_skill on usage_events(skill_id, occurred_at desc);
-        create index idx_usage_events_agent on usage_events(agent_code, occurred_at desc);
-
-        create table review_items (
-          id text primary key,
-          item_type text not null,
-          subject_id text not null,
-          skill_id text,
-          skill_name text,
-          title text not null,
-          detail text not null default '',
-          reason text not null,
-          source text not null,
-          reviewer text not null,
-          risk text not null,
-          status text not null,
-          metadata_json text not null default '{}',
-          created_at text not null default current_timestamp,
-          updated_at text not null default current_timestamp,
-          unique(item_type, subject_id)
-        );
-
-        create table review_notes (
-          id text primary key,
-          review_item_id text references review_items(id) on delete cascade,
-          note text not null,
-          status text not null,
-          created_at text not null default current_timestamp
-        );
-
-        create index idx_review_items_status_risk on review_items(status, risk, updated_at desc);
-        create index idx_review_items_skill on review_items(skill_id);
-        create index idx_review_notes_item on review_notes(review_item_id, created_at desc);
-      `);
-    }
-  },
-  {
-    version: 8,
-    name: '008_discover_sources',
+    version: 5,
+    name: '005_discover_sources',
     up(database) {
       database.exec(`
         create table discover_sources (
@@ -394,7 +272,6 @@ const migrations: Migration[] = [
           name text not null,
           source_type text not null,
           url text not null,
-          trust_level text not null,
           verified integer not null default 0,
           status text not null default 'configured',
           cached_at text,
@@ -409,7 +286,6 @@ const migrations: Migration[] = [
           description text not null default '',
           tags_json text not null default '[]',
           skill_path text not null,
-          risk_status text not null default 'unscanned',
           cached_at text not null default current_timestamp
         );
 
@@ -419,37 +295,13 @@ const migrations: Migration[] = [
     }
   },
   {
-    version: 9,
-    name: '009_research_gap_closure',
+    version: 6,
+    name: '006_inventory_productization',
     up(database) {
       database.exec(`
-        alter table agent_roots add column root_kind text not null default 'user';
-        alter table installations add column projection_mode text not null default 'copy';
-        alter table skill_versions add column lifecycle text not null default 'released';
-        alter table skill_versions add column release_channel text not null default 'stable';
-        alter table skill_versions add column signature_json text;
-
         create table skill_favorites (
           skill_id text primary key references skills(id) on delete cascade,
           created_at text not null default current_timestamp
-        );
-
-        create table policy_packs (
-          id text primary key,
-          name text not null,
-          allowed_sources_json text not null default '[]',
-          blocked_rules_json text not null default '[]',
-          required_scan_level text not null,
-          approved_plugins_json text not null default '[]',
-          created_at text not null default current_timestamp,
-          updated_at text not null default current_timestamp
-        );
-
-        create table team_baselines (
-          id text primary key,
-          name text not null,
-          package_json text not null,
-          applied_at text not null default current_timestamp
         );
 
         drop table skill_search;
@@ -465,8 +317,8 @@ const migrations: Migration[] = [
     }
   },
   {
-    version: 10,
-    name: '010_app_settings',
+    version: 7,
+    name: '007_app_settings',
     up(database) {
       database.exec(`
         create table app_settings (
@@ -478,8 +330,8 @@ const migrations: Migration[] = [
     }
   },
   {
-    version: 11,
-    name: '011_local_similarity_index',
+    version: 8,
+    name: '008_local_similarity_index',
     up(database) {
       database.exec(`
         create table skill_similarity_index (
@@ -491,25 +343,10 @@ const migrations: Migration[] = [
     }
   },
   {
-    version: 12,
-    name: '012_installation_lifecycle_lock',
+    version: 9,
+    name: '009_plugin_directories',
     up(database) {
       database.exec(`
-        alter table installations add column read_only_locked integer not null default 0;
-      `);
-    }
-  },
-  {
-    version: 13,
-    name: '013_plugin_directories',
-    up(database) {
-      database.exec(`
-        alter table plugin_manifests
-          add column signature_json text not null default '{"status":"unsigned"}';
-
-        alter table plugin_manifests
-          add column signature_status text not null default 'unsigned';
-
         create table plugin_directories (
           id text primary key,
           root_path text not null unique,
@@ -526,7 +363,6 @@ const migrations: Migration[] = [
           name text not null,
           version text not null,
           root_path text not null,
-          signature_status text not null,
           status text not null default 'available',
           error_message text,
           created_at text not null default current_timestamp,

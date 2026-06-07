@@ -18,7 +18,6 @@ describe('skill repository', () => {
       source: {
         type: 'local',
         url: null,
-        trustLevel: 'user'
       },
       files: [
         {
@@ -98,7 +97,6 @@ describe('skill repository', () => {
       source: {
         type: 'local',
         url: null,
-        trustLevel: 'user'
       },
       files: [
         {
@@ -115,7 +113,6 @@ describe('skill repository', () => {
       source: {
         type: 'local',
         url: null,
-        trustLevel: 'user'
       },
       files: [
         {
@@ -132,7 +129,6 @@ describe('skill repository', () => {
       source: {
         type: 'local',
         url: null,
-        trustLevel: 'user'
       },
       files: [
         {
@@ -173,7 +169,6 @@ describe('skill repository', () => {
       source: {
         type: 'agent-root',
         url: '/tmp/.agents/skills/chinese-novelist',
-        trustLevel: 'agents'
       },
       files: [
         {
@@ -213,7 +208,6 @@ describe('skill repository', () => {
       source: {
         type: 'local',
         url: null,
-        trustLevel: 'user'
       },
       files: [{ relativePath: 'SKILL.md', content: '# Healthy Search' }]
     });
@@ -225,7 +219,6 @@ describe('skill repository', () => {
       source: {
         type: 'local',
         url: null,
-        trustLevel: 'user'
       },
       files: [{ relativePath: 'SKILL.md', content: '# Corrupt Search' }]
     });
@@ -237,7 +230,7 @@ describe('skill repository', () => {
     ]);
   });
 
-  it('filters library search by source, risk, agent, tags, and favorites while returning facet counts', () => {
+  it('filters library search by source, agent, tags, and favorites while returning facet counts', () => {
     const db = createMemoryDatabase();
     runMigrations(db);
     const repository = createSkillRepository(db);
@@ -251,7 +244,6 @@ describe('skill repository', () => {
       source: {
         type: 'local',
         url: null,
-        trustLevel: 'user'
       },
       files: [{ relativePath: 'SKILL.md', content: '# Local Helper' }]
     });
@@ -263,7 +255,6 @@ describe('skill repository', () => {
       source: {
         type: 'git',
         url: 'file:///tmp/git-helper',
-        trustLevel: 'user'
       },
       files: [{ relativePath: 'SKILL.md', content: '# Git Import Helper\n\nPackage importer.' }]
     });
@@ -275,12 +266,11 @@ describe('skill repository', () => {
       source: {
         type: 'zip',
         url: '/tmp/helper.zip',
-        trustLevel: 'user'
       },
       files: [{ relativePath: 'SKILL.md', content: '# ZIP Helper' }]
     });
 
-    library.recordScannedInstallation({
+    library.recordIndexedSkillLocation({
       skillId: git.id,
       versionId: git.versionId,
       agentCode: 'codex',
@@ -291,24 +281,15 @@ describe('skill repository', () => {
       writable: true,
       isDefault: true,
       skillPath: '/tmp/.codex/skills/git-import-helper',
-      installStatus: 'installed'
+      visibilityStatus: 'indexed'
     });
     repository.setFavorite(git.id, true);
-    db.prepare(
-      `
-        insert into security_scans
-          (id, skill_version_id, score, level, blocked, ruleset_version)
-        values
-          ('scan-git', ?, 100, 'critical', 1, 'test')
-      `
-    ).run(git.versionId);
 
     expect(
       repository.searchSkills('package', {
         mode: 'hybrid',
         filters: {
           sourceTypes: ['git'],
-          riskStatuses: ['blocked'],
           agentCodes: ['codex'],
           tags: ['imports'],
           favoritesOnly: true
@@ -328,10 +309,6 @@ describe('skill repository', () => {
         { value: 'git', count: 1 },
         { value: 'local', count: 1 },
         { value: 'zip', count: 1 }
-      ]),
-      risks: expect.arrayContaining([
-        { value: 'blocked', count: 1 },
-        { value: 'unscanned', count: 2 }
       ]),
       agents: [{ value: 'codex', count: 1 }],
       tags: expect.arrayContaining([

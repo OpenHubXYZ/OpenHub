@@ -117,7 +117,6 @@ describe('import service', () => {
           name: 'mirror-helper',
           slug: 'mirror-helper',
           versionNo: 1,
-          signature: { status: 'unsigned' },
           files: [{ relativePath: 'SKILL.md', hash: mirrorHash, size: Buffer.byteLength(mirrorContent) }]
         },
         null,
@@ -145,7 +144,7 @@ describe('import service', () => {
       'git-sparse-helper',
       'mirror-helper'
     ]);
-    expect(mirrorResult.signatureStatus).toBe('unsigned');
+    expect('signatureStatus' in mirrorResult).toBe(false);
     expect(countRows(database, 'skills')).toBe(3);
   });
 

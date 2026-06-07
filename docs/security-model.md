@@ -1,62 +1,44 @@
 # Security Model
 
-OpenHub is a local-first skills manager. Its security model is
-designed to reduce accidental unsafe installs and make risky choices auditable.
-It is not an execution sandbox.
+OpenHub is a local-first skills inventory. Its security model protects local
+data, renderer privileges, import staging, optional sync, and plugin execution.
+It does not include a Trust Center, source reputation score, security scan
+queue, or deploy-time blocking workflow.
 
 ## Boundaries
 
 - Renderer code cannot directly access Node, the filesystem, SQLite, or
   `ipcRenderer`.
-- Imports are staged before parsing or installation.
+- Privileged work goes through typed preload IPC and main-process services.
+- Imports are staged before parsing.
 - Paths are canonicalized before root-boundary decisions.
-- Agent directories are projections; SQLite records the app-owned files.
-- Security scans run before install writes.
-- High and critical findings block installs unless a scoped exemption exists.
+- ZIP slip, path traversal, and symlink escape attempts are rejected.
+- Agent directories are read-only inventory inputs in the current runtime.
 - Sync and plugins are disabled by default.
 - Plugins register capabilities through a restricted host API and require
   explicit permission authorization before enabling.
+- Logs must redact secrets, full skill contents, and sensitive path fragments.
 
-## Initial Ruleset
+## Import Safety
 
-The Phase 5 ruleset scans skill files for:
+Local folders, Git repositories, and ZIP archives are copied or extracted into
+isolated staging directories before `SKILL.md` parsing and content-store writes.
+Only canonical paths inside the staged root can be imported.
 
-- dangerous shell commands
-- external data transfer
-- sensitive file reads
-- path traversal references
-- executable scripts
-- oversized files
+The content-addressed store records imported file bytes by hash, and SQLite
+stores skill metadata, versions, file records, indexed locations, source
+previews, sync state, and plugin state.
 
-The scanner records findings and a score in SQLite. Batch rescans update the
-same skill-version and ruleset record instead of producing duplicate history
-noise.
+## Plugin Limits
 
-## Exemptions
-
-Exemptions are scoped to a skill and install scope. Each exemption records a
-reason and creation timestamp. Revoking an exemption immediately makes the
-policy evaluate the skill normally again.
-
-## Security Center Actions
-
-The renderer exposes security operations through typed preload IPC only:
-
-- rescan one selected skill or all indexed skills
-- view finding detail for a skill, scan, or rule
-- create a scoped exemption with a reason
-- revoke an exemption
-- show high and critical block reasons before an install writes files
-
-Repeated scans for the same skill version and ruleset update the existing scan
-record, so history stays readable while the latest policy result remains
-auditable.
+The plugin host exposes registration methods only for declared capabilities. It
+does not provide filesystem, network, shell, process, or SQLite APIs to plugin
+entry code. Source preflight blocks obvious escape patterns, but this is not a
+complete JavaScript sandbox.
 
 ## Limitations
 
-Security scanning is pattern-based. It can miss obfuscated or novel behavior,
-and it cannot prevent a trusted agent from executing installed skill content.
-The Phase 8 plugin host reduces exposed APIs and blocks obvious escape patterns,
-but it is not a complete sandbox for arbitrary untrusted JavaScript. Users and
-maintainers should treat scan results and plugin host checks as governance
-signals, not as runtime containment guarantees.
+OpenHub does not decide whether a skill is safe to run inside an external agent.
+Users and maintainers should inspect skill content directly before relying on
+it. Any future scanner, source reputation system, or deploy workflow requires a
+new accepted spec and tests before implementation.

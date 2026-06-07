@@ -24,17 +24,39 @@ describe('workspace view model fixture boundaries', () => {
     expect(renderedState).not.toContain('1482');
   });
 
-  it('does not surface internal mock sync mode labels', () => {
+  it('collapses primary navigation to retained product sections', () => {
     const state = createEmptyWorkspaceState();
-    state.syncCenter.profiles = [{ mode: 'mock-rest', status: 'enabled' }];
+    const viewModel = createWorkspaceViewModel(state);
+    const uxModel = createWorkspaceUxModel({
+      state,
+      activePage: 'home',
+      selectedSkillDetail: null,
+      discoverPreviewSkills: [],
+      agentRootTargets: []
+    });
 
-    const renderedState = JSON.stringify(createWorkspaceViewModel(state)).toLowerCase();
-
-    expect(renderedState).not.toContain('mock');
-    expect(renderedState).toContain('rest contract');
+    expect(viewModel.navItems.map((item) => item.label)).toEqual([
+      'Home',
+      'Inventory',
+      'Sources',
+      'Settings'
+    ]);
+    expect(JSON.stringify(viewModel.navItems)).not.toMatch(/Deploy|Trust|Usage|Reviews|Security|Installs|Discover|Library/);
+    expect(uxModel.workflowOwners).toEqual({
+      roots: 'settings',
+      sourcePreview: 'sources',
+      settings: 'settings'
+    });
+    expect(Object.keys(uxModel.sectionEmptyStates)).toEqual([
+      'home',
+      'inventory',
+      'sources',
+      'settings'
+    ]);
+    expect(JSON.stringify(uxModel)).not.toMatch(/trust|deploy|install|security/i);
   });
 
-  it('keeps scanned local agent skills installed in the user-visible model', () => {
+  it('keeps scanned local agent skills visible as indexed locations', () => {
     const state = createEmptyWorkspaceState();
     const merged = mergeScanIntoWorkspaceState(state, {
       indexedSkills: [
@@ -54,39 +76,37 @@ describe('workspace view model fixture boundaries', () => {
       expect.objectContaining({
         name: 'openai-docs',
         sourceAgent: 'Codex',
-        installStatus: 'installed'
+        visibilityStatus: 'indexed'
       })
     ]);
     expect(viewModel.dashboard.metrics).toContainEqual(
       expect.objectContaining({
-        label: 'Installed projections',
+        label: 'Indexed skills',
         value: '1'
       })
     );
   });
 
-  it('creates first-run action steps and page-specific empty states from fresh local state', () => {
+  it('creates first-run action steps and source empty states from fresh local state', () => {
     const uxModel = createWorkspaceUxModel({
       state: createEmptyWorkspaceState(),
-      activePage: 'dashboard',
+      activePage: 'home',
       selectedSkillDetail: null,
-      activeInstallPlan: null,
       discoverPreviewSkills: [],
-      installTargets: []
+      agentRootTargets: []
     });
 
     expect(uxModel.actionSteps.map((step) => step.label)).toEqual([
-      'Detect agent roots',
-      'Run local scan',
-      'Preview a source',
-      'Review trust',
-      'Create install plan'
+      'Set local roots',
+      'Build inventory',
+      'Preview source'
     ]);
     expect(uxModel.actionSteps[0]).toMatchObject({
       status: 'current',
-      provenance: 'not scanned'
+      provenance: 'not scanned',
+      targetPage: 'settings'
     });
-    expect(uxModel.emptyStates.discover).toMatchObject({
+    expect(uxModel.sectionEmptyStates.sources).toMatchObject({
       title: 'No sources previewed',
       actionLabel: 'Add local or Git source',
       provenance: 'source preview'
@@ -94,28 +114,25 @@ describe('workspace view model fixture boundaries', () => {
     expect(uxModel.provenanceChips.map((chip) => chip.label)).toContain('not scanned');
   });
 
-  it('summarizes source preview as local trust evidence with no planned writes', () => {
+  it('summarizes source preview without trust or write impact language', () => {
     const uxModel = createWorkspaceUxModel({
       state: createEmptyWorkspaceState(),
-      activePage: 'discover',
+      activePage: 'sources',
       selectedSkillDetail: null,
-      activeInstallPlan: null,
       discoverPreviewSkills: [
         {
           name: 'Preview Helper',
           description: 'Preview only',
           tags: ['preview'],
-          path: 'preview-helper',
-          riskStatus: 'safe',
-          warnings: ['Unsigned source']
+          path: 'preview-helper'
         }
       ],
-      installTargets: []
+      agentRootTargets: []
     });
 
-    expect(uxModel.trustImpact.title).toBe('Preview Helper');
-    expect(uxModel.trustImpact.rows).toContainEqual({ label: 'Writes planned', value: 'false' });
-    expect(uxModel.trustImpact.rows).toContainEqual({ label: 'Risk', value: 'safe' });
+    expect(uxModel.selectionSummary.title).toBe('Preview Helper');
+    expect(uxModel.selectionSummary.rows).toContainEqual({ label: 'Path', value: 'preview-helper' });
+    expect(JSON.stringify(uxModel.selectionSummary)).not.toMatch(/trust|risk|writes/i);
     expect(uxModel.diagnostics).toContainEqual(
       expect.objectContaining({
         title: 'Source preview ready',
@@ -124,32 +141,11 @@ describe('workspace view model fixture boundaries', () => {
     );
   });
 
-  it('derives compatibility rows and blocked governance diagnostics for selected skills', () => {
+  it('derives root visibility rows for selected skills without governance diagnostics', () => {
     const state = createEmptyWorkspaceState();
-    state.securityCenter = {
-      queue: [{ skillName: 'Runtime Helper', status: 'blocked' }],
-      riskScore: 88,
-      level: 'high',
-      findings: [{ ruleName: 'Dangerous shell command', severity: 'high' }],
-      history: [],
-      exemptions: []
-    };
-    state.reviewCenter.queue = [
-      {
-        id: 'review-runtime',
-        title: 'Runtime Helper security review',
-        detail: 'blocked scan',
-        reason: 'Dangerous shell command',
-        source: 'Security scan',
-        reviewer: 'Maintainer',
-        risk: 'High',
-        status: 'Open',
-        skillName: 'Runtime Helper'
-      }
-    ];
     const uxModel = createWorkspaceUxModel({
       state,
-      activePage: 'library',
+      activePage: 'inventory',
       selectedSkillDetail: {
         skill: {
           id: 'skill-runtime',
@@ -162,8 +158,7 @@ describe('workspace view model fixture boundaries', () => {
         },
         source: {
           type: 'local',
-          url: '/tmp/runtime-helper',
-          trustLevel: 'verified'
+          url: '/tmp/runtime-helper'
         },
         versions: [],
         files: [
@@ -174,20 +169,10 @@ describe('workspace view model fixture boundaries', () => {
             kind: 'markdown'
           }
         ],
-        skillMarkdown: '# Runtime Helper',
-        latestScan: {
-          scanId: 'scan-runtime',
-          score: 88,
-          level: 'high',
-          blocked: true,
-          scannedAt: '2026-06-06T00:00:00.000Z'
-        },
-        installations: [],
-        riskStatus: 'high'
+        skillMarkdown: '# Runtime Helper'
       },
-      activeInstallPlan: null,
       discoverPreviewSkills: [],
-      installTargets: [
+      agentRootTargets: [
         {
           agentCode: 'codex',
           agentDisplayName: 'Codex',
@@ -201,8 +186,8 @@ describe('workspace view model fixture boundaries', () => {
       ]
     });
 
-    expect(uxModel.trustImpact.title).toBe('Runtime Helper');
-    expect(uxModel.trustImpact.rows).toContainEqual({ label: 'Security', value: 'blocked' });
+    expect(uxModel.selectionSummary.title).toBe('Runtime Helper');
+    expect(uxModel.selectionSummary.rows).toContainEqual({ label: 'Files', value: '1' });
     expect(uxModel.compatibilityRows).toContainEqual(
       expect.objectContaining({
         agent: 'Codex',
@@ -210,11 +195,6 @@ describe('workspace view model fixture boundaries', () => {
         root: '/tmp/.codex/skills'
       })
     );
-    expect(uxModel.diagnostics).toContainEqual(
-      expect.objectContaining({
-        title: 'Blocked install',
-        action: 'Open Security or Reviews before applying'
-      })
-    );
+    expect(JSON.stringify(uxModel.diagnostics)).not.toMatch(/blocked|review|security|install/i);
   });
 });

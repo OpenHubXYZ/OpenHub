@@ -24,7 +24,6 @@ import { parseSkillManifest } from './skill-parser';
 const execFileAsync = promisify(execFile);
 
 export type ImportSourceType = 'local' | 'git' | 'git-sparse' | 'zip' | 'tar' | 'mirror';
-export type ImportSignatureStatus = 'unsigned' | 'signed' | 'untrusted';
 
 export interface CreateImportServiceInput {
   database: SqliteDatabase;
@@ -42,7 +41,6 @@ export interface ImportedSkillResult {
   skill: SkillRecord;
   files: ImportedSkillFile[];
   stagedFrom: string;
-  signatureStatus?: ImportSignatureStatus;
 }
 
 export interface ImportService {
@@ -58,7 +56,6 @@ interface StagedImportInput {
   stagedDirectory: string;
   sourceType: ImportSourceType;
   sourceUrl: string | null;
-  signatureStatus?: ImportSignatureStatus;
 }
 
 interface CollectedSkillFile {
@@ -185,8 +182,7 @@ export function createImportService(input: CreateImportServiceInput): ImportServ
       return importFromStage(input, {
         stagedDirectory,
         sourceType: 'mirror',
-        sourceUrl: mirrorDirectory,
-        signatureStatus: verifyMirrorSignature(manifest)
+        sourceUrl: mirrorDirectory
       });
     }
   };
@@ -218,8 +214,7 @@ async function importFromStage(
     tags: manifest.tags,
     source: {
       type: importInput.sourceType,
-      url: importInput.sourceUrl,
-      trustLevel: 'user'
+      url: importInput.sourceUrl
     },
     files: files.map((file) => ({
       relativePath: file.relativePath,
@@ -231,8 +226,7 @@ async function importFromStage(
   return {
     skill,
     files: storedFiles,
-    stagedFrom: importInput.stagedDirectory,
-    ...(importInput.signatureStatus ? { signatureStatus: importInput.signatureStatus } : {})
+    stagedFrom: importInput.stagedDirectory
   };
 }
 
@@ -241,12 +235,6 @@ interface MirrorManifest {
   slug?: string;
   versionNo?: number;
   files: Array<{ relativePath: string; hash: string; size: number }>;
-  signature?: {
-    status?: ImportSignatureStatus;
-    algorithm?: 'sha256';
-    signer?: string;
-    value?: string;
-  };
 }
 
 async function assertTarArchiveSafe(tarPath: string): Promise<void> {
@@ -266,32 +254,6 @@ async function assertTarArchiveSafe(tarPath: string): Promise<void> {
   if (unsafeLink) {
     throw new Error(`unsafe TAR link: ${unsafeLink}`);
   }
-}
-
-function verifyMirrorSignature(manifest: MirrorManifest): ImportSignatureStatus {
-  if (!manifest.signature || manifest.signature.status === 'unsigned') {
-    return 'unsigned';
-  }
-
-  if (
-    manifest.signature.status === 'signed' &&
-    manifest.signature.algorithm === 'sha256' &&
-    manifest.signature.value === signedManifestValue(manifest, manifest.signature.signer ?? '')
-  ) {
-    return 'signed';
-  }
-
-  return 'untrusted';
-}
-
-export function signedManifestValue(manifest: MirrorManifest, signer: string): string {
-  const payload = {
-    name: manifest.name,
-    slug: manifest.slug,
-    versionNo: manifest.versionNo,
-    files: manifest.files
-  };
-  return createHash('sha256').update(`${JSON.stringify(payload)}:${signer}`).digest('hex');
 }
 
 async function createStageDirectory(stagingDirectory: string): Promise<string> {
@@ -417,7 +379,14 @@ function hasHighControlCharacterRatio(input: string): boolean {
     return false;
   }
 
-  const controlCharacters = input.match(/[\x01-\x08\x0B\x0C\x0E-\x1F]/g)?.length ?? 0;
+  let controlCharacters = 0;
+  for (let index = 0; index < input.length; index += 1) {
+    const code = input.charCodeAt(index);
+    if ((code >= 1 && code <= 8) || code === 11 || code === 12 || (code >= 14 && code <= 31)) {
+      controlCharacters += 1;
+    }
+  }
+
   return controlCharacters / input.length > 0.05;
 }
 

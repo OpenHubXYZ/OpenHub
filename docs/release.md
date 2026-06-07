@@ -20,10 +20,10 @@ Before a release:
 - Run `pnpm package:desktop` and `pnpm release:smoke` on the current platform.
 - Verify packaged main startup under the Electron runtime.
 - Verify database migrations from empty and previous supported versions.
-- Verify first launch root detection, `Open workspace`, and ordinary import
-  paths.
-- Verify Phase 4 import/install/uninstall smoke flow plus TAR, sparse Git,
-  mirror import, and signed export controls.
+- Verify first launch root detection, `Open workspace`, root scan, and ordinary
+  import paths.
+- Verify local/Git/ZIP import, FTS search, inventory flow, Discover source
+  preview, and version diff/compare behavior.
 - Verify optional sync remains disabled until a profile is enabled.
 - Verify sync credentials use OS-backed credential storage and release logs do
   not contain credential material.
@@ -32,8 +32,6 @@ Before a release:
   is enabled.
 - Verify enabled plugin providers appear only in the workflows they are
   authorized for, and disabling a plugin removes those capabilities.
-- Verify policy packs and team baselines apply records without writing agent
-  roots.
 - Review `out/release/*.log` for tokens, full skill contents, and sensitive
   paths.
 - Update `CHANGELOG.md`.
@@ -42,7 +40,8 @@ Before a release:
   a fuller SBOM before public release.
 - Confirm signing and notarization status for each platform.
 - Document rollback steps.
-- Confirm roadmap, ADR, maintainer guide, and security response docs are current.
+- Confirm roadmap, ADR, maintainer guide, and security response docs are
+  current.
 
 ## Packaging Targets
 
@@ -55,16 +54,16 @@ Planned targets:
 Release artifacts must be reproducible from committed source, lockfile, and CI
 configuration.
 
-The current Phase 9 package script produces a reproducible unpacked payload
-under `out/packages/` for the current platform. It copies runtime external
+The current package script produces a reproducible unpacked payload under
+`out/packages/` for the current platform. It copies runtime external
 dependencies and installs the Electron ABI native SQLite runtime before writing
 checksums. Public native installers still require signing/notarization
 credentials and platform-specific CI before a published release.
 
 The release manifest records runtime boundaries for SQLite source-of-truth,
 renderer privilege isolation, OS-backed credential storage, sync-disabled
-default, and plugin-disabled default. Release smoke rejects packages that
-weaken those boundaries.
+default, and plugin-disabled default. Release smoke rejects packages that weaken
+those boundaries.
 
 ## Signing Status
 
@@ -90,6 +89,9 @@ Release validation must confirm:
 - crash or diagnostic logs are redacted
 - credentials use OS keychain storage
 - renderer code has no direct Node, filesystem, SQLite, or `ipcRenderer` access
+- agent roots are not written by current inventory workflows
+- source preview does not expose ratings, reputation, trust levels, or risk
+  scores
 
 ## Rollback
 

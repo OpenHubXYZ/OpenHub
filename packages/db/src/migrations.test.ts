@@ -12,20 +12,16 @@ describe('SQLite migrations', () => {
     expect(firstRun.applied).toEqual([
       '001_domain_schema',
       '002_skill_search_fts',
-      '003_installation_files',
-      '004_security_exemptions',
-      '005_sync_state',
-      '006_plugin_runtime',
-      '007_review_usage_events',
-      '008_discover_sources',
-      '009_research_gap_closure',
-      '010_app_settings',
-      '011_local_similarity_index',
-      '012_installation_lifecycle_lock',
-      '013_plugin_directories'
+      '003_sync_state',
+      '004_plugin_runtime',
+      '005_discover_sources',
+      '006_inventory_productization',
+      '007_app_settings',
+      '008_local_similarity_index',
+      '009_plugin_directories'
     ]);
     expect(secondRun.applied).toEqual([]);
-    expect(getCurrentSchemaVersion(db)).toBe(13);
+    expect(getCurrentSchemaVersion(db)).toBe(9);
   });
 
   it('creates the required Phase 2 domain tables and FTS table', () => {
@@ -49,19 +45,12 @@ describe('SQLite migrations', () => {
         'collection_items',
         'discover_source_cache',
         'discover_sources',
-        'installations',
-        'installation_files',
+        'indexed_skill_locations',
         'plugin_errors',
         'plugin_catalog_entries',
         'plugin_directories',
         'plugin_manifests',
         'plugin_permission_grants',
-        'policy_packs',
-        'review_items',
-        'review_notes',
-        'security_findings',
-        'security_exemptions',
-        'security_scans',
         'skill_favorites',
         'skill_files',
         'skill_similarity_index',
@@ -69,12 +58,24 @@ describe('SQLite migrations', () => {
         'skill_versions',
         'skills',
         'sources',
-        'team_baselines',
         'sync_conflicts',
         'sync_events',
         'sync_inbox',
         'sync_outbox',
-        'sync_profiles',
+        'sync_profiles'
+      ])
+    );
+    expect(tableNames).not.toEqual(
+      expect.arrayContaining([
+        'installations',
+        'installation_files',
+        'security_scans',
+        'security_findings',
+        'security_exemptions',
+        'review_items',
+        'review_notes',
+        'policy_packs',
+        'team_baselines',
         'usage_events'
       ])
     );

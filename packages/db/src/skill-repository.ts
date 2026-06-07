@@ -6,7 +6,6 @@ export type SkillSearchMode = 'fts' | 'semantic' | 'hybrid';
 
 export interface SkillSearchFilters {
   sourceTypes?: string[] | undefined;
-  riskStatuses?: string[] | undefined;
   agentCodes?: string[] | undefined;
   tags?: string[] | undefined;
   favoritesOnly?: boolean | undefined;
@@ -25,7 +24,6 @@ export interface LibraryFacetValue {
 
 export interface LibraryFacets {
   sources: LibraryFacetValue[];
-  risks: LibraryFacetValue[];
   agents: LibraryFacetValue[];
   tags: LibraryFacetValue[];
   favorites: LibraryFacetValue;
@@ -39,7 +37,6 @@ export interface CreateSkillInput {
   source: {
     type: string;
     url: string | null;
-    trustLevel: string;
   };
   files: SkillFileInput[];
 }
@@ -93,15 +90,14 @@ export function createSkillRepository(database: SqliteDatabase): SkillRepository
         database
           .prepare(
             `
-              insert into sources (id, source_type, url, trust_level)
-              values (@id, @sourceType, @url, @trustLevel)
+              insert into sources (id, source_type, url)
+              values (@id, @sourceType, @url)
             `
           )
           .run({
             id: sourceId,
             sourceType: input.source.type,
-            url: input.source.url,
-            trustLevel: input.source.trustLevel
+            url: input.source.url
           });
 
         database
@@ -497,7 +493,6 @@ function searchSemantic(
 interface SearchCandidate {
   skill: SkillRecord;
   sourceType: string;
-  riskStatus: string;
   agentCodes: string[];
   tags: string[];
   tokensJson: string | null;
@@ -523,23 +518,11 @@ function listSearchCandidates(
           case when sfav.skill_id is null then 0 else 1 end as favorite,
           (
             select group_concat(distinct a.code)
-            from installations i
-            join agent_roots ar on ar.id = i.agent_root_id
+            from indexed_skill_locations isl
+            join agent_roots ar on ar.id = isl.agent_root_id
             join agents a on a.id = ar.agent_id
-            where i.skill_id = s.id
-              and i.status != 'uninstalled'
+            where isl.skill_id = s.id
           ) as agentCodesCsv,
-          coalesce(
-            (
-              select case when ss.blocked = 1 then 'blocked' else ss.level end
-              from security_scans ss
-              join skill_versions scan_sv on scan_sv.id = ss.skill_version_id
-              where scan_sv.skill_id = s.id
-              order by ss.scanned_at desc, ss.id desc
-              limit 1
-            ),
-            'unscanned'
-          ) as riskStatus,
           si.tokens_json as tokensJson
         from skills s
         join skill_versions sv on sv.skill_id = s.id
@@ -562,7 +545,6 @@ function listSearchCandidates(
 function searchCandidateRow(row: unknown): SearchCandidate {
   const typed = row as {
     sourceType: string;
-    riskStatus: string;
     agentCodesCsv: string | null;
     tokensJson: string | null;
   };
@@ -570,7 +552,6 @@ function searchCandidateRow(row: unknown): SearchCandidate {
   return {
     skill,
     sourceType: typed.sourceType,
-    riskStatus: typed.riskStatus,
     agentCodes: splitCsv(typed.agentCodesCsv),
     tags: skill.tags,
     tokensJson: typed.tokensJson
@@ -588,9 +569,6 @@ function matchesSearchFilters(
   if (filters.sourceTypes?.length && !filters.sourceTypes.includes(candidate.sourceType)) {
     return false;
   }
-  if (filters.riskStatuses?.length && !filters.riskStatuses.includes(candidate.riskStatus)) {
-    return false;
-  }
   if (filters.agentCodes?.length && !filters.agentCodes.some((agentCode) => candidate.agentCodes.includes(agentCode))) {
     return false;
   }
@@ -603,7 +581,6 @@ function matchesSearchFilters(
 function facetCounts(candidates: SearchCandidate[]): LibraryFacets {
   return {
     sources: countFacet(candidates.flatMap((candidate) => [candidate.sourceType])),
-    risks: countFacet(candidates.flatMap((candidate) => [candidate.riskStatus])),
     agents: countFacet(candidates.flatMap((candidate) => candidate.agentCodes)),
     tags: countFacet(candidates.flatMap((candidate) => candidate.tags)),
     favorites: {

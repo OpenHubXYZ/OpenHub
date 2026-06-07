@@ -11,16 +11,11 @@ export interface AgentRoot {
   isDefault: boolean;
 }
 
-export interface InstalledSkillLocation {
+export interface IndexedSkillLocation {
   agentCode: AgentCode;
   rootPath: string;
   skillPath: string;
   manifestPath: string;
-}
-
-export interface AdapterOperationResult {
-  status: 'unsupported';
-  message: string;
 }
 
 export interface AgentAdapter {
@@ -28,8 +23,5 @@ export interface AgentAdapter {
   displayName: string;
   adapterVersion: string;
   detectRoots(): Promise<AgentRoot[]>;
-  listInstalled(root: AgentRoot): Promise<InstalledSkillLocation[]>;
-  install(): Promise<AdapterOperationResult>;
-  uninstall(): Promise<AdapterOperationResult>;
-  verify(): Promise<AdapterOperationResult>;
+  listIndexedSkills(root: AgentRoot): Promise<IndexedSkillLocation[]>;
 }

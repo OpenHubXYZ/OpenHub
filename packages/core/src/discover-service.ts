@@ -17,7 +17,6 @@ export interface DiscoverSource {
   name: string;
   sourceType: DiscoverSourceType;
   url: string;
-  trustLevel: string;
   verified: boolean;
   status: string;
   cachedAt: string | null;
@@ -28,16 +27,14 @@ export interface DiscoverSkillPreview {
   description: string;
   tags: string[];
   path: string;
-  riskStatus: string;
   selected?: boolean;
   importLabel?: string;
-  warnings?: string[];
 }
 
 export interface DiscoverPreviewResult {
   source: DiscoverSource;
   skills: DiscoverSkillPreview[];
-  writesPlanned: false;
+  cachedAt: string;
 }
 
 export interface CreateDiscoverServiceInput {
@@ -50,7 +47,6 @@ export interface DiscoverService {
     name: string;
     sourceType: DiscoverSourceType;
     url: string;
-    trustLevel: string;
   }): DiscoverSource;
   listSources(): DiscoverSource[];
   previewSource(input: { sourceId: string }): Promise<DiscoverPreviewResult>;
@@ -61,7 +57,6 @@ interface DiscoverSourceRow {
   name: string;
   sourceType: DiscoverSourceType;
   url: string;
-  trustLevel: string;
   verified: number;
   status: string;
   cachedAt: string | null;
@@ -69,24 +64,22 @@ interface DiscoverSourceRow {
 
 export function createDiscoverService(input: CreateDiscoverServiceInput): DiscoverService {
   return {
-    addSource({ name, sourceType, url, trustLevel }) {
+    addSource({ name, sourceType, url }) {
       const id = randomUUID();
       input.database
         .prepare(
           `
             insert into discover_sources
-              (id, name, source_type, url, trust_level, verified, status)
+              (id, name, source_type, url, verified, status)
             values
-              (@id, @name, @sourceType, @url, @trustLevel, @verified, 'configured')
+              (@id, @name, @sourceType, @url, 0, 'configured')
           `
         )
         .run({
           id,
           name,
           sourceType,
-          url,
-          trustLevel,
-          verified: trustLevel === 'verified' || trustLevel === 'curated' ? 1 : 0
+          url
         });
 
       return getSource(input.database, id);
@@ -101,7 +94,6 @@ export function createDiscoverService(input: CreateDiscoverServiceInput): Discov
               name,
               source_type as sourceType,
               url,
-              trust_level as trustLevel,
               verified,
               status,
               cached_at as cachedAt
@@ -128,7 +120,7 @@ export function createDiscoverService(input: CreateDiscoverServiceInput): Discov
       return {
         source: getSource(input.database, source.id),
         skills,
-        writesPlanned: false
+        cachedAt: new Date().toISOString()
       };
     }
   };
@@ -180,16 +172,14 @@ async function previewSkill(skillDirectory: string): Promise<DiscoverSkillPrevie
       name: manifest.name,
       description: manifest.description,
       tags: manifest.tags,
-      path: skillDirectory,
-      riskStatus: 'unscanned'
+      path: skillDirectory
     };
   } catch {
     return {
       name: path.basename(skillDirectory),
       description: '',
       tags: [],
-      path: skillDirectory,
-      riskStatus: 'malformed'
+      path: skillDirectory
     };
   }
 }
@@ -204,9 +194,9 @@ function recordCache(
     const insert = database.prepare(
       `
         insert into discover_source_cache
-          (id, source_id, skill_name, description, tags_json, skill_path, risk_status)
+          (id, source_id, skill_name, description, tags_json, skill_path)
         values
-          (@id, @sourceId, @skillName, @description, @tagsJson, @skillPath, @riskStatus)
+          (@id, @sourceId, @skillName, @description, @tagsJson, @skillPath)
       `
     );
 
@@ -217,8 +207,7 @@ function recordCache(
         skillName: skill.name,
         description: skill.description,
         tagsJson: JSON.stringify(skill.tags),
-        skillPath: skill.path,
-        riskStatus: skill.riskStatus
+        skillPath: skill.path
       });
     }
 
@@ -247,7 +236,6 @@ function getSource(database: SqliteDatabase, sourceId: string): DiscoverSource {
           name,
           source_type as sourceType,
           url,
-          trust_level as trustLevel,
           verified,
           status,
           cached_at as cachedAt
@@ -271,7 +259,6 @@ function discoverSourceRow(row: unknown): DiscoverSource {
     name: source.name,
     sourceType: source.sourceType,
     url: source.url,
-    trustLevel: source.trustLevel,
     verified: source.verified === 1,
     status: source.status,
     cachedAt: source.cachedAt

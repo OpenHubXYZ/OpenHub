@@ -1,7 +1,7 @@
 # Security Policy
 
-TheOpenHub Skills Studio manages local skill files that may contain sensitive
-workflow details. Security and privacy are product requirements, not add-ons.
+OpenHub manages local skill files that may contain sensitive workflow details.
+Security and privacy are product requirements, not add-ons.
 
 ## Privacy Rule
 
@@ -13,8 +13,8 @@ and testable.
 ## Reporting Vulnerabilities
 
 Please do not open public issues for vulnerabilities that expose private data,
-path traversal, credential handling, install bypasses, plugin escapes, or
-security scan bypasses.
+path traversal, credential handling, renderer privilege escapes, plugin escapes,
+sync privacy problems, or import-boundary bypasses.
 
 Use the private vulnerability reporting channel on GitHub if available for this
 repository. If it is not enabled yet, email the maintainers listed in
@@ -39,9 +39,10 @@ apply to the default branch.
 - Renderer code must not directly access Node, the filesystem, or SQLite.
 - Privileged work must go through typed preload IPC and main-process services.
 - Imported folders, Git repositories, and archives must be staged in isolated
-  temporary directories before installation.
+  temporary directories before parsing.
 - Paths must be canonicalized and checked against target boundaries.
 - ZIP slip, path traversal, and symlink escape attempts must be rejected.
+- Agent roots are read-only inventory inputs in the current runtime.
 - Credentials must be stored in the operating system keychain, not SQLite,
   localStorage, plain JSON, or logs.
 - Sync and plugins must be disabled by default.
@@ -51,18 +52,12 @@ apply to the default branch.
 - Plugins must declare capabilities and permissions, pass entry integrity
   checks, and receive explicit authorization before enabling.
 - Plugin entries must not receive filesystem, network, shell, process, or
-  SQLite APIs through the host. The Phase 8 host is a constrained governance
-  boundary, not a complete sandbox for arbitrary untrusted JavaScript.
+  SQLite APIs through the host.
 - Logs must redact secrets, full skill contents, and sensitive path fragments.
 
-## Security Scanning Limits
+## Product Boundary
 
-The Security Center can identify risky patterns and block high-risk installs,
-but it is not an execution sandbox guarantee. Users should still review skills
-before installing them into agent environments.
-
-The initial ruleset checks for dangerous shell commands, external data
-transfer, sensitive file reads, path traversal references, executable scripts,
-and oversized files. Low- and medium-risk findings are warnings. High and
-critical findings block install by default unless a scoped exemption with a
-reason is active.
+OpenHub does not currently deploy skills into agent roots and does not maintain
+a trust score, source reputation system, security scan queue, or policy
+exemption workflow. Any future feature in those areas requires a new accepted
+spec, tests, and security review before implementation.

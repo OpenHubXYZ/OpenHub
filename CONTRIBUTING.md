@@ -1,21 +1,25 @@
 # Contributing
 
-Thank you for helping improve TheOpenHub Skills Studio.
+Thank you for helping improve OpenHub.
 
 The project has a working pnpm TypeScript workspace, Electron shell, SQLite
-domain model, local management loop, governance, sync, plugin runtime, and
-release-readiness tooling. Contributions should preserve the local-first
-security model and include tests for public behavior.
+domain model, local inventory loop, sync, plugin runtime, and release-readiness
+tooling. Contributions should preserve the local-first security model and
+include tests for public behavior.
 
 ## Ground Rules
 
 - Keep the app local-first by default.
 - Preserve SQLite as the authoritative local data store.
-- Do not give renderer code direct Node, filesystem, or SQLite access.
+- Do not give renderer code direct Node, filesystem, SQLite, or `ipcRenderer`
+  access.
 - Do not introduce telemetry, cloud sync, or network calls without explicit
   product and security review.
-- Treat agent skill directories as projections, not the only state source.
-- Add or update tests for public behavior once implementation begins.
+- Treat agent skill directories as read-only inventory inputs in current
+  runtime workflows.
+- Do not reintroduce deploy, source reputation, trust scoring, policy packs, or
+  review queues without a new accepted spec.
+- Add or update tests for public behavior.
 
 ## Development Flow
 
@@ -48,7 +52,7 @@ Dependency changes must explain:
 - Security and maintenance risk.
 - Replacement or removal plan if the dependency becomes unmaintained.
 
-The lockfile must be committed after Phase 1 creates the workspace.
+The lockfile must be committed.
 
 ## Commit Style
 
@@ -67,6 +71,5 @@ ci: add workspace verification
 Fixtures must be synthetic. Do not commit real private skills, tokens, user
 paths, customer names, API keys, or full local agent directory snapshots.
 
-See `docs/contributor-recipes.md` for adding adapters, security rules, sync
-drivers, and fixtures. See `docs/fixture-contribution.md` for fixture review
-rules.
+See `docs/contributor-recipes.md` for adding adapters, importers, sync drivers,
+and fixtures. See `docs/fixture-contribution.md` for fixture review rules.

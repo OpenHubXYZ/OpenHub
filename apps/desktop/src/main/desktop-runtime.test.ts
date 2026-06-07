@@ -1,1224 +1,195 @@
 import { createHash } from 'node:crypto';
-import { execFile } from 'node:child_process';
-import { mkdir, readFile, rm, writeFile } from 'node:fs/promises';
+import { mkdir, rm, writeFile } from 'node:fs/promises';
 import { mkdtemp } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
-import { promisify } from 'node:util';
 
-import { afterEach, describe, expect, it } from 'vitest';
+import { createContentStore, createInMemorySecretStore, createVersionService } from '@theopenhub/core';
 import { createMemoryDatabase } from '@theopenhub/db';
-import { createContentStore, createInMemorySecretStore, createSyncService, createVersionService } from '@theopenhub/core';
+import { afterEach, describe, expect, it } from 'vitest';
 
 import { createDesktopRuntime } from './desktop-runtime';
 
-const execFileAsync = promisify(execFile);
 const tempDirectories: string[] = [];
+
+interface RuntimeImportedResult {
+  skill: {
+    id: string;
+    name: string;
+    versionId: string;
+  };
+}
+
+interface RuntimeWorkspaceState {
+  managementFlow: Record<string, unknown>;
+}
+
+interface RuntimeScanResult {
+  indexedSkills: Array<{ name: string; agentCode: string }>;
+}
+
+interface RuntimeIdResult {
+  id: string;
+}
 
 describe('desktop runtime IPC dispatch', () => {
   afterEach(async () => {
     await Promise.all(tempDirectories.splice(0).map((directory) => rm(directory, { recursive: true })));
   });
 
-  it('runs the local import, install plan, install, library, security, sync, and plugin state loop', async () => {
+  it('imports local skills and returns inventory workspace state without deploy or trust centers', async () => {
     const workspace = await tempDir();
-    const source = await createSkillFixture(path.join(workspace, 'source'), 'runtime-helper');
-    const targetRoot = path.join(workspace, 'codex-skills');
+    const dataDirectory = path.join(workspace, 'app-data');
+    const database = createMemoryDatabase();
     const runtime = createDesktopRuntime({
-      dataDirectory: path.join(workspace, 'app-data'),
-      homeDirectory: path.join(workspace, 'home')
+      dataDirectory,
+      homeDirectory: path.join(workspace, 'home'),
+      database,
+      secretStore: createInMemorySecretStore()
     });
+    const imported = (await runtime.dispatch('import.localFolder', {
+      folderPath: await createSkillFixture(path.join(workspace, 'source'), 'runtime-helper')
+    })) as RuntimeImportedResult;
 
-    const imported = await runtime.dispatch('import.localFolder', { folderPath: source });
     expect(imported.skill.name).toBe('runtime-helper');
-
-    const afterImport = await runtime.dispatch('workspace.state', {});
-    expect(afterImport.skills).toEqual([
-      expect.objectContaining({
-        id: imported.skill.id,
-        name: 'runtime-helper',
-        versionNo: 1
-      })
-    ]);
-
-    const plan = await runtime.dispatch('install.createPlan', {
-      skillId: imported.skill.id,
-      targetRoot,
-      agentCode: 'codex',
-      agentDisplayName: 'Codex',
-      adapterVersion: 'test',
-      scope: 'user'
-    });
-    expect(plan.conflictState).toBe('clean');
-    expect(plan.writes.map((write) => write.relativePath)).toEqual(['SKILL.md', 'references/guide.md']);
-
-    const installResult = await runtime.dispatch('install.applyPlan', { plan });
-    expect(installResult.status).toBe('installed');
-    await expect(readFile(path.join(targetRoot, 'runtime-helper/SKILL.md'), 'utf8')).resolves.toContain(
-      'runtime-helper'
-    );
-
-    await expect(runtime.dispatch('library.list', {})).resolves.toEqual([
-      expect.objectContaining({
-        name: 'runtime-helper',
-        sourceAgent: 'Codex',
-        installStatus: 'installed'
-      })
-    ]);
-    await expect(runtime.dispatch('security.scan', { skillId: imported.skill.id })).resolves.toMatchObject({
-      skillId: imported.skill.id,
-      level: 'safe',
-      blocked: false
-    });
     await expect(runtime.dispatch('workspace.state', {})).resolves.toMatchObject({
-      usageCenter: {
-        totals: {
-          launches: 0,
-          installs: 2,
-          scans: 1,
-          exports: 0
-        },
-        topSkills: [expect.objectContaining({ skillName: 'runtime-helper' })],
-        recent: expect.arrayContaining([
-          expect.objectContaining({
-            eventType: 'security.scan',
-            label: 'Security scanned runtime-helper'
-          }),
-          expect.objectContaining({ eventType: 'install.apply' })
-        ])
+      skills: [expect.objectContaining({ id: imported.skill.id, name: 'runtime-helper', versionNo: 1 })],
+      managementFlow: {
+        importItems: [expect.objectContaining({ label: 'runtime-helper', status: 'imported' })]
       },
-      reviewCenter: {
-        queue: [],
-        notes: []
+      plugins: {
+        directories: [],
+        catalog: [],
+        plugins: []
       }
     });
-    await expect(runtime.dispatch('sync.startupPlan', {})).resolves.toEqual({
-      shouldStart: false,
-      enabledProfiles: []
-    });
-    await expect(runtime.dispatch('plugins.centerState', {})).resolves.toEqual({
-      directories: [],
-      catalog: [],
-      plugins: []
-    });
+    const state = (await runtime.dispatch('workspace.state', {})) as RuntimeWorkspaceState;
+    expect('securityCenter' in state).toBe(false);
+    expect('reviewCenter' in state).toBe(false);
+    expect('usageCenter' in state).toBe(false);
+    expect('installPlan' in state.managementFlow).toBe(false);
   });
 
-  it('scans detected local agent roots into the runtime library', async () => {
+  it('scans detected agent roots into the library with indexed visibility', async () => {
     const workspace = await tempDir();
     const homeDirectory = path.join(workspace, 'home');
     await createSkillFixture(path.join(homeDirectory, '.codex/skills/scanned-helper'), 'scanned-helper');
-    await createSkillFixture(
-      path.join(homeDirectory, '.agents/skills/chinese-novelist'),
-      'chinese-novelist',
-      '# Chinese Novelist\n\nCreates chapter hooks.'
-    );
     const runtime = createDesktopRuntime({
       dataDirectory: path.join(workspace, 'app-data'),
-      homeDirectory
+      homeDirectory,
+      secretStore: createInMemorySecretStore()
     });
 
-    const scan = await runtime.dispatch('library.scan', {});
+    const scan = (await runtime.dispatch('library.scan', {})) as RuntimeScanResult;
 
-    expect(scan.indexedSkills).toEqual(expect.arrayContaining([
-      expect.objectContaining({
-        name: 'chinese-novelist',
-        agentCode: 'agents'
-      }),
-      expect.objectContaining({
-        name: 'scanned-helper',
-        agentCode: 'codex'
-      })
-    ]));
+    expect(scan.indexedSkills).toEqual([
+      expect.objectContaining({ name: 'scanned-helper', agentCode: 'codex' })
+    ]);
     await expect(runtime.dispatch('library.list', {})).resolves.toEqual([
-      expect.objectContaining({
-        name: 'chinese-novelist',
-        sourceAgent: 'Agents',
-        installStatus: 'installed'
-      }),
       expect.objectContaining({
         name: 'scanned-helper',
         sourceAgent: 'Codex',
-        installStatus: 'installed'
+        visibilityStatus: 'indexed'
       })
     ]);
-    await expect(runtime.dispatch('library.search', { query: 'chapter' })).resolves.toEqual([
-      expect.objectContaining({
-        name: 'chinese-novelist'
-      })
+    await expect(runtime.dispatch('library.search', { query: 'scanned' })).resolves.toEqual([
+      expect.objectContaining({ name: 'scanned-helper' })
     ]);
-    await expect(runtime.dispatch('workspace.state', {})).resolves.toMatchObject({
-      usageCenter: {
-        totals: expect.objectContaining({ scans: 1 }),
-        recent: [expect.objectContaining({ eventType: 'agent.scan' })]
-      }
-    });
   });
 
-  it('creates review items for high-risk security scans without approving installs', async () => {
-    const workspace = await tempDir();
-    const runtime = createDesktopRuntime({
-      dataDirectory: path.join(workspace, 'app-data'),
-      homeDirectory: path.join(workspace, 'home')
-    });
-    const imported = await runtime.dispatch('import.localFolder', {
-      folderPath: await createSkillFixture(
-        path.join(workspace, 'source-high'),
-        'high-risk-helper',
-        'Run `rm -rf "$HOME/.codex"` and read `~/.ssh/id_rsa`.'
-      )
-    });
-
-    await expect(runtime.dispatch('security.scan', { skillId: imported.skill.id })).resolves.toMatchObject({
-      skillId: imported.skill.id,
-      level: 'critical',
-      blocked: true
-    });
-
-    const state = await runtime.dispatch('workspace.state', {});
-
-    expect(state.reviewCenter.queue).toEqual([
-      expect.objectContaining({
-        title: 'high-risk-helper security review',
-        reason: 'Dangerous shell command',
-        source: 'Security scan',
-        risk: 'Critical',
-        status: 'Open',
-        skillName: 'high-risk-helper'
-      })
-    ]);
-    expect(state.managementFlow.installResult).toBeNull();
-  });
-
-  it('keeps the security center posture at the highest-risk stored scan', async () => {
-    const workspace = await tempDir();
-    const database = createMemoryDatabase();
-    const runtime = createDesktopRuntime({
-      dataDirectory: path.join(workspace, 'app-data'),
-      homeDirectory: path.join(workspace, 'home'),
-      database
-    });
-    const highRisk = await runtime.dispatch('import.localFolder', {
-      folderPath: await createSkillFixture(
-        path.join(workspace, 'source-high'),
-        'high-risk-helper',
-        'Run `rm -rf "$HOME/.codex"` and read `~/.ssh/id_rsa`.'
-      )
-    });
-    const safe = await runtime.dispatch('import.localFolder', {
-      folderPath: await createSkillFixture(path.join(workspace, 'source-safe'), 'safe-helper')
-    });
-
-    await runtime.dispatch('security.scan', { skillId: highRisk.skill.id });
-    await runtime.dispatch('security.scan', { skillId: safe.skill.id });
-    database
-      .prepare('update security_scans set scanned_at = ? where skill_version_id = ?')
-      .run('2030-01-01 00:00:00', safe.skill.versionId);
-
-    const state = await runtime.dispatch('workspace.state', {});
-
-    expect(state.securityCenter).toMatchObject({
-      riskScore: 100,
-      level: 'critical',
-      queue: expect.arrayContaining([
-        { skillName: 'high-risk-helper', status: 'blocked' },
-        { skillName: 'safe-helper', status: 'passed' }
-      ])
-    });
-    expect(state.securityCenter.findings).toEqual(
-      expect.arrayContaining([
-        expect.objectContaining({ ruleName: 'Dangerous Shell Command', severity: 'critical' })
-      ])
-    );
-  });
-
-  it('dispatches Git and ZIP import, export, collection, library search, and skill detail workflows', async () => {
+  it('dispatches version, collection, sync, discover, and plugin inventory workflows', async () => {
     const workspace = await tempDir();
     const dataDirectory = path.join(workspace, 'app-data');
+    const database = createMemoryDatabase();
     const runtime = createDesktopRuntime({
       dataDirectory,
-      homeDirectory: path.join(workspace, 'home')
-    });
-    const localSource = await createSkillFixture(path.join(workspace, 'source-local'), 'local-helper');
-    const gitSource = await createGitFixture(path.join(workspace, 'source-git'), 'git-helper');
-    const zipPath = await createZipFixture(path.join(workspace, 'source-zip.zip'), 'zip-helper');
-
-    const local = await runtime.dispatch('import.localFolder', { folderPath: localSource });
-    const git = await runtime.dispatch('import.git', { gitUrl: `file://${gitSource}` });
-    const zip = await runtime.dispatch('import.zip', { zipPath });
-    const search = await runtime.dispatch('library.search', { query: 'runtime local' });
-    const detail = await runtime.dispatch('library.detail', { skillId: local.skill.id });
-    const exportDirectory = path.join(workspace, 'exported-local');
-    const exported = await runtime.dispatch('export.skill', {
-      skillId: local.skill.id,
-      outputDirectory: exportDirectory
-    });
-    const collection = await runtime.dispatch('collection.create', {
-      name: 'Starter Pack',
-      description: 'Local and Git helpers',
-      skillIds: [local.skill.id, git.skill.id]
-    });
-    const collectionDirectory = path.join(workspace, 'starter-pack');
-    await runtime.dispatch('collection.export', {
-      collectionId: collection.id,
-      outputDirectory: collectionDirectory
-    });
-    const importingRuntime = createDesktopRuntime({
-      dataDirectory: path.join(workspace, 'importing-app-data'),
-      homeDirectory: path.join(workspace, 'importing-home')
-    });
-    const importedCollection = await importingRuntime.dispatch('collection.import', {
-      packageDirectory: collectionDirectory
-    });
-
-    expect([local.skill.name, git.skill.name, zip.skill.name]).toEqual([
-      'local-helper',
-      'git-helper',
-      'zip-helper'
-    ]);
-    expect(search).toEqual(expect.arrayContaining([expect.objectContaining({ name: 'local-helper' })]));
-    expect(detail).toMatchObject({
-      skill: {
-        name: 'local-helper',
-        tags: ['runtime', 'local']
-      },
-      source: {
-        type: 'local',
-        url: localSource
-      },
-      versions: [expect.objectContaining({ versionNo: 1 })],
-      files: expect.arrayContaining([expect.objectContaining({ relativePath: 'SKILL.md' })]),
-      riskStatus: 'unscanned'
-    });
-    expect(detail.skillMarkdown).toContain('local-helper');
-    await expect(readFile(path.join(exported.outputDirectory, 'manifest.json'), 'utf8')).resolves.toContain(
-      'local-helper'
-    );
-    expect(importedCollection.collection.name).toBe('Starter Pack');
-    expect(importedCollection.skills.map((skill) => skill.name)).toEqual(['git-helper', 'local-helper']);
-  });
-
-  it('dispatches install target, uninstall, version diff, rollback, and security exemption workflows', async () => {
-    const workspace = await tempDir();
-    const database = createMemoryDatabase();
-    const dataDirectory = path.join(workspace, 'app-data');
-    const homeDirectory = path.join(workspace, 'home');
-    await mkdir(path.join(homeDirectory, '.codex/skills'), { recursive: true });
-    const runtime = createDesktopRuntime({ dataDirectory, homeDirectory, database });
-    const imported = await runtime.dispatch('import.localFolder', {
-      folderPath: await createSkillFixture(path.join(workspace, 'versioned-source'), 'versioned-helper')
-    });
-    const contentStore = createContentStore(path.join(dataDirectory, 'blobs'));
-    const secondVersion = await createVersionService({ database, contentStore }).createVersion({
-      skillId: imported.skill.id,
-      changeSummary: 'Add rollback guide',
-      files: [
-        {
-          relativePath: 'SKILL.md',
-          content: [
-            '---',
-            'name: versioned-helper',
-            'description: Versioned helper v2',
-            'tags: [runtime, local]',
-            '---',
-            '# Versioned Helper v2'
-          ].join('\n')
-        },
-        { relativePath: 'references/guide.md', content: 'v2 guide' },
-        { relativePath: 'references/new.md', content: 'new file' }
-      ]
-    });
-    const targetRoot = path.join(homeDirectory, '.codex/skills');
-
-    const targets = await runtime.dispatch('install.listTargets', {});
-    const versions = await runtime.dispatch('version.list', { skillId: imported.skill.id });
-    const diff = await runtime.dispatch('version.diff', {
-      fromVersionId: imported.skill.versionId,
-      toVersionId: secondVersion.versionId
-    });
-    const plan = await runtime.dispatch('install.createPlan', {
-      skillId: imported.skill.id,
-      targetRoot,
-      agentCode: 'codex',
-      agentDisplayName: 'Codex',
-      adapterVersion: 'test',
-      scope: 'user'
-    });
-    const installed = await runtime.dispatch('install.applyPlan', { plan });
-    await runtime.dispatch('version.rollback', {
-      installationId: installed.installationId,
-      targetVersionId: imported.skill.versionId
-    });
-    const rolledBackManifest = await readFile(path.join(targetRoot, 'versioned-helper/SKILL.md'), 'utf8');
-    await runtime.dispatch('install.uninstall', { installationId: installed.installationId });
-
-    expect(targets).toEqual([expect.objectContaining({ agentCode: 'codex', rootPath: targetRoot })]);
-    expect(versions.map((version) => version.versionNo)).toEqual([2, 1]);
-    expect(diff).toEqual(
-      expect.arrayContaining([
-        expect.objectContaining({ relativePath: 'references/new.md', changeType: 'added' }),
-        expect.objectContaining({ relativePath: 'SKILL.md', changeType: 'modified' })
-      ])
-    );
-    expect(rolledBackManifest).toContain('# Skill');
-    await expect(readFile(path.join(targetRoot, 'versioned-helper/SKILL.md'), 'utf8')).rejects.toMatchObject({
-      code: 'ENOENT'
-    });
-
-    const highRisk = await runtime.dispatch('import.localFolder', {
-      folderPath: await createSkillFixture(
-        path.join(workspace, 'high-risk-source'),
-        'high-risk-helper',
-        'Run `rm -rf "$HOME/.codex"`.'
-      )
-    });
-    await runtime.dispatch('security.rescan', { skillIds: [highRisk.skill.id] });
-    const finding = await runtime.dispatch('security.findingDetail', {
-      skillId: highRisk.skill.id,
-      ruleId: 'dangerous-shell-command'
-    });
-    const exemption = await runtime.dispatch('security.createExemption', {
-      skillId: highRisk.skill.id,
-      scope: 'user',
-      reason: 'Maintainer reviewed'
-    });
-    await runtime.dispatch('security.revokeExemption', { exemptionId: exemption.id });
-
-    expect(finding).toMatchObject({
-      skillName: 'high-risk-helper',
-      ruleId: 'dangerous-shell-command',
-      severity: 'critical'
-    });
-    expect(exemption).toMatchObject({ skillId: highRisk.skill.id, scope: 'user' });
-  });
-
-  it('dispatches install compatibility, reinstall, relink, and read-only lock workflows', async () => {
-    const workspace = await tempDir();
-    const source = path.join(workspace, 'compat-source');
-    const codexRoot = path.join(workspace, 'codex-root');
-    const claudeRoot = path.join(workspace, 'claude-root');
-    const relinkRoot = path.join(workspace, 'codex-relinked');
-    await mkdir(source, { recursive: true });
-    await writeFile(
-      path.join(source, 'SKILL.md'),
-      [
-        '---',
-        'name: lifecycle-helper',
-        'description: Lifecycle helper',
-        'tags: [runtime, local]',
-        'supported_agents: [codex]',
-        '---',
-        '# Lifecycle Helper'
-      ].join('\n')
-    );
-    const runtime = createDesktopRuntime({
-      dataDirectory: path.join(workspace, 'app-data'),
-      homeDirectory: path.join(workspace, 'home')
-    });
-    const imported = await runtime.dispatch('import.localFolder', { folderPath: source });
-
-    await expect(
-      runtime.dispatch('install.checkCompatibility', {
-        skillId: imported.skill.id,
-        targetRoot: codexRoot,
-        agentCode: 'codex',
-        agentDisplayName: 'Codex',
-        adapterVersion: 'test',
-        scope: 'user'
-      })
-    ).resolves.toMatchObject({ status: 'compatible', supportedAgents: ['codex'] });
-    const incompatiblePlan = await runtime.dispatch('install.createPlan', {
-      skillId: imported.skill.id,
-      targetRoot: claudeRoot,
-      agentCode: 'claude',
-      agentDisplayName: 'Claude',
-      adapterVersion: 'test',
-      scope: 'user'
-    });
-    await expect(runtime.dispatch('install.applyPlan', { plan: incompatiblePlan })).rejects.toThrow(/incompatible/i);
-
-    const plan = await runtime.dispatch('install.createPlan', {
-      skillId: imported.skill.id,
-      targetRoot: codexRoot,
-      agentCode: 'codex',
-      agentDisplayName: 'Codex',
-      adapterVersion: 'test',
-      scope: 'user'
-    });
-    const installed = await runtime.dispatch('install.applyPlan', { plan });
-    await writeFile(path.join(codexRoot, 'lifecycle-helper/SKILL.md'), 'corrupted app-owned file');
-    await writeFile(path.join(codexRoot, 'lifecycle-helper/user-note.md'), 'keep user note');
-
-    await expect(
-      runtime.dispatch('install.setReadOnlyLock', {
-        installationId: installed.installationId,
-        locked: true
-      })
-    ).resolves.toEqual({
-      status: 'locked',
-      installationId: installed.installationId,
-      readOnlyLocked: true
-    });
-    await expect(runtime.dispatch('install.reinstall', { installationId: installed.installationId })).rejects.toThrow(
-      /read-only locked/
-    );
-    await expect(
-      runtime.dispatch('install.relink', {
-        installationId: installed.installationId,
-        targetRoot: relinkRoot,
-        agentCode: 'codex',
-        agentDisplayName: 'Codex',
-        adapterVersion: 'test',
-        scope: 'user',
-        projectionMode: 'copy'
-      })
-    ).rejects.toThrow(/read-only locked/);
-    await expect(runtime.dispatch('install.uninstall', { installationId: installed.installationId })).rejects.toThrow(
-      /read-only locked/
-    );
-
-    await runtime.dispatch('install.setReadOnlyLock', {
-      installationId: installed.installationId,
-      locked: false
-    });
-    await expect(runtime.dispatch('install.reinstall', { installationId: installed.installationId })).resolves.toMatchObject({
-      status: 'reinstalled',
-      installationId: installed.installationId
-    });
-    await expect(readFile(path.join(codexRoot, 'lifecycle-helper/SKILL.md'), 'utf8')).resolves.toContain(
-      'Lifecycle Helper'
-    );
-    await expect(
-      runtime.dispatch('install.relink', {
-        installationId: installed.installationId,
-        targetRoot: relinkRoot,
-        agentCode: 'codex',
-        agentDisplayName: 'Codex',
-        adapterVersion: 'test',
-        scope: 'user',
-        projectionMode: 'copy'
-      })
-    ).resolves.toMatchObject({
-      status: 'relinked',
-      installationId: installed.installationId,
-      targetRoot: relinkRoot,
-      projectionMode: 'copy'
-    });
-    const detail = await runtime.dispatch('library.detail', { skillId: imported.skill.id });
-
-    await expect(readFile(path.join(codexRoot, 'lifecycle-helper/SKILL.md'), 'utf8')).rejects.toMatchObject({
-      code: 'ENOENT'
-    });
-    await expect(readFile(path.join(codexRoot, 'lifecycle-helper/user-note.md'), 'utf8')).resolves.toBe(
-      'keep user note'
-    );
-    await expect(readFile(path.join(relinkRoot, 'lifecycle-helper/SKILL.md'), 'utf8')).resolves.toContain(
-      'Lifecycle Helper'
-    );
-    expect(detail.installations).toEqual([
-      expect.objectContaining({
-        installationId: installed.installationId,
-        rootPath: relinkRoot,
-        projectionMode: 'copy',
-        readOnlyLocked: false
-      })
-    ]);
-  });
-
-  it('dispatches desktop draft version, promotion, and comparison workflows', async () => {
-    const workspace = await tempDir();
-    const runtime = createDesktopRuntime({
-      dataDirectory: path.join(workspace, 'app-data'),
-      homeDirectory: path.join(workspace, 'home')
-    });
-    const imported = await runtime.dispatch('import.localFolder', {
-      folderPath: await createSkillFixture(path.join(workspace, 'author-source'), 'author-helper')
-    });
-
-    const draft = await runtime.dispatch('version.createDraft', {
-      skillId: imported.skill.id,
-      changeSummary: 'Draft author edits',
-      files: [
-        {
-          relativePath: 'SKILL.md',
-          content: [
-            '---',
-            'name: author-helper',
-            'description: Author helper draft',
-            'tags: [runtime, local]',
-            '---',
-            '# Draft Author Helper'
-          ].join('\n')
-        },
-        { relativePath: 'references/draft.md', content: 'draft notes' }
-      ]
-    });
-    const promoted = await runtime.dispatch('version.promote', {
-      versionId: draft.versionId,
-      releaseChannel: 'stable'
-    });
-    const comparison = await runtime.dispatch('version.compare', {
-      fromVersionId: imported.skill.versionId,
-      toVersionId: draft.versionId
-    });
-
-    expect(draft).toMatchObject({ lifecycle: 'draft', releaseChannel: 'local' });
-    expect(promoted).toMatchObject({ lifecycle: 'released', releaseChannel: 'stable' });
-    expect(comparison).toMatchObject({
-      manifestHashChanged: true,
-      files: expect.arrayContaining([
-        expect.objectContaining({ relativePath: 'SKILL.md', changeType: 'modified' }),
-        expect.objectContaining({ relativePath: 'references/draft.md', changeType: 'added' })
-      ])
-    });
-  });
-
-  it('dispatches author preflight, source open, draft package, and signed publish package workflows', async () => {
-    const workspace = await tempDir();
-    const openedSources: string[] = [];
-    const runtime = createDesktopRuntime({
-      dataDirectory: path.join(workspace, 'app-data'),
-      homeDirectory: path.join(workspace, 'home'),
-      sourceFolderOpener(sourcePath) {
-        openedSources.push(sourcePath);
-      }
-    });
-    const sourcePath = await createSkillFixture(path.join(workspace, 'author-tool-source'), 'author-tool-helper');
-    const imported = await runtime.dispatch('import.localFolder', { folderPath: sourcePath });
-    const dispatch = runtime.dispatch as unknown as (channel: string, payload: unknown) => Promise<unknown>;
-
-    await expect(dispatch('author.openSourceFolder', { sourcePath })).resolves.toEqual({
-      status: 'opened',
-      sourcePath
-    });
-    expect(openedSources).toEqual([sourcePath]);
-    await expect(dispatch('author.preflight', { sourcePath, signer: 'OpenHub Runtime' })).resolves.toMatchObject({
-      ok: true,
-      signatureReady: true
-    });
-    await writeFile(
-      path.join(sourcePath, 'SKILL.md'),
-      ['---', 'name: author-tool-helper', 'description: Edited', '---', '# Edited Author Tool'].join('\n')
-    );
-    await expect(
-      dispatch('author.createDraftPackage', {
-        skillId: imported.skill.id,
-        sourcePath,
-        outputDirectory: path.join(workspace, 'author-draft-package'),
-        changeSummary: 'Author edits'
-      })
-    ).resolves.toMatchObject({ signatureStatus: 'unsigned', networkUpload: false });
-    await expect(
-      dispatch('author.preparePublishPackage', {
-        skillId: imported.skill.id,
-        sourcePath,
-        outputDirectory: path.join(workspace, 'author-publish-package'),
-        signer: 'OpenHub Runtime'
-      })
-    ).resolves.toMatchObject({ signatureStatus: 'signed', networkUpload: false });
-  });
-
-  it('persists onboarding completion and returns detected roots without migration previews', async () => {
-    const workspace = await tempDir();
-    const homeDirectory = path.join(workspace, 'home');
-    await createSkillFixture(path.join(homeDirectory, '.codex/skills/root-helper'), 'Root Helper');
-    await mkdir(path.join(homeDirectory, '.claude/skills'), { recursive: true });
-    const runtime = createDesktopRuntime({
-      dataDirectory: path.join(workspace, 'app-data'),
-      homeDirectory
-    });
-
-    const initial = await runtime.dispatch('onboarding.state', {});
-
-    expect(initial).toMatchObject({
-      completed: false,
-      detectedRoots: expect.arrayContaining([
-        expect.objectContaining({ agentCode: 'codex', rootPath: path.join(homeDirectory, '.codex/skills') }),
-        expect.objectContaining({ agentCode: 'claude', rootPath: path.join(homeDirectory, '.claude/skills') })
-      ])
-    });
-    expect(initial).not.toHaveProperty('migrationPreviews');
-
-    await runtime.dispatch('onboarding.complete', { completed: true });
-    await expect(runtime.dispatch('onboarding.state', {})).resolves.toMatchObject({
-      completed: true
-    });
-  });
-
-  it('rejects removed migration IPC channels', async () => {
-    const workspace = await tempDir();
-    const runtime = createDesktopRuntime({
-      dataDirectory: path.join(workspace, 'app-data'),
-      homeDirectory: path.join(workspace, 'home')
-    });
-    const dispatch = runtime.dispatch as unknown as (channel: string, payload: unknown) => Promise<unknown>;
-
-    await expect(
-      dispatch('discover.migrationPreview', {
-        adapter: 'openskills',
-        sourcePath: workspace
-      })
-    ).rejects.toThrow(/Unknown IPC channel/);
-    await expect(
-      dispatch('onboarding.importMigration', {
-      adapter: 'openskills',
-        sourcePath: workspace,
-        paths: [workspace]
-      })
-    ).rejects.toThrow(/Unknown IPC channel/);
-  });
-
-  it('persists project roots, lists them as install targets, applies clean multi-target plans, and reports conflicts', async () => {
-    const workspace = await tempDir();
-    const dataDirectory = path.join(workspace, 'app-data');
-    const projectCodexRoot = path.join(workspace, 'project/.codex/skills');
-    const projectClaudeRoot = path.join(workspace, 'project/.claude/skills');
-    const runtime = createDesktopRuntime({
-      dataDirectory,
-      homeDirectory: path.join(workspace, 'home')
-    });
-    const imported = await runtime.dispatch('import.localFolder', {
-      folderPath: await createSkillFixture(path.join(workspace, 'project-root-source'), 'Project Root Helper')
-    });
-
-    const codexRoot = await runtime.dispatch('agentRoots.addProject', {
-      agentCode: 'codex',
-      rootPath: projectCodexRoot
-    });
-    const claudeRoot = await runtime.dispatch('agentRoots.addProject', {
-      agentCode: 'claude',
-      rootPath: projectClaudeRoot
-    });
-    const targets = await runtime.dispatch('install.listTargets', {});
-    const plans = await runtime.dispatch('install.createMultiTargetPlan', {
-      skillId: imported.skill.id,
-      targets: [codexRoot, claudeRoot]
-    });
-
-    await mkdir(path.join(projectClaudeRoot, 'project-root-helper'), { recursive: true });
-    await writeFile(path.join(projectClaudeRoot, 'project-root-helper/SKILL.md'), 'conflicting user file');
-    const mixedPlans = await runtime.dispatch('install.createMultiTargetPlan', {
-      skillId: imported.skill.id,
-      targets: [codexRoot, claudeRoot]
-    });
-    const applied = await runtime.dispatch('install.applyMultiTargetPlan', { plans: mixedPlans });
-
-    expect(targets).toEqual(
-      expect.arrayContaining([
-        expect.objectContaining({ agentCode: 'codex', rootPath: projectCodexRoot, rootKind: 'project' }),
-        expect.objectContaining({ agentCode: 'claude', rootPath: projectClaudeRoot, rootKind: 'project' })
-      ])
-    );
-    expect(plans.map((plan) => plan.targetRoot).sort()).toEqual([projectClaudeRoot, projectCodexRoot].sort());
-    expect(applied.installed).toHaveLength(1);
-    expect(applied.blocked).toEqual([
-      expect.objectContaining({ targetRoot: projectClaudeRoot, conflictState: 'conflict' })
-    ]);
-    await expect(readFile(path.join(projectCodexRoot, 'project-root-helper/SKILL.md'), 'utf8')).resolves.toContain(
-      'Project Root Helper'
-    );
-  });
-
-  it('exposes favorite state through library summaries and library.setFavorite IPC', async () => {
-    const workspace = await tempDir();
-    const runtime = createDesktopRuntime({
-      dataDirectory: path.join(workspace, 'app-data'),
-      homeDirectory: path.join(workspace, 'home')
-    });
-    const imported = await runtime.dispatch('import.localFolder', {
-      folderPath: await createSkillFixture(path.join(workspace, 'favorite-source'), 'Favorite Helper')
-    });
-
-    await expect(runtime.dispatch('library.search', { query: 'favorite', favoritesOnly: true })).resolves.toEqual([]);
-    const favorited = await runtime.dispatch('library.setFavorite', {
-      skillId: imported.skill.id,
-      favorite: true
-    });
-
-    expect(favorited).toEqual(expect.objectContaining({ id: imported.skill.id, favorite: true }));
-    await expect(runtime.dispatch('library.facets', {})).resolves.toMatchObject({
-      sources: [{ value: 'local', count: 1 }],
-      tags: expect.arrayContaining([{ value: 'runtime', count: 1 }]),
-      favorites: { value: 'favorites', count: 1 }
-    });
-    await expect(
-      runtime.dispatch('library.search', {
-        query: 'favorite',
-        filters: {
-          sourceTypes: ['local'],
-          tags: ['runtime'],
-          favoritesOnly: true
-        }
-      })
-    ).resolves.toEqual([expect.objectContaining({ id: imported.skill.id, favorite: true })]);
-    await expect(runtime.dispatch('library.search', { query: 'favorite', favoritesOnly: true })).resolves.toEqual([
-      expect.objectContaining({ id: imported.skill.id, favorite: true })
-    ]);
-    await expect(runtime.dispatch('library.detail', { skillId: imported.skill.id })).resolves.toMatchObject({
-      skill: { favorite: true }
-    });
-
-    await runtime.dispatch('library.setFavorite', { skillId: imported.skill.id, favorite: false });
-    await expect(runtime.dispatch('library.facets', {})).resolves.toMatchObject({
-      favorites: { value: 'favorites', count: 0 }
-    });
-    await expect(runtime.dispatch('library.search', { query: 'favorite', favoritesOnly: true })).resolves.toEqual([]);
-  });
-
-  it('dispatches local semantic and hybrid library search modes without remote lookup', async () => {
-    const workspace = await tempDir();
-    const runtime = createDesktopRuntime({
-      dataDirectory: path.join(workspace, 'app-data'),
-      homeDirectory: path.join(workspace, 'home')
-    });
-    const sqlite = await runtime.dispatch('import.localFolder', {
-      folderPath: await createSkillFixture(
-        path.join(workspace, 'sqlite-source'),
-        'SQLite Runtime Helper',
-        '# SQLite Runtime Helper\n\nIndexes schema migrations and local storage tables.'
-      )
-    });
-    const exact = await runtime.dispatch('import.localFolder', {
-      folderPath: await createSkillFixture(
-        path.join(workspace, 'database-source'),
-        'Database Runtime Helper',
-        '# Database Runtime Helper'
-      )
-    });
-
-    await expect(runtime.dispatch('library.search', { query: 'db', mode: 'fts' })).resolves.toEqual([]);
-    await expect(runtime.dispatch('library.search', { query: 'db', mode: 'semantic' })).resolves.toEqual(
-      expect.arrayContaining([
-        expect.objectContaining({ id: sqlite.skill.id }),
-        expect.objectContaining({ id: exact.skill.id })
-      ])
-    );
-    await expect(runtime.dispatch('library.search', { query: 'database', mode: 'hybrid' })).resolves.toEqual([
-      expect.objectContaining({ id: exact.skill.id }),
-      expect.objectContaining({ id: sqlite.skill.id })
-    ]);
-  });
-
-  it('stores REST sync credentials through the injected secret store without leaking raw tokens', async () => {
-    const workspace = await tempDir();
-    const database = createMemoryDatabase();
-    const secretStore = createInMemorySecretStore();
-    const runtime = createDesktopRuntime({
-      dataDirectory: path.join(workspace, 'app-data'),
       homeDirectory: path.join(workspace, 'home'),
       database,
-      secretStore
+      secretStore: createInMemorySecretStore()
     });
-
+    const imported = (await runtime.dispatch('import.localFolder', {
+      folderPath: await createSkillFixture(path.join(workspace, 'version-source'), 'version-helper')
+    })) as RuntimeImportedResult;
+    const versionTwo = await createVersionService({
+      database,
+      contentStore: createContentStore(path.join(dataDirectory, 'blobs'))
+    }).createVersion({
+      skillId: imported.skill.id,
+      changeSummary: 'Runtime version update',
+      files: [
+        { relativePath: 'SKILL.md', content: '# Runtime Version Two' },
+        { relativePath: 'references/next.md', content: 'next notes' }
+      ]
+    });
+    const collection = await runtime.dispatch('collection.create', {
+      name: 'Runtime Collection',
+      description: 'Inventory grouping',
+      skillIds: [imported.skill.id]
+    }) as { name: string };
     const profile = await runtime.dispatch('sync.createProfile', {
-      mode: 'rest',
-      remoteUrl: 'https://sync.example.test',
-      enabled: true,
-      auth: {
-        label: 'Production sync token',
-        token: 'super-secret-token'
-      }
-    });
-    const profileRows = database.prepare('select auth_ref as authRef from sync_profiles').all();
-    const workspaceState = await runtime.dispatch('workspace.state', {});
-    const inspected = await runtime.dispatch('sync.inspectCredential', {
-      authRef: profile.authRef
-    });
-    const deleted = await runtime.dispatch('sync.deleteCredential', {
-      authRef: profile.authRef
-    });
-
-    expect(profile).toMatchObject({
-      mode: 'rest',
-      remoteUrl: 'https://sync.example.test',
-      enabled: true
-    });
-    expect(profile.authRef).toMatch(/^keychain:\/\/sync\//);
-    expect(JSON.stringify(profileRows)).toContain(profile.authRef);
-    expect(JSON.stringify(profileRows)).not.toContain('super-secret-token');
-    expect(JSON.stringify(workspaceState)).not.toContain('super-secret-token');
-    expect(inspected).toMatchObject({
-      authRef: profile.authRef,
-      label: 'Production sync token'
-    });
-    expect(inspected?.masked).not.toContain('super-secret-token');
-    expect(deleted).toEqual({ status: 'deleted' });
-    await expect(runtime.dispatch('sync.inspectCredential', { authRef: profile.authRef })).resolves.toBeNull();
-  });
-
-  it('creates active policy packs, blocks disallowed installs, and applies baselines without agent-root writes', async () => {
-    const workspace = await tempDir();
-    const database = createMemoryDatabase();
-    const runtime = createDesktopRuntime({
-      dataDirectory: path.join(workspace, 'app-data'),
-      homeDirectory: path.join(workspace, 'home'),
-      database
-    });
-    const dispatch = runtime.dispatch as unknown as (channel: string, payload: unknown) => Promise<unknown>;
-    const policy = (await dispatch('policy.create', {
-      name: 'Safe Local Policy',
-      allowedSources: ['local'],
-      blockedRules: ['dangerous-shell-command'],
-      requiredScanLevel: 'safe',
-      approvedPlugins: ['approved-plugin']
-    })) as { id: string };
-    await dispatch('policy.setActive', { policyPackId: policy.id });
-
-    await expect(dispatch('policy.list', {})).resolves.toEqual([
-      expect.objectContaining({ id: policy.id, name: 'Safe Local Policy' })
-    ]);
-    await expect(
-      dispatch('policy.evaluate', {
-        policyPackId: policy.id,
-        sourceType: 'git',
-        findingRuleIds: [],
-        scanLevel: 'safe',
-        pluginIds: ['approved-plugin']
-      })
-    ).resolves.toMatchObject({ allowed: false, reasons: ['source-blocked:git'] });
-
-    const highRisk = await runtime.dispatch('import.localFolder', {
-      folderPath: await createSkillFixture(
-        path.join(workspace, 'policy-high-risk-source'),
-        'policy-high-risk-helper',
-        'Run `rm -rf "$HOME/.codex"`.'
-      )
-    });
-    await runtime.dispatch('security.scan', { skillId: highRisk.skill.id });
-    const targetRoot = path.join(workspace, 'codex-skills');
-    const plan = await runtime.dispatch('install.createPlan', {
-      skillId: highRisk.skill.id,
-      targetRoot,
-      agentCode: 'codex',
-      agentDisplayName: 'Codex',
-      adapterVersion: 'test',
-      scope: 'user'
-    });
-
-    await expect(runtime.dispatch('install.applyPlan', { plan })).rejects.toThrow(/Policy blocked install/);
-    await expect(readFile(path.join(targetRoot, 'policy-high-risk-helper/SKILL.md'), 'utf8')).rejects.toMatchObject({
-      code: 'ENOENT'
-    });
-
-    const baselineDirectory = path.join(workspace, 'baseline-export');
-    await dispatch('baseline.export', {
-      outputDirectory: baselineDirectory,
-      name: 'Frontend Team',
-      collectionIds: [],
-      policyPackId: policy.id,
-      rootTemplates: [{ agentCode: 'codex', scope: 'project', rootPathTemplate: '.codex/skills' }]
-    });
-    await expect(dispatch('baseline.preview', { packageDirectory: baselineDirectory })).resolves.toMatchObject({
-      name: 'Frontend Team',
-      writesAgentRoots: false
-    });
-    const beforeAgentRoots = countRows(database, 'agent_roots');
-    await expect(dispatch('baseline.apply', { packageDirectory: baselineDirectory, confirm: true })).resolves.toMatchObject({
-      name: 'Frontend Team',
-      writesAgentRoots: false
-    });
-    expect(countRows(database, 'agent_roots')).toBe(beforeAgentRoots);
-  });
-
-  it('wires enabled plugin providers into targets, importer IPC, security scans, and sync driver registry', async () => {
-    const workspace = await tempDir();
-    const runtime = createDesktopRuntime({
-      dataDirectory: path.join(workspace, 'app-data'),
-      homeDirectory: path.join(workspace, 'home')
-    });
-    const providerSource = `
-      exports.register = (host) => {
-        host.registerAgentAdapter({ code: 'local-agent', displayName: 'Local Agent' });
-        host.registerImporter({
-          id: 'frontmatter-importer',
-          name: 'Frontmatter Importer',
-          invoke(input) {
-            return { accepted: input.path === 'SKILL.md', normalizedPath: input.path };
-          }
-        });
-        host.registerSecurityRule({
-          id: 'extra-risk',
-          name: 'Extra Risk',
-          invoke() {
-            return [{
-              ruleId: 'plugin-extra-risk',
-              ruleName: 'Plugin Extra Risk',
-              severity: 'warning',
-              category: 'plugin',
-              relativePath: 'SKILL.md',
-              lineNo: null,
-              excerpt: 'plugin finding'
-            }];
-          }
-        });
-        host.registerSyncDriver({
-          id: 'remote-sync',
-          name: 'Remote Sync',
-          invoke() {
-            return { status: 'ready' };
-          }
-        });
-      };
-    `;
-    const pluginRoot = await createPluginFixture({
-      directory: path.join(workspace, 'provider-plugin'),
-      id: 'provider-plugin',
-      name: 'Provider Plugin',
-      source: providerSource,
-      capabilities: [
-        { type: 'agent-adapter', id: 'local-agent' },
-        { type: 'importer', id: 'frontmatter-importer' },
-        { type: 'security-rule', id: 'extra-risk' },
-        { type: 'sync-driver', id: 'remote-sync' }
-      ],
-      permissions: ['import:local', 'sync-driver']
-    });
-    const installed = await runtime.dispatch('plugins.install', { rootPath: pluginRoot });
-    await runtime.dispatch('plugins.authorizePermission', {
-      pluginId: installed.id,
-      permission: 'import:local',
-      reason: 'Provider import'
-    });
-    await runtime.dispatch('plugins.authorizePermission', {
-      pluginId: installed.id,
-      permission: 'sync-driver',
-      reason: 'Provider sync'
-    });
-    await runtime.dispatch('plugins.enable', { pluginId: installed.id });
-
-    await expect(runtime.dispatch('install.listTargets', {})).resolves.toEqual(
-      expect.arrayContaining([
-        expect.objectContaining({
-          agentCode: 'local-agent',
-          agentDisplayName: 'Local Agent',
-          rootPath: `plugin://${installed.id}/local-agent`,
-          writable: false
-        })
-      ])
-    );
-    await expect(
-      (runtime.dispatch as unknown as (channel: string, payload: unknown) => Promise<unknown>)('plugins.invokeProvider', {
-        pluginId: installed.id,
-        capabilityType: 'importer',
-        capabilityId: 'frontmatter-importer',
-        input: { path: 'SKILL.md' }
-      })
-    ).resolves.toEqual({ accepted: true, normalizedPath: 'SKILL.md' });
-
-    const imported = await runtime.dispatch('import.localFolder', {
-      folderPath: await createSkillFixture(path.join(workspace, 'plugin-scan-source'), 'plugin-scan-helper')
-    });
-    await expect(runtime.dispatch('security.scan', { skillId: imported.skill.id })).resolves.toMatchObject({
-      findings: [expect.objectContaining({ ruleId: 'plugin-extra-risk', ruleName: 'Plugin Extra Risk' })]
-    });
-    await expect(runtime.dispatch('plugins.registry', {})).resolves.toMatchObject({
-      syncDrivers: [{ pluginId: installed.id, id: 'remote-sync', name: 'Remote Sync' }]
-    });
-  });
-
-  it('dispatches plugin directory scans, signature trust, and exporter providers', async () => {
-    const workspace = await tempDir();
-    const runtime = createDesktopRuntime({
-      dataDirectory: path.join(workspace, 'app-data'),
-      homeDirectory: path.join(workspace, 'home')
-    });
-    const pluginDirectory = path.join(workspace, 'plugin-directory');
-    const exporterRoot = await createPluginFixture({
-      directory: path.join(pluginDirectory, 'exporter-plugin'),
-      id: 'exporter-plugin',
-      name: 'Exporter Plugin',
+      mode: 'shared-folder',
+      remoteUrl: path.join(workspace, 'sync'),
+      enabled: false
+    }) as RuntimeIdResult;
+    const outbox = await runtime.dispatch('sync.enqueueLocalChange', {
+      profileId: profile.id,
+      entityType: 'skill',
+      entityId: imported.skill.id,
+      payload: { name: imported.skill.name }
+    }) as { status: string; entityId: string };
+    const sourceRoot = path.join(workspace, 'discover-source');
+    await createSkillFixture(path.join(sourceRoot, 'discover-helper'), 'discover-helper');
+    const discoverSource = await runtime.dispatch('discover.addSource', {
+      name: 'Local Discover',
+      sourceType: 'local',
+      url: sourceRoot
+    }) as RuntimeIdResult;
+    const pluginRoot = await createPluginFixture(path.join(workspace, 'plugin'), {
+      id: 'runtime-importer-plugin',
+      name: 'Runtime Importer Plugin',
+      capabilities: [{ type: 'importer', id: 'runtime-importer' }],
+      permissions: ['import:local'],
       source: `
         exports.register = (host) => {
-          host.registerExporter({
-            id: 'bundle-exporter',
-            name: 'Bundle Exporter',
+          host.registerImporter({
+            id: 'runtime-importer',
+            name: 'Runtime Importer',
             invoke(input) {
-              return { outputDirectory: input.outputDirectory, exported: input.files.length };
+              return { accepted: input.path.endsWith('SKILL.md') };
             }
           });
         };
-      `,
-      capabilities: [{ type: 'exporter', id: 'bundle-exporter' }],
-      permissions: ['export:local'],
-      signature: {
-        signer: 'trusted:runtime',
-        value: signedPluginManifestValue('exporter-plugin', 'Exporter Plugin', '1.0.0', 'trusted:runtime')
-      }
+      `
     });
-    const dispatch = runtime.dispatch as unknown as (channel: string, payload: unknown) => Promise<unknown>;
-    const directory = (await dispatch('plugins.addDirectory', { rootPath: pluginDirectory })) as { id: string };
-
-    await expect(dispatch('plugins.scanDirectory', { directoryId: directory.id })).resolves.toMatchObject({
-      catalog: [
-        expect.objectContaining({
-          pluginId: 'exporter-plugin',
-          rootPath: exporterRoot,
-          signatureStatus: 'trusted',
-          installed: false
-        })
-      ]
-    });
-    const installed = await runtime.dispatch('plugins.install', { rootPath: exporterRoot });
+    const plugin = await runtime.dispatch('plugins.install', { rootPath: pluginRoot }) as RuntimeIdResult;
     await runtime.dispatch('plugins.authorizePermission', {
-      pluginId: installed.id,
-      permission: 'export:local',
-      reason: 'Exporter runtime test'
-    });
-    await runtime.dispatch('plugins.enable', { pluginId: installed.id });
-    await expect(runtime.dispatch('plugins.registry', {})).resolves.toMatchObject({
-      exporters: [{ pluginId: installed.id, id: 'bundle-exporter', name: 'Bundle Exporter' }]
-    });
-    await expect(
-      dispatch('plugins.invokeProvider', {
-        pluginId: installed.id,
-        capabilityType: 'exporter',
-        capabilityId: 'bundle-exporter',
-        input: { outputDirectory: '/tmp/out', files: ['SKILL.md'] }
-      })
-    ).resolves.toEqual({ outputDirectory: '/tmp/out', exported: 1 });
-
-    await runtime.dispatch('plugins.disable', { pluginId: installed.id });
-    await expect(runtime.dispatch('plugins.registry', {})).resolves.toMatchObject({ exporters: [] });
-    await expect(dispatch('plugins.removeDirectory', { directoryId: directory.id })).resolves.toEqual({ status: 'removed' });
-  });
-
-  it('dispatches durable settings without writing agent roots', async () => {
-    const workspace = await tempDir();
-    const database = createMemoryDatabase();
-    const runtime = createDesktopRuntime({
-      dataDirectory: path.join(workspace, 'app-data'),
-      homeDirectory: path.join(workspace, 'home'),
-      database
-    });
-    const dispatch = runtime.dispatch as unknown as (channel: string, payload: unknown) => Promise<unknown>;
-    const beforeAgentRoots = countRows(database, 'agent_roots');
-
-    await expect(dispatch('settings.get', {})).resolves.toMatchObject({
-      mirrorSources: [],
-      updateChecksEnabled: false,
-      logLevel: 'info',
-      pluginDirectories: []
-    });
-    const mirror = (await dispatch('settings.addMirrorSource', {
-      name: 'Local Mirror',
-      url: '/tmp/mirror'
-    })) as { id: string };
-    await dispatch('settings.setUpdateChecks', { enabled: true });
-    await dispatch('settings.setLogLevel', { logLevel: 'warn' });
-    const pluginDirectory = (await dispatch('settings.addPluginDirectory', {
-      rootPath: path.join(workspace, 'plugins')
-    })) as { id: string };
-
-    await expect(dispatch('settings.get', {})).resolves.toMatchObject({
-      mirrorSources: [expect.objectContaining({ id: mirror.id, name: 'Local Mirror' })],
-      updateChecksEnabled: true,
-      logLevel: 'warn',
-      pluginDirectories: [expect.objectContaining({ id: pluginDirectory.id })]
-    });
-    await dispatch('settings.removeMirrorSource', { mirrorSourceId: mirror.id });
-    await dispatch('settings.removePluginDirectory', { directoryId: pluginDirectory.id });
-    await expect(dispatch('settings.get', {})).resolves.toMatchObject({
-      mirrorSources: [],
-      pluginDirectories: []
-    });
-    expect(countRows(database, 'agent_roots')).toBe(beforeAgentRoots);
-  });
-
-  it('dispatches sync, plugin runtime, and discover source workflows', async () => {
-    const workspace = await tempDir();
-    const database = createMemoryDatabase();
-    const dataDirectory = path.join(workspace, 'app-data');
-    const runtime = createDesktopRuntime({
-      dataDirectory,
-      homeDirectory: path.join(workspace, 'home'),
-      database
-    });
-    const imported = await runtime.dispatch('import.localFolder', {
-      folderPath: await createSkillFixture(path.join(workspace, 'sync-source'), 'sync-runtime-helper')
-    });
-    const sharedDirectory = path.join(workspace, 'shared-sync');
-    const profile = await runtime.dispatch('sync.createProfile', {
-      mode: 'shared-folder',
-      remoteUrl: sharedDirectory,
-      enabled: true,
-      authRef: 'keychain://sync/shared'
-    });
-    const outbox = await runtime.dispatch('sync.enqueueLocalChange', {
-      profileId: profile.id,
-      entityType: 'skill_version',
-      entityId: imported.skill.versionId,
-      payload: { skillId: imported.skill.id }
-    });
-    await runtime.dispatch('sync.push', { profileId: profile.id });
-    await mkdir(path.join(sharedDirectory, 'inbox'), { recursive: true });
-    await writeFile(
-      path.join(sharedDirectory, 'inbox/remote-change.json'),
-      JSON.stringify({ entityType: 'skill_version', entityId: 'remote-v1', payload: { versionNo: 3 } })
-    );
-    const pulled = await runtime.dispatch('sync.pull', { profileId: profile.id });
-    const syncForSetup = createSyncService({ database });
-    const conflict = syncForSetup.detectConflict({
-      profileId: profile.id,
-      entityType: 'skill_version',
-      entityId: imported.skill.versionId,
-      base: { hash: 'base' },
-      local: { hash: 'local' },
-      remote: { hash: 'remote' }
-    });
-    const listedConflicts = await runtime.dispatch('sync.listConflicts', { profileId: profile.id });
-    const resolvedConflict = await runtime.dispatch('sync.resolveConflict', {
-      conflictId: conflict.id,
-      resolution: 'use-local'
+      pluginId: plugin.id,
+      permission: 'import:local',
+      reason: 'Runtime importer test'
     });
 
-    const pluginRoot = await createPluginFixture({
-      directory: path.join(workspace, 'plugin'),
-      id: 'local-agent-plugin',
-      name: 'Local Agent Plugin',
-      permission: 'network:fetch'
+    expect(versionTwo).toMatchObject({ versionNo: 2, changeSummary: 'Runtime version update' });
+    await expect(runtime.dispatch('version.diff', {
+      fromVersionId: imported.skill.versionId,
+      toVersionId: versionTwo.versionId
+    })).resolves.toEqual(expect.arrayContaining([
+      expect.objectContaining({ relativePath: 'SKILL.md', changeType: 'modified' })
+    ]));
+    expect(collection).toMatchObject({ name: 'Runtime Collection' });
+    expect(outbox).toMatchObject({ status: 'queued', entityId: imported.skill.id });
+    await expect(runtime.dispatch('discover.previewSource', { sourceId: discoverSource.id })).resolves.toMatchObject({
+      skills: [expect.objectContaining({ name: 'discover-helper' })]
     });
-    const installedPlugin = await runtime.dispatch('plugins.install', { rootPath: pluginRoot });
-    await runtime.dispatch('plugins.authorizePermission', {
-      pluginId: installedPlugin.id,
-      permission: 'network:fetch',
-      reason: 'Fixture grant'
+    await expect(runtime.dispatch('plugins.enable', { pluginId: plugin.id })).resolves.toMatchObject({
+      importers: [{ pluginId: plugin.id, id: 'runtime-importer', name: 'Runtime Importer' }],
+      syncDrivers: []
     });
-    const enabledRegistry = await runtime.dispatch('plugins.enable', { pluginId: installedPlugin.id });
-    const currentRegistry = await runtime.dispatch('plugins.registry', {});
-    await runtime.dispatch('plugins.disable', { pluginId: installedPlugin.id });
-    const disabledRegistry = await runtime.dispatch('plugins.registry', {});
-
-    const sourcePath = path.join(workspace, 'discover-source');
-    await createSkillFixture(path.join(sourcePath, 'discover-helper'), 'Discover Helper');
-    const source = await runtime.dispatch('discover.addSource', {
-      name: 'Local Discover',
-      sourceType: 'local',
-      url: sourcePath,
-      trustLevel: 'verified'
-    });
-    const preview = await runtime.dispatch('discover.previewSource', { sourceId: source.id });
-
-    expect(outbox.status).toBe('queued');
-    await expect(readFile(path.join(sharedDirectory, 'outbox', `${outbox.id}.json`), 'utf8')).resolves.toContain(
-      imported.skill.versionId
-    );
-    expect(pulled).toHaveLength(1);
-    expect(listedConflicts).toEqual([expect.objectContaining({ id: conflict.id, status: 'open' })]);
-    expect(resolvedConflict).toMatchObject({ id: conflict.id, status: 'resolved', resolution: 'use-local' });
-    expect(enabledRegistry.agentAdapters).toEqual([
-      {
-        pluginId: installedPlugin.id,
-        code: 'local-agent',
-        displayName: 'Local Agent'
-      }
-    ]);
-    expect(currentRegistry.agentAdapters).toHaveLength(1);
-    expect(disabledRegistry.agentAdapters).toEqual([]);
-    expect(preview).toMatchObject({
-      source: { name: 'Local Discover', status: 'cached', verified: true },
-      writesPlanned: false,
-      skills: [expect.objectContaining({ name: 'Discover Helper' })]
-    });
-    expect(countRows(database, 'skills')).toBe(1);
+    await expect(runtime.dispatch('plugins.invokeProvider', {
+      pluginId: plugin.id,
+      capabilityType: 'importer',
+      capabilityId: 'runtime-importer',
+      input: { path: 'SKILL.md' }
+    })).resolves.toEqual({ accepted: true });
   });
 });
 
@@ -1228,179 +199,30 @@ async function tempDir(): Promise<string> {
   return directory;
 }
 
-async function createSkillFixture(directory: string, name: string, body = '# Skill'): Promise<string> {
+async function createSkillFixture(directory: string, name: string, body = `# ${name}`): Promise<string> {
   await mkdir(path.join(directory, 'references'), { recursive: true });
   await writeFile(
     path.join(directory, 'SKILL.md'),
-    ['---', `name: ${name}`, `description: ${name} description`, 'tags: [runtime, local]', '---', body].join(
-      '\n'
-    )
+    ['---', `name: ${name}`, `description: ${name}`, 'tags: [runtime]', '---', body].join('\n')
   );
-  await writeFile(path.join(directory, 'references/guide.md'), `${name} guide`);
+  await writeFile(path.join(directory, 'references/guide.md'), `Guide for ${name}`);
   return directory;
 }
 
-async function createGitFixture(directory: string, name: string): Promise<string> {
-  await createSkillFixture(directory, name);
-  await execFileAsync('git', ['init'], { cwd: directory });
-  await execFileAsync('git', ['add', '.'], { cwd: directory });
-  await execFileAsync(
-    'git',
-    ['-c', 'user.name=OpenHub Test', '-c', 'user.email=test@example.com', 'commit', '-m', 'fixture'],
-    { cwd: directory }
-  );
-  return directory;
-}
-
-async function createZipFixture(zipPath: string, name: string): Promise<string> {
-  await writeFile(
-    zipPath,
-    createRawZipArchive([
-      {
-        fileName: 'SKILL.md',
-        content: ['---', `name: ${name}`, `description: ${name} description`, 'tags: [runtime, local]', '---', '# Skill'].join('\n')
-      },
-      {
-        fileName: 'references/guide.md',
-        content: `${name} guide`
-      }
-    ])
-  );
-  return zipPath;
-}
-
-function createRawZipArchive(files: Array<{ fileName: string; content: string }>): Buffer {
-  const localRecords: Buffer[] = [];
-  const centralRecords: Buffer[] = [];
-  let localOffset = 0;
-
-  for (const file of files) {
-    const fileNameBytes = Buffer.from(file.fileName);
-    const contentBytes = Buffer.from(file.content);
-    const checksum = crc32(contentBytes);
-    const localHeader = Buffer.alloc(30);
-    let offset = 0;
-    localHeader.writeUInt32LE(0x04034b50, offset);
-    offset += 4;
-    localHeader.writeUInt16LE(20, offset);
-    offset += 2;
-    localHeader.writeUInt16LE(0, offset);
-    offset += 2;
-    localHeader.writeUInt16LE(0, offset);
-    offset += 2;
-    localHeader.writeUInt16LE(0, offset);
-    offset += 2;
-    localHeader.writeUInt16LE(0, offset);
-    offset += 2;
-    localHeader.writeUInt32LE(checksum, offset);
-    offset += 4;
-    localHeader.writeUInt32LE(contentBytes.length, offset);
-    offset += 4;
-    localHeader.writeUInt32LE(contentBytes.length, offset);
-    offset += 4;
-    localHeader.writeUInt16LE(fileNameBytes.length, offset);
-    offset += 2;
-    localHeader.writeUInt16LE(0, offset);
-
-    const localRecord = Buffer.concat([localHeader, fileNameBytes, contentBytes]);
-    localRecords.push(localRecord);
-
-    const centralHeader = Buffer.alloc(46);
-    offset = 0;
-    centralHeader.writeUInt32LE(0x02014b50, offset);
-    offset += 4;
-    centralHeader.writeUInt16LE(20, offset);
-    offset += 2;
-    centralHeader.writeUInt16LE(20, offset);
-    offset += 2;
-    centralHeader.writeUInt16LE(0, offset);
-    offset += 2;
-    centralHeader.writeUInt16LE(0, offset);
-    offset += 2;
-    centralHeader.writeUInt16LE(0, offset);
-    offset += 2;
-    centralHeader.writeUInt16LE(0, offset);
-    offset += 2;
-    centralHeader.writeUInt32LE(checksum, offset);
-    offset += 4;
-    centralHeader.writeUInt32LE(contentBytes.length, offset);
-    offset += 4;
-    centralHeader.writeUInt32LE(contentBytes.length, offset);
-    offset += 4;
-    centralHeader.writeUInt16LE(fileNameBytes.length, offset);
-    offset += 2;
-    centralHeader.writeUInt16LE(0, offset);
-    offset += 2;
-    centralHeader.writeUInt16LE(0, offset);
-    offset += 2;
-    centralHeader.writeUInt16LE(0, offset);
-    offset += 2;
-    centralHeader.writeUInt16LE(0, offset);
-    offset += 2;
-    centralHeader.writeUInt32LE(0, offset);
-    offset += 4;
-    centralHeader.writeUInt32LE(localOffset, offset);
-    centralRecords.push(Buffer.concat([centralHeader, fileNameBytes]));
-    localOffset += localRecord.length;
-  }
-
-  const centralDirectory = Buffer.concat(centralRecords);
-  const endOfCentralDirectory = Buffer.alloc(22);
-  let offset = 0;
-  endOfCentralDirectory.writeUInt32LE(0x06054b50, offset);
-  offset += 4;
-  endOfCentralDirectory.writeUInt16LE(0, offset);
-  offset += 2;
-  endOfCentralDirectory.writeUInt16LE(0, offset);
-  offset += 2;
-  endOfCentralDirectory.writeUInt16LE(files.length, offset);
-  offset += 2;
-  endOfCentralDirectory.writeUInt16LE(files.length, offset);
-  offset += 2;
-  endOfCentralDirectory.writeUInt32LE(centralDirectory.length, offset);
-  offset += 4;
-  endOfCentralDirectory.writeUInt32LE(localOffset, offset);
-  offset += 4;
-  endOfCentralDirectory.writeUInt16LE(0, offset);
-
-  return Buffer.concat([...localRecords, centralDirectory, endOfCentralDirectory]);
-}
-
-function crc32(buffer: Buffer): number {
-  let checksum = 0xffffffff;
-  for (const byte of buffer) {
-    checksum ^= byte;
-    for (let index = 0; index < 8; index += 1) {
-      checksum = (checksum >>> 1) ^ (0xedb88320 & -(checksum & 1));
-    }
-  }
-
-  return (checksum ^ 0xffffffff) >>> 0;
-}
-
-async function createPluginFixture(input: {
-  directory: string;
-  id: string;
-  name: string;
-  permission?: 'network:fetch';
-  source?: string;
-  capabilities?: Array<{
-    type: 'agent-adapter' | 'importer' | 'security-rule' | 'sync-driver' | 'exporter';
+async function createPluginFixture(
+  directory: string,
+  input: {
     id: string;
-  }>;
-  permissions?: Array<'agent-root:read' | 'agent-root:write' | 'network:fetch' | 'import:local' | 'sync-driver' | 'export:local'>;
-  signature?: { signer: string; value: string };
-}): Promise<string> {
-  await mkdir(input.directory, { recursive: true });
-  const source = input.source ?? `
-    exports.register = (host) => {
-      host.registerAgentAdapter({ code: 'local-agent', displayName: 'Local Agent' });
-    };
-  `;
-  await writeFile(path.join(input.directory, 'plugin.js'), source);
-  const permissions = input.permissions ?? (input.permission ? [input.permission] : []);
+    name: string;
+    capabilities: Array<{ type: string; id: string }>;
+    permissions: string[];
+    source: string;
+  }
+): Promise<string> {
+  await mkdir(directory, { recursive: true });
+  await writeFile(path.join(directory, 'plugin.js'), input.source);
   await writeFile(
-    path.join(input.directory, 'plugin.json'),
+    path.join(directory, 'plugin.json'),
     JSON.stringify(
       {
         id: input.id,
@@ -1408,34 +230,13 @@ async function createPluginFixture(input: {
         version: '1.0.0',
         apiVersion: 1,
         entry: 'plugin.js',
-        capabilities: input.capabilities ?? [{ type: 'agent-adapter', id: 'local-agent' }],
-        permissions,
-        integrity: {
-          algorithm: 'sha256',
-          hash: createHash('sha256').update(source).digest('hex')
-        },
-        ...(input.signature
-          ? {
-              signature: {
-                status: 'signed',
-                algorithm: 'sha256',
-                signer: input.signature.signer,
-                value: input.signature.value
-              }
-            }
-          : {})
+        capabilities: input.capabilities,
+        permissions: input.permissions,
+        integrity: { algorithm: 'sha256', hash: createHash('sha256').update(input.source).digest('hex') }
       },
       null,
       2
     )
   );
-  return input.directory;
-}
-
-function signedPluginManifestValue(id: string, name: string, version: string, signer: string): string {
-  return createHash('sha256').update(`${JSON.stringify({ id, name, version })}:${signer}`).digest('hex');
-}
-
-function countRows(database: ReturnType<typeof createMemoryDatabase>, tableName: string): number {
-  return (database.prepare(`select count(*) as count from ${tableName}`).get() as { count: number }).count;
+  return directory;
 }

@@ -5,11 +5,4 @@ export const adaptersPackage = {
 
 export { createBuiltInAgentAdapters } from './built-in-adapters';
 
-export type {
-  AdapterOperationResult,
-  AgentAdapter,
-  AgentCode,
-  AgentRoot,
-  AgentRootScope,
-  InstalledSkillLocation
-} from './agent-adapter';
+export type { AgentAdapter, AgentCode, AgentRoot, AgentRootScope, IndexedSkillLocation } from './agent-adapter';

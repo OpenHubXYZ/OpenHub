@@ -3,7 +3,7 @@ import { access, readdir, stat } from 'node:fs/promises';
 import { homedir } from 'node:os';
 import path from 'node:path';
 
-import type { AgentAdapter, AgentCode, InstalledSkillLocation } from './agent-adapter';
+import type { AgentAdapter, AgentCode, IndexedSkillLocation } from './agent-adapter';
 
 interface BuiltInAdapterConfig {
   id: AgentCode;
@@ -52,29 +52,17 @@ export function createBuiltInAgentAdapters(options: BuiltInAdapterOptions = {}):
       ];
     },
 
-    async listInstalled(root) {
-      return listInstalledSkillLocations(config.id, root.rootPath);
-    },
-
-    async install() {
-      return phaseFourOnly();
-    },
-
-    async uninstall() {
-      return phaseFourOnly();
-    },
-
-    async verify() {
-      return phaseFourOnly();
+    async listIndexedSkills(root) {
+      return listIndexedSkillLocations(config.id, root.rootPath);
     }
   }));
 }
 
-async function listInstalledSkillLocations(
+async function listIndexedSkillLocations(
   agentCode: AgentCode,
   rootPath: string,
   directoryPath = rootPath
-): Promise<InstalledSkillLocation[]> {
+): Promise<IndexedSkillLocation[]> {
   const manifestPath = path.join(directoryPath, 'SKILL.md');
   if (directoryPath !== rootPath && (await fileExists(manifestPath))) {
     return [
@@ -88,17 +76,17 @@ async function listInstalledSkillLocations(
   }
 
   const entries = await readdir(directoryPath, { withFileTypes: true });
-  const installed: InstalledSkillLocation[] = [];
+  const indexed: IndexedSkillLocation[] = [];
 
   for (const entry of entries) {
     if (!entry.isDirectory()) {
       continue;
     }
 
-    installed.push(...(await listInstalledSkillLocations(agentCode, rootPath, path.join(directoryPath, entry.name))));
+    indexed.push(...(await listIndexedSkillLocations(agentCode, rootPath, path.join(directoryPath, entry.name))));
   }
 
-  return installed.sort((left, right) => left.skillPath.localeCompare(right.skillPath));
+  return indexed.sort((left, right) => left.skillPath.localeCompare(right.skillPath));
 }
 
 async function directoryExists(directoryPath: string): Promise<boolean> {
@@ -124,11 +112,4 @@ async function canWrite(directoryPath: string): Promise<boolean> {
   } catch {
     return false;
   }
-}
-
-function phaseFourOnly() {
-  return {
-    status: 'unsupported' as const,
-    message: 'Install, uninstall, and verify operations are implemented in Phase 4.'
-  };
 }

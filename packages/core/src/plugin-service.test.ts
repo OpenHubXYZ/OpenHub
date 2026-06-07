@@ -10,7 +10,6 @@ import {
   PluginHostError,
   PluginManifestError,
   createPluginService,
-  type PluginCapability,
   type PluginManifest
 } from './plugin-service';
 
@@ -30,6 +29,10 @@ describe('plugin service', () => {
     expectPluginManifestError(
       () => plugins.validateManifest(validManifest({ permissions: ['filesystem:*'] })),
       'unknown-permission'
+    );
+    expectPluginManifestError(
+      () => plugins.validateManifest(validManifest({ capabilities: [{ type: 'exporter', id: 'bundle' }] })),
+      'unknown-capability'
     );
     expectPluginManifestError(
       () => plugins.validateManifest(validManifest({ apiVersion: 99 })),
@@ -198,98 +201,34 @@ describe('plugin service', () => {
     ).rejects.toMatchObject({ code: 'plugin-not-found' });
   });
 
-  it('registers exporter providers only after permission grants and removes them when disabled', async () => {
-    const database = createMemoryDatabase();
-    runMigrations(database);
-    const plugins = createPluginService({ database });
-    const rootPath = await createPluginFixture({
-      id: 'exporter-plugin',
-      name: 'Exporter Plugin',
-      capabilities: [{ type: 'exporter', id: 'bundle-exporter' }],
-      permissions: ['export:local'],
-      signature: {
-        signer: 'trusted:fixture',
-        value: signedPluginManifestValue('exporter-plugin', 'Exporter Plugin', '1.0.0', 'trusted:fixture')
-      },
-      source: `
-        exports.register = (host) => {
-          host.registerExporter({
-            id: 'bundle-exporter',
-            name: 'Bundle Exporter',
-            invoke(input) {
-              return { outputDirectory: input.outputDirectory, fileCount: input.files.length };
-            }
-          });
-        };
-      `
-    });
-    const installed = await plugins.installPlugin({ rootPath });
-
-    expect(installed.signatureStatus).toBe('trusted');
-    await expect(plugins.enablePlugin({ pluginId: installed.id })).rejects.toMatchObject({
-      code: 'permission-not-authorized'
-    });
-    expect(plugins.getRegistry().exporters).toEqual([]);
-
-    plugins.authorizePermission({
-      pluginId: installed.id,
-      permission: 'export:local',
-      reason: 'Export provider test'
-    });
-    await plugins.enablePlugin({ pluginId: installed.id });
-
-    expect(plugins.getRegistry().exporters).toEqual([
-      { pluginId: installed.id, id: 'bundle-exporter', name: 'Bundle Exporter' }
-    ]);
-    await expect(
-      plugins.invokeProvider({
-        pluginId: installed.id,
-        capabilityType: 'exporter',
-        capabilityId: 'bundle-exporter',
-        input: { outputDirectory: '/tmp/out', files: ['SKILL.md'] }
-      })
-    ).resolves.toEqual({ outputDirectory: '/tmp/out', fileCount: 1 });
-
-    plugins.disablePlugin({ pluginId: installed.id });
-    expect(plugins.getRegistry().exporters).toEqual([]);
-    await expect(
-      plugins.invokeProvider({
-        pluginId: installed.id,
-        capabilityType: 'exporter',
-        capabilityId: 'bundle-exporter',
-        input: { outputDirectory: '/tmp/out', files: [] }
-      })
-    ).rejects.toMatchObject({ code: 'plugin-not-found' });
-  });
-
-  it('manages plugin directories, catalog scans, and package signature trust state', async () => {
+  it('manages plugin directories, catalog scans, and installed state', async () => {
     const database = createMemoryDatabase();
     runMigrations(database);
     const plugins = createPluginService({ database });
     const directory = await mkdtemp(path.join(tmpdir(), 'theopenhub-plugin-catalog-'));
     tempDirectories.push(directory);
-    const trustedRoot = await createPluginFixture({
-      directory: path.join(directory, 'trusted'),
-      id: 'trusted-plugin',
-      name: 'Trusted Plugin',
-      signature: {
-        signer: 'trusted:catalog',
-        value: signedPluginManifestValue('trusted-plugin', 'Trusted Plugin', '1.0.0', 'trusted:catalog')
-      }
+    const availableRoot = await createPluginFixture({
+      directory: path.join(directory, 'available'),
+      id: 'available-plugin',
+      name: 'Available Plugin'
     });
     await createPluginFixture({
-      directory: path.join(directory, 'untrusted'),
-      id: 'untrusted-plugin',
-      name: 'Untrusted Plugin',
-      signature: {
-        signer: 'unknown:catalog',
-        value: 'bad-signature'
-      }
+      directory: path.join(directory, 'sync'),
+      id: 'sync-plugin',
+      name: 'Sync Plugin',
+      capabilities: [{ type: 'sync-driver', id: 'folder-sync' }],
+      permissions: ['sync-driver'],
+      source: `
+        exports.register = (host) => {
+          host.registerSyncDriver({ id: 'folder-sync', name: 'Folder Sync' });
+        };
+      `
     });
     await createPluginFixture({
-      directory: path.join(directory, 'unsigned'),
-      id: 'unsigned-plugin',
-      name: 'Unsigned Plugin'
+      directory: path.join(directory, 'invalid'),
+      id: 'invalid-plugin',
+      name: 'Invalid Plugin',
+      capabilities: [{ type: 'exporter', id: 'removed-exporter' }]
     });
 
     const record = plugins.addPluginDirectory({ rootPath: directory });
@@ -300,20 +239,19 @@ describe('plugin service', () => {
     expect(scan.catalog).toEqual(
       expect.arrayContaining([
         expect.objectContaining({
-          pluginId: 'trusted-plugin',
-          rootPath: trustedRoot,
-          signatureStatus: 'trusted',
+          pluginId: 'available-plugin',
+          rootPath: availableRoot,
           installed: false
         }),
-        expect.objectContaining({ pluginId: 'untrusted-plugin', signatureStatus: 'untrusted' }),
-        expect.objectContaining({ pluginId: 'unsigned-plugin', signatureStatus: 'unsigned' })
+        expect.objectContaining({ pluginId: 'sync-plugin', status: 'available' }),
+        expect.objectContaining({ pluginId: 'invalid', status: 'error' })
       ])
     );
 
-    await plugins.installPlugin({ rootPath: trustedRoot });
+    await plugins.installPlugin({ rootPath: availableRoot });
     expect(plugins.getPluginCenterState().catalog).toEqual(
       expect.arrayContaining([
-        expect.objectContaining({ pluginId: 'trusted-plugin', installed: true, signatureStatus: 'trusted' })
+        expect.objectContaining({ pluginId: 'available-plugin', installed: true })
       ])
     );
 
@@ -325,7 +263,10 @@ describe('plugin service', () => {
 });
 
 function validManifest(
-  overrides: Partial<Omit<PluginManifest, 'permissions'>> & { permissions?: string[] } = {}
+  overrides: Partial<Omit<PluginManifest, 'capabilities' | 'permissions'>> & {
+    capabilities?: Array<{ type: string; id: string }>;
+    permissions?: string[];
+  } = {}
 ): Record<string, unknown> {
   return {
     id: 'valid-plugin',
@@ -346,10 +287,9 @@ async function createPluginFixture(input: {
   name?: string;
   apiVersion?: number;
   source?: string;
-  capabilities?: PluginCapability[];
+  capabilities?: Array<{ type: string; id: string }>;
   permissions?: string[];
   integrityHash?: string;
-  signature?: { signer: string; value: string };
 } = {}): Promise<string> {
   const directory = input.directory ?? (await mkdtemp(path.join(tmpdir(), 'theopenhub-plugin-')));
   if (!input.directory) {
@@ -378,17 +318,7 @@ async function createPluginFixture(input: {
         apiVersion: input.apiVersion ?? 1,
         capabilities: input.capabilities ?? [{ type: 'agent-adapter', id: 'mock-agent' }],
         permissions: input.permissions ?? [],
-        integrity: { algorithm: 'sha256', hash: input.integrityHash ?? hash },
-        ...(input.signature
-          ? {
-              signature: {
-                status: 'signed',
-                algorithm: 'sha256',
-                signer: input.signature.signer,
-                value: input.signature.value
-              }
-            }
-          : {})
+        integrity: { algorithm: 'sha256', hash: input.integrityHash ?? hash }
       }),
       null,
       2
@@ -408,8 +338,4 @@ function expectPluginManifestError(fn: () => unknown, code: string): void {
   }
 
   throw new Error(`Expected PluginManifestError: ${code}`);
-}
-
-function signedPluginManifestValue(id: string, name: string, version: string, signer: string): string {
-  return createHash('sha256').update(`${JSON.stringify({ id, name, version })}:${signer}`).digest('hex');
 }

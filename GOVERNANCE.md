@@ -1,7 +1,6 @@
 # Governance
 
-TheOpenHub Skills Studio is an MIT licensed open-source project stewarded by
-maintainers.
+OpenHub is an MIT licensed open-source project stewarded by maintainers.
 
 ## Decision Principles
 
@@ -12,6 +11,8 @@ Technical decisions should preserve:
 - Clear renderer and main-process privilege separation.
 - Reproducible builds and tests.
 - Minimal permissions for sync and plugins.
+- Read-only treatment of agent roots unless a future accepted spec changes that
+  boundary.
 - Contributor-visible documentation for major architecture choices.
 
 ## Maintainer Responsibilities
@@ -37,7 +38,9 @@ including:
 - Renderer privilege changes.
 - Plugin permission changes.
 - Sync protocol changes.
-- Import, install, or uninstall behavior changes.
+- Import, indexing, or source-preview behavior changes.
+- Any future deploy, trust scoring, reputation, scanner, policy, or review
+  workflow.
 - Release and signing policy changes.
 
 When maintainers disagree, prefer the option that is safer, easier to test, and

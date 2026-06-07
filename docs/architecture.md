@@ -1,27 +1,21 @@
 # Architecture
 
-OpenHub is a local-first Electron desktop
-application for managing AI coding agent skills.
+OpenHub is a local-first Electron desktop application for indexing and
+organizing AI coding agent skills.
 
 ## Stack Choice
 
-The repository planning documents select Electron + React + Node + SQLite for
-the first implementation:
-
-- Electron provides the desktop shell and main-process boundary.
+- Electron provides the desktop shell and main-process privilege boundary.
 - React and Vite provide the renderer UI.
-- Node in the main process handles filesystem, archive, Git, and adapter work.
+- Node in the main process handles filesystem, archive, Git, adapter, sync, and
+  plugin work.
 - SQLite is the local source of truth for domain state.
 - TypeScript keeps IPC, services, adapters, and UI contracts typed.
-
-The alternative Tauri path remains useful background from the research report,
-but this project's implementation plan intentionally adopts the Electron
-alternative for the initial open-source project.
 
 ## Process Boundaries
 
 Renderer code is untrusted relative to local data and must not directly access
-Node, the filesystem, or SQLite. The desktop shell uses:
+Node, the filesystem, SQLite, or `ipcRenderer`. The desktop shell uses:
 
 - `contextIsolation: true`
 - `nodeIntegration: false`
@@ -34,20 +28,22 @@ The Electron main process owns privileged services:
 - filesystem scanning
 - archive extraction
 - Git import
-- agent directory writes
-- keychain access
-- security scanning
-- sync and plugin host APIs
+- keychain references for future credentials
+- sync drivers
+- plugin host APIs
+
+The current runtime treats agent roots as read-only inventory inputs. It does
+not deploy, uninstall, roll back, score, or block skills in external agent
+directories.
 
 ## Workspace Layout
 
-Workspace packages:
-
 - `apps/desktop`: Electron main process, preload IPC, Vite React renderer.
 - `packages/shared`: shared types, schemas, IPC contracts, constants.
-- `packages/core`: domain services and policies.
+- `packages/core`: domain services for parsing, indexing, imports, versions,
+  collections, source preview, sync, and plugins.
 - `packages/db`: SQLite migrations, repositories, fixtures.
-- `packages/adapters`: built-in agent adapters.
+- `packages/adapters`: built-in read-only agent adapters.
 
 ## Local Source Of Truth
 
@@ -57,305 +53,150 @@ SQLite stores the authoritative state:
 - skill versions
 - skill files
 - blob metadata
-- sources
+- sources and Discover preview cache
 - agents and roots
-- installations
+- indexed skill locations
 - collections
-- security scans
 - sync profiles and events
 - plugin manifests and permissions
 
-Agent directories are deployment projections. The app records what it writes so
-uninstall and rollback can avoid deleting unknown user files.
+Agent directories can be scanned, but they are not the app's persistence layer
+and are not mutated by current runtime workflows.
 
-## Phase 2 Database Implementation
+## Database Implementation
 
-The Phase 2 implementation lives in `packages/db` and uses `better-sqlite3`.
-The migration runner applies migrations transactionally and records them in
-`schema_migrations` so running from an empty database to latest is idempotent.
+`packages/db` uses `better-sqlite3`. The migration runner applies migrations
+transactionally and records them in `schema_migrations` so running from an empty
+database to latest is idempotent.
 
-Implemented migrations:
+Current schema areas:
 
-- `001_domain_schema`: skills, skill versions, skill files, blob objects,
-  sources, agents, agent roots, installations, collections, collection items,
-  security scans, and security findings.
-- `002_skill_search_fts`: FTS5 search over skill name, description, tags, and
-  file paths.
-- `003_installation_files`: app-owned install file records used by uninstall
-  and rollback-safe file projection.
-- `004_security_exemptions`: unique security scan records per version/ruleset
-  plus scoped exemptions with reason, timestamp, and revocation.
-- `005_sync_state`: disabled-by-default sync profiles, local outbox, remote
-  inbox, conflict records, and sync events.
-- `006_plugin_runtime`: plugin manifests, declared permission grants, and
-  plugin error logs.
-- `007_review_usage_events`: local usage event, review item, and review note
-  records used by the Usage and Reviews surfaces.
-- `008_discover_sources`: configured Discover sources and cached preview rows
-  for local/Git source listings.
+- domain tables for skills, versions, files, blob objects, sources, agents,
+  agent roots, indexed locations, and collections
+- FTS5 search over skill name, description, tags, and file paths
+- disabled-by-default sync profiles, outbox, inbox, conflict records, and
+  events
+- plugin manifests, declared permission grants, and plugin error logs
+- Discover sources and cached preview rows for local/Git source listings
 
 Repository tests use `:memory:` databases. They do not write to real user
 directories or agent roots.
 
 ## Data Flow
 
-1. Importers stage local folders, Git repositories, or archives in isolated
+1. Built-in adapters detect local skill roots for supported agents.
+2. The scanner reads `SKILL.md` directories and records indexed locations in
+   SQLite.
+3. Importers stage local folders, Git repositories, or archives in isolated
    temporary directories.
-2. Path checks reject traversal, ZIP slip, symlink escape, and writes outside
-   allowed roots.
-3. Parsed skill metadata and file hashes are written to SQLite.
-4. File contents are stored in a content-addressed blob store.
-5. Installation creates a plan, reports conflicts, then clean plans project
-   files into an agent root and record app-owned targets.
-6. Security scans and release smoke verification compare recorded state with
-   runtime behavior before writes are treated as ready.
+4. Path checks reject traversal, ZIP slip, symlink escape, and writes outside
+   allowed staging roots.
+5. Parsed skill metadata and file hashes are written to SQLite.
+6. File contents are stored in a content-addressed blob store.
+7. Version, diff, collection, source preview, sync, and plugin workflows read
+   from the same local SQLite state.
 
 ## Runtime IPC Integration
 
-The desktop runtime uses the Electron main process as the only privileged
-process. `apps/desktop/src/main/desktop-runtime.ts` opens the app data SQLite
-database, runs migrations, creates the content store, and dispatches typed IPC
-channels through shared Zod contracts.
+`apps/desktop/src/main/desktop-runtime.ts` opens the app data SQLite database,
+runs migrations, creates the content store, and dispatches typed IPC channels
+through shared Zod contracts.
 
 Runtime channels currently cover:
 
-- `workspace.state`: aggregate app, library, management, security, governance,
-  sync, and plugin panel state.
-- `library.scan` and `library.list`: scan detected Codex, Claude, Gemini, and
-  OpenCode roots, then list indexed installed projections.
-- `library.search` and `library.detail`: run FTS-backed search and aggregate
-  selected skill metadata, source, files, versions, scan state, and installs.
+- `workspace.state`: aggregate app, library, import, version, collection, sync,
+  plugin, and source-preview state.
+- `app.info`, `app.onboarding.get`, and `app.onboarding.complete`: app metadata
+  and first-run state.
+- `agentRoots.list`, `agentRoots.detect`, and `agentRoots.addProjectRoot`:
+  detect and register local roots for indexing.
+- `library.scan`, `library.list`, `library.search`, `library.facets`,
+  `library.favorite`, and `library.detail`: scan roots, query inventory, and
+  aggregate selected skill metadata and files.
 - `import.localFolder`, `import.git`, and `import.zip`: stage and import local
   folders, Git URLs, and ZIP archives.
-- `export.skill`, `collection.create`, `collection.export`, and
-  `collection.import`: create portable skill and collection packages.
-- `install.listTargets`, `install.createPlan`, `install.applyPlan`, and
-  `install.uninstall`: discover writable agent roots, create conflict-aware
-  copy projection plans, apply clean plans, and remove app-owned files.
-- `version.list`, `version.diff`, and `version.rollback`: inspect version
-  history, compare file hashes, and rewrite an installed projection to an older
-  version.
-- `security.scan`, `security.rescan`, `security.findingDetail`,
-  `security.createExemption`, and `security.revokeExemption`: scan latest
-  versions, batch rescan, inspect findings, and manage scoped exemptions.
+- `collection.create`: group local skill records.
+- `version.list`, `version.diff`, and `version.compare`: inspect version
+  history and file changes.
 - `sync.startupPlan`, `sync.createProfile`, `sync.enqueueLocalChange`,
   `sync.push`, `sync.pull`, `sync.listConflicts`, and `sync.resolveConflict`:
   keep sync disabled by default and expose explicit profile, push/pull, and
   conflict operations.
 - `plugins.centerState`, `plugins.install`, `plugins.authorizePermission`,
-  `plugins.enable`, `plugins.disable`, and `plugins.registry`: install plugin
+  `plugins.enable`, `plugins.disable`, and `plugins.registry`: add plugin
   folders, authorize declared permissions, enable/disable plugins, and inspect
   registered capabilities.
-- `discover.addSource` and `discover.previewSource`: configure local/Git sources
-  and preview source candidates before writing skills.
+- `discover.addSource` and `discover.previewSource`: configure local/Git
+  sources and preview candidates before import.
 
 The preload bridge validates every response before exposing it to the renderer.
-Renderer code still has no direct Node, filesystem, SQLite, or `ipcRenderer`
-access.
+
+## Renderer Model
+
+The renderer uses four primary pages:
+
+- Home: metrics, first-run steps, and scan status.
+- Inventory: indexed and imported skills.
+- Sources: local/Git source preview.
+- Settings: roots, sync status, and plugin registry.
+
+Renderer code consumes typed preload APIs only. It must not reach into Node,
+SQLite, the filesystem, or Electron IPC directly.
 
 ## Offline And Sync
 
 The app starts offline and performs no sync activity without a user-created
-sync profile. Phase 7 implements sync as an optional layer on top of local
-SQLite transactions, outbox and inbox records, conflict objects, and explicit
-drivers.
+sync profile. Sync is an optional layer on top of local SQLite transactions,
+outbox and inbox records, conflict objects, and explicit drivers.
 
-Local writes must exist in SQLite before they can be queued in `sync_outbox`.
 Drivers exchange portable change packages; they do not bypass the database as
-the local source of truth. The first drivers cover shared-folder package files
-and Git-backed package commits. A mock REST mode exists for service contracts
-and conflict lifecycle tests without introducing live network behavior.
+the local source of truth. Current drivers cover shared-folder package files,
+Git-backed package commits, and a mock REST mode for contract tests.
 
-Conflicts are stored in `sync_conflicts` with base, local, remote, status, and
-resolution payloads so UI and future main-process workflows can require an
-explicit choice before applying divergent remote state.
+Conflicts are stored with base, local, remote, status, and resolution payloads
+so UI and future main-process workflows can require an explicit choice before
+applying divergent remote state.
 
 ## Plugin Boundary
 
-Plugins are constrained extensions for adapters, importers, security rules, and
-sync drivers. They must declare capabilities and permissions in `plugin.json`,
-pass integrity validation for their entry file, and receive explicit permission
-authorization before enabling.
+Plugins are constrained extensions for adapters, importers, and sync drivers.
+They must declare capabilities and permissions in `plugin.json`, pass integrity
+validation for their entry file, and receive explicit permission authorization
+before enabling.
 
-Phase 8 executes the v1 plugin entry through a restricted host API that exposes
-registration methods only. It does not expose filesystem, network, shell,
-process, or SQLite APIs to plugin code. The implementation also preflights
-entry source for unsafe runtime escape patterns. This is a governance and
-capability boundary, not a substitute for reviewing untrusted plugin code before
-installation.
+The v1 plugin host exposes registration methods only. It does not expose
+filesystem, network, shell, process, or SQLite APIs to plugin code. The
+implementation also preflights entry source for unsafe runtime escape patterns.
+This is a capability boundary, not a substitute for reviewing untrusted plugin
+code before enabling it.
 
-## Phase 3 Agent Indexing
+## Source Preview
 
-The Phase 3 implementation adds a read-only indexing path:
+The Discover layer is local-first and preview-oriented:
 
-- `packages/adapters` defines `AgentAdapter` and built-in adapters for Codex,
-  Claude, Gemini, and OpenCode.
-- Built-in adapters detect default user skill roots under the provided home
-  directory and list installed skill directories that contain `SKILL.md`.
-- `packages/core` parses YAML frontmatter from `SKILL.md` and returns
-  explainable errors for missing or malformed metadata.
-- The scanner reads fixture roots, writes skills, versions, files, agents,
-  roots, and installation records into SQLite, and keeps invalid skills as scan
-  errors instead of crashing.
-- `library.list` is a typed IPC channel for renderer library queries.
-
-## Phase 4 Import And Install Loop
-
-The Phase 4 implementation adds the first write-capable management loop while
-keeping SQLite authoritative:
-
-- `packages/core` stages local folders, Git clones, and ZIP archives under an
-  isolated temp directory before parsing `SKILL.md`.
-- `path-safety` canonicalizes roots and candidate paths, rejects symlink escape,
-  and rejects ZIP entries with absolute paths or `..` traversal.
-- `content-store` writes file contents by SHA-256 hash so database blob metadata
-  and file bytes stay linked.
-- Install planning computes target root, skill directory, writes, and conflict
-  state before any agent directory write occurs.
-- Install application copies blobs into the agent root and records every
-  app-owned target file in `installation_files`.
-- Uninstall deletes only those recorded file paths and leaves unknown user files
-  in place.
-- Export writes `manifest.json` plus a `files/` tree containing the skill files
-  and recorded hashes.
-- The renderer shows the P0 import queue, install plan, and install result
-  state without direct Node, filesystem, SQLite, or `ipcRenderer` access.
-
-## Phase 5 Security Governance
-
-The Phase 5 implementation adds pre-install security governance:
-
-- `security-service` defines `SecurityRule`, scan results, findings, risk
-  scoring, and install policy results.
-- Initial rules cover dangerous shell commands, external data transfer,
-  sensitive file reads, path traversal references, executable scripts, and
-  oversized files.
-- Scans are recorded in `security_scans` and `security_findings`; rescans use a
-  stable version/ruleset key so repeated batch rescans update existing records
-  instead of creating noisy duplicates.
-- `createInstallService()` evaluates the current security policy before writing
-  files. High and critical results are blocked by default.
-- Scoped exemptions are recorded in `security_exemptions` with reason and
-  timestamp and can be revoked. Active exemptions allow a blocked install for
-  the matching skill and scope.
-- Low and medium findings are returned as install warnings.
-- The renderer can display Security Center state for scan queue, risk score,
-  rule details, scan history, and exemptions without privileged access.
-
-## Phase 6 History And Collections
-
-The Phase 6 implementation adds governance history on top of the existing
-content-addressed blob store:
-
-- `version-service` creates new `skill_versions` rows for content-changing
-  operations, writes `skill_files`, and dedupes identical blob hashes through
-  `blob_objects`.
-- Version listing exposes newest-first history.
-- File diffs classify added, modified, and deleted paths by comparing version
-  file hashes.
-- Installation rollback rewrites only the app-owned projection for a target
-  installation and version, removes files that are no longer in the target
-  version, and updates install file ownership records.
-- `collection-service` creates collections, exports all latest skill files in a
-  portable package, and imports that package into a fresh SQLite database.
-- The renderer can display History, Diff, and Collections state without
-  privileged access.
-
-## Discover Sources And Root Detection
-
-The Discover layer is intentionally local-first and preview-oriented:
-
-- `discover_sources` stores configured local or Git sources, trust metadata,
-  verification flags, cache status, and timestamps.
+- `discover_sources` stores configured local or Git sources.
 - `discover_source_cache` stores preview rows for skill name, description,
-  tags, path, and risk status.
-- Adding a source records metadata only; Git or local reads happen when the user
-  explicitly asks to preview.
-- First launch reads common Codex, Claude, Gemini, and OpenCode roots through
-  the built-in adapters and presents them before opening the workspace.
-- Non-standard directories use ordinary local folder, Git, ZIP, TAR, sparse-Git,
-  or mirror import flows instead of a dedicated first-launch wizard.
-- The renderer exposes configured source and preview actions through preload IPC
-  only.
+  tags, path, and verified metadata.
+- Adding a source does not import skills or write agent roots.
+- Preview scans happen only when the user explicitly asks to preview.
+- Non-standard directories are covered by ordinary import flows.
 
-## Phase 7 Offline-First Sync
+The runtime does not expose marketplace ratings, source reputation, trust
+levels, or risk status.
 
-The Phase 7 implementation keeps sync opt-in and local-first:
+## Release Readiness
 
-- `sync_profiles` controls mode, remote location, enabled state, and last sync
-  timestamp. No profile means no startup sync activity.
-- `sync_outbox` records local entity changes after the local entity exists in
-  SQLite.
-- `sync_inbox` records pulled remote packages with a unique remote event key per
-  profile.
-- `sync_events` captures inbound, outbound, and conflict lifecycle events.
-- `sync_conflicts` stores local, remote, and base payloads until an explicit
-  resolution is recorded.
-- `sync-service` exposes shared-folder, Git, and mock REST mode contracts. The
-  shared-folder driver writes package JSON to an outbox directory and reads
-  inbox package JSON. The Git driver initializes a package repository, writes
-  package files, commits queued changes, and reads package files back.
-- The renderer can display Sync Center state for profiles, outbox, inbox, and
-  conflicts without privileged access.
+Release readiness is verified by:
 
-## Phase 8 Plugin Runtime
+- workspace build, lint, typecheck, and test gates
+- current-platform unpacked desktop packaging
+- release smoke for package entrypoints, native SQLite runtime, database
+  migrations, local/Git/ZIP import, inventory flow, source preview, sync
+  disabled default, plugin disabled default, and renderer privilege boundaries
+- checksum and dependency inventory scripts
+- redacted release logs
 
-The Phase 8 implementation adds a disabled-by-default plugin management layer:
+## Maintainer Operations
 
-- `plugin_manifests` stores manifest metadata, capabilities, permissions,
-  integrity metadata, root path, status, and enabled state.
-- `plugin_permission_grants` records explicit permission authorizations with a
-  reason and revocation slot.
-- `plugin_errors` records host execution, unsafe entry, and permission errors
-  for Plugins UI review.
-- `plugin-service` validates required manifest fields, supported API version,
-  known capability types, known permissions, safe entry paths, and sha256 entry
-  integrity.
-- Enabling a plugin requires all declared permissions to have active grants.
-- The restricted host API supports registration for agent adapters, importers,
-  security rules, and sync drivers. Each registration must match a declared
-  capability.
-- Disabling a plugin removes its capabilities from the in-memory registry and
-  marks it disabled in SQLite.
-- The renderer can display Plugins state for install status, capabilities,
-  permissions, and error logs without privileged access.
-
-## Phase 9 Release Packaging
-
-The Phase 9 implementation adds release-readiness tooling without checking in
-generated artifacts:
-
-- `config/desktop-packaging.json` records product identity and macOS, Windows,
-  and Linux package target metadata.
-- `package:desktop` builds the workspace and writes a current-platform unpacked
-  payload under `out/packages`.
-- The package payload includes renderer, main, preload, package metadata,
-  runtime external dependencies, Electron ABI native SQLite runtime, license,
-  changelog, README, security policy, and a release manifest.
-- The release manifest records entrypoints and privacy defaults: no telemetry,
-  no automatic sync profile, and no automatically enabled plugin.
-- `release:checksums` writes sha256 checksums for package payload files.
-- `release:inventory` writes a dependency inventory for root and workspace
-  package manifests.
-- `release:smoke` validates package entrypoints, packaged main startup under
-  the Electron runtime, privacy defaults, database migration coverage, local,
-  Git, and ZIP import, FTS search, skill export, install, app-owned uninstall,
-  first-launch window options, and redacted release logs.
-
-## Phase 10 Maintainer Operations
-
-The Phase 10 implementation adds long-term open-source operating structure:
-
-- ADRs under `docs/adr/` capture major architecture decisions.
-- `docs/maintainer-guide.md` gives maintainers a single triage, release, and
-  security intake workflow.
-- `docs/triage-policy.md` and `docs/issue-labels.md` standardize issue intake.
-- `docs/dependency-policy.md` defines dependency risk notes and required
-  verification.
-- `docs/security-response-playbook.md` defines private vulnerability handling.
-- `docs/fixture-contribution.md` prevents committing real skill contents,
-  tokens, user paths, or agent snapshots.
-- `docs/roadmap-workflow.md` keeps roadmap changes public and reviewable.
-- `docs/contributor-recipes.md` teaches safe adapter, security rule, sync
-  driver, and fixture contributions.
-- CI now includes desktop packaging and release smoke gates.
+Maintainer docs cover triage, release, private vulnerability intake, dependency
+updates, fixture rules, contributor recipes, roadmap workflow, and ADRs.

@@ -2,7 +2,7 @@ import { createHash } from 'node:crypto';
 
 import type { SqliteDatabase } from './migrations';
 
-export interface RecordScannedInstallationInput {
+export interface RecordIndexedSkillLocationInput {
   skillId: string;
   versionId: string;
   agentCode: string;
@@ -14,7 +14,7 @@ export interface RecordScannedInstallationInput {
   writable: boolean;
   isDefault: boolean;
   skillPath: string;
-  installStatus: string;
+  visibilityStatus: string;
 }
 
 export interface LibrarySkillSummary {
@@ -22,21 +22,21 @@ export interface LibrarySkillSummary {
   name: string;
   sourceAgent: string;
   path: string;
-  installStatus: string;
+  visibilityStatus: string;
   favorite: boolean;
 }
 
 export interface LibraryRepository {
-  recordScannedInstallation(input: RecordScannedInstallationInput): void;
+  recordIndexedSkillLocation(input: RecordIndexedSkillLocationInput): void;
   listLibrarySkills(): LibrarySkillSummary[];
 }
 
 export function createLibraryRepository(database: SqliteDatabase): LibraryRepository {
   return {
-    recordScannedInstallation(input) {
+    recordIndexedSkillLocation(input) {
       const agentId = stableId('agent', input.agentCode);
       const rootId = stableId('agent-root', `${input.agentCode}:${input.rootPath}:${input.rootScope}`);
-      const installationId = stableId('installation', `${input.skillId}:${rootId}:${input.skillPath}`);
+      const locationId = stableId('indexed-skill-location', `${input.skillId}:${rootId}:${input.skillPath}`);
 
       const record = database.transaction(() => {
         database
@@ -88,24 +88,23 @@ export function createLibraryRepository(database: SqliteDatabase): LibraryReposi
         database
           .prepare(
             `
-              insert into installations
-                (id, skill_id, agent_root_id, installed_version_id, install_scope, install_path, status)
+              insert into indexed_skill_locations
+                (id, skill_id, agent_root_id, skill_version_id, skill_path, visibility_status, last_indexed_at)
               values
-                (@id, @skillId, @rootId, @versionId, @installScope, @installPath, @status)
+                (@id, @skillId, @rootId, @versionId, @skillPath, @visibilityStatus, current_timestamp)
               on conflict(id) do update set
-                installed_version_id = excluded.installed_version_id,
-                status = excluded.status,
-                last_verified_at = current_timestamp
+                skill_version_id = excluded.skill_version_id,
+                visibility_status = excluded.visibility_status,
+                last_indexed_at = current_timestamp
             `
           )
           .run({
-            id: installationId,
+            id: locationId,
             skillId: input.skillId,
             rootId,
             versionId: input.versionId,
-            installScope: input.rootScope,
-            installPath: input.skillPath,
-            status: input.installStatus
+            skillPath: input.skillPath,
+            visibilityStatus: input.visibilityStatus
           });
       });
 
@@ -120,12 +119,12 @@ export function createLibraryRepository(database: SqliteDatabase): LibraryReposi
               s.id,
               s.name,
               a.display_name as sourceAgent,
-              i.install_path as path,
-              i.status as installStatus,
+              isl.skill_path as path,
+              isl.visibility_status as visibilityStatus,
               case when sfav.skill_id is null then 0 else 1 end as favorite
-            from installations i
-            join skills s on s.id = i.skill_id
-            join agent_roots ar on ar.id = i.agent_root_id
+            from indexed_skill_locations isl
+            join skills s on s.id = isl.skill_id
+            join agent_roots ar on ar.id = isl.agent_root_id
             join agents a on a.id = ar.agent_id
             left join skill_favorites sfav on sfav.skill_id = s.id
             order by s.name collate nocase, a.display_name collate nocase

@@ -316,11 +316,11 @@ describe('sync service', () => {
     expect(appliedFiles.draftVersionIds).toHaveLength(2);
     expect(
       database
-        .prepare('select lifecycle, release_channel as releaseChannel from skill_versions where skill_id = ? order by version_no desc limit 2')
+        .prepare('select version_no as versionNo, change_summary as changeSummary from skill_versions where skill_id = ? order by version_no desc limit 2')
         .all(imported.skill.id)
     ).toEqual([
-      { lifecycle: 'draft', releaseChannel: 'local' },
-      { lifecycle: 'draft', releaseChannel: 'local' }
+      expect.objectContaining({ versionNo: 3, changeSummary: `Remote conflict draft ${fileConflict.id}` }),
+      expect.objectContaining({ versionNo: 2, changeSummary: `Local conflict draft ${fileConflict.id}` })
     ]);
 
     const deleteConflict = sync.detectConflict({

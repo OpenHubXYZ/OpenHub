@@ -1,8 +1,8 @@
 # Plugin API
 
-Phase 8 introduces a constrained v1 plugin API for local extensions. Plugins are
-disabled after installation until their declared permissions are explicitly
-authorized and the user enables them.
+OpenHub supports a constrained v1 plugin API for local extensions. Plugins are
+disabled by default until their declared permissions are explicitly authorized
+and the user enables them.
 
 ## Manifest
 
@@ -28,25 +28,24 @@ Supported capability types:
 
 - `agent-adapter`
 - `importer`
-- `security-rule`
 - `sync-driver`
 
 Supported permissions:
 
 - `agent-root:read`
-- `agent-root:write`
 - `network:fetch`
 - `import:local`
 - `sync-driver`
 
-Unknown permissions, unknown capability types, unsafe entry paths, incompatible
-API versions, and entry integrity mismatches reject installation or enablement.
+Unknown permissions, unknown capability types, unsafe entry paths,
+incompatible API versions, and entry integrity mismatches reject registration or
+enablement.
 
 ## User Workflow
 
 Plugins are managed from Settings through preload IPC:
 
-- install a local plugin folder containing `plugin.json`
+- add a local plugin folder containing `plugin.json`
 - inspect manifest details, declared permissions, grants, capabilities, and
   recorded errors
 - authorize a declared permission with a reason
@@ -54,8 +53,8 @@ Plugins are managed from Settings through preload IPC:
 - inspect the runtime registry after enablement
 - disable the plugin and remove its registered capabilities from the registry
 
-Installation records metadata and validation failures in SQLite. Enablement is
-the step that runs the constrained registration entry.
+The plugin record stores metadata and validation failures in SQLite. Enablement
+is the step that runs the constrained registration entry.
 
 ## Entry Module
 
@@ -74,12 +73,12 @@ The host currently exposes registration methods only:
 
 - `registerAgentAdapter({ code, displayName })`
 - `registerImporter({ id, name })`
-- `registerSecurityRule({ id, name })`
 - `registerSyncDriver({ id, name })`
 
-Every registration must match a declared manifest capability. Disabling a plugin
-removes all capabilities registered by that plugin from the runtime registry.
-Undeclared registrations fail and are recorded as plugin errors for the UI.
+Every registration must match a declared manifest capability. Disabling a
+plugin removes all capabilities registered by that plugin from the runtime
+registry. Undeclared registrations fail and are recorded as plugin errors for
+the UI.
 
 ## Security Limits
 
@@ -88,6 +87,6 @@ APIs. Entry source is blocked when it contains unsafe escape patterns such as
 `require`, dynamic `import`, `process`, `fetch`, `node:`, `child_process`, `fs`,
 `eval`, or `Function`.
 
-This is a constrained governance boundary for Phase 8, not a complete sandbox
-for arbitrary untrusted JavaScript. Maintainers should still review plugin code
-before authorizing permissions or enabling a plugin.
+This is a constrained capability boundary, not a complete sandbox for arbitrary
+untrusted JavaScript. Maintainers should still review plugin code before
+authorizing permissions or enabling a plugin.

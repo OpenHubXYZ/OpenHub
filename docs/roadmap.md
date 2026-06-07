@@ -1,16 +1,16 @@
 # Roadmap
 
-This roadmap mirrors the high-standard development plan in `references/`.
-Each phase must pass acceptance before the next phase expands product scope.
+The current roadmap is inventory-first. Historical planning documents in
+`references/` remain useful context, but the current product no longer includes
+agent-root deploy workflows, trust scoring, policy packs, or review queues.
 
 ## Phase 0: Open-Source Repository Foundation
 
 - Track planning references.
 - Add MIT license, community health files, and baseline docs.
-- Keep the repository documentation-only with no product code.
 
-Acceptance: `git status --short --untracked-files=all` shows references and
-open-source files, and docs explain status, privacy, architecture, and roadmap.
+Acceptance: open-source files are visible and docs explain status, privacy,
+architecture, and roadmap.
 
 ## Phase 1: Workspace, Tooling, CI Baseline
 
@@ -31,52 +31,43 @@ real user directories.
 
 ## Phase 3: Agent Detection And Library Indexing
 
-- Add Codex, Claude, Gemini, and OpenCode adapters.
+- Add Codex, Claude, Gemini, OpenCode, and Agents adapters.
 - Parse `SKILL.md` files.
-- Expose Library search, Skill Detail, and Settings roots UI.
+- Expose Inventory search, Skill Detail, and Settings roots UI.
 
 Acceptance: fixture roots scan, malformed files produce explainable errors, and
 IPC library search/detail tests pass.
 
-## Phase 4: Import, Export, Install, Uninstall
+## Phase 4: Import Into Local Inventory
 
 - Add local folder, Git, and ZIP importers.
-- Add path sanitization, conflict planning, copy projection, uninstall, and
-  portable export packages.
+- Add path sanitization and isolated staging.
+- Store imported file contents in the content-addressed store.
 
-Acceptance: fixture imports, security rejection fixtures, install plans,
-export packages, uninstall safety, and UI flows pass.
+Acceptance: fixture imports, ZIP slip rejection, symlink escape rejection,
+search, detail, and renderer import state tests pass.
 
 ## Phase 4.5: Discover Sources And Root-Aware Imports
 
 - Add local and Git source configuration.
 - Cache source preview listings.
-- Keep first launch focused on common Codex, Claude, Gemini, and OpenCode root
-  detection.
+- Keep first launch focused on common local root detection.
 - Route non-standard directories through ordinary local folder, Git, ZIP, TAR,
-  sparse-Git, or mirror imports.
+  sparse-Git, or mirror imports when supported.
 
 Acceptance: adding a source performs no network or import writes by itself,
 preview reports candidate skills before import, first-launch root detection is
-read-only, and no account, telemetry, or remote catalog fetch is required by
-default.
+read-only, and no account, telemetry, remote catalog fetch, trust level, or risk
+score is required by default.
 
-## Phase 5: Security Center And Governance
+## Phase 5: Version History, Blob Store, Collections
 
-- Add security rule engine, risk scoring, scan history, exemptions, and install
-  blocking.
+- Extend content-addressed file storage with version creation, file diff,
+  compare, and collections.
 
-Acceptance: high-risk fixtures block before install and exemption lifecycle
-tests pass.
+Acceptance: dedupe, versioning, diff, compare, and collection tests pass.
 
-## Phase 6: Version History, Blob Store, Collections
-
-- Extend the content-addressed file storage with version creation, diff,
-  rollback, collections, and batch operations.
-
-Acceptance: dedupe, versioning, diff, rollback, and collection tests pass.
-
-## Phase 7: Offline-First Sync
+## Phase 6: Offline-First Sync
 
 - Add disabled-by-default sync profiles, outbox, inbox, shared folder sync, Git
   sync, mock REST interface, and conflict center.
@@ -85,28 +76,29 @@ Acceptance: no profile means no sync activity, shared-folder and Git fixture
 sync work through explicit push/pull actions, credentials are represented by
 `auth_ref`, and conflict lifecycle tests pass.
 
-## Phase 8: Plugin Runtime And Extension APIs
+## Phase 7: Plugin Runtime And Extension APIs
 
 - Add manifest validation, constrained host API, permissions, and plugin UI.
 
 Acceptance: unauthorized plugins cannot enable, unsafe entries and integrity
-mismatches fail visibly, registered capabilities appear only after enablement,
-disabling a plugin removes them from the registry, and example plugin contract
-tests pass.
+mismatches fail visibly, registered adapter/importer/sync capabilities appear
+only after enablement, disabling a plugin removes them from the registry, and
+example plugin contract tests pass.
 
-## Phase 9: Packaging, Release, OSS Launch
+## Phase 8: Packaging, Release, OSS Launch
 
 - Add desktop packaging, smoke tests, release checklist, checksums, dependency
   inventory, and launch README.
 
 Acceptance: current-platform package build and smoke coverage for search,
-Git/ZIP import, export, install, uninstall, sync disabled default, and plugin
-disabled default pass.
+local/Git/ZIP import, inventory flow, source preview, sync disabled default, and
+plugin disabled default pass.
 
-## Phase 10: Maintainer Operations
+## Phase 9: Maintainer Operations
 
 - Add ADRs, triage policy, maintainer guide, dependency update policy, security
-  response playbook, and fixture contribution rules.
+  response playbook, fixture contribution rules, contributor recipes, and
+  public roadmap workflow.
 
 Acceptance: maintainers can triage, release, handle security intake, and guide
-contributors through adapters, rules, sync drivers, and fixtures.
+contributors through adapters, importers, sync drivers, and fixtures.
