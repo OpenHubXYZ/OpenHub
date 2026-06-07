@@ -861,6 +861,18 @@ button {
     text-overflow: clip;
   }
 
+  .candidate-heading {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+
+  .candidate strong,
+  .candidate > span {
+    white-space: normal;
+    overflow-wrap: anywhere;
+    text-overflow: clip;
+  }
+
   .detail-heading {
     flex-direction: column;
   }
