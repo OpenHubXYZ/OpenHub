@@ -44,6 +44,16 @@ describe('renderer layout containment CSS', () => {
     expect(compactRules).toContain('grid-template-rows: auto minmax(0, 1fr);');
   });
 
+  it('keeps mobile dashboard metrics compact so start actions remain reachable', async () => {
+    const css = await readFile(cssPath, 'utf8');
+    const compactRules = atRuleBlock(css, '@media (max-width: 900px)');
+
+    expect(compactRules).toContain('.metric-grid {');
+    expect(compactRules).toContain('grid-template-columns: repeat(2, minmax(0, 1fr));');
+    expect(compactRules).toContain('.metric {');
+    expect(compactRules).toContain('padding: 12px;');
+  });
+
   it('lets narrow settings rows show long local paths instead of collapsing to ellipses', async () => {
     const css = await readFile(cssPath, 'utf8');
     const compactRules = atRuleBlock(css, '@media (max-width: 900px)');
