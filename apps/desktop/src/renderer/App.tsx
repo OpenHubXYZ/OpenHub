@@ -1,5 +1,6 @@
 import { FolderSearch, Home, Library, Plug, RefreshCw, Search, Settings, Star } from 'lucide-react';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import type { RefObject } from 'react';
 
 import type {
   AgentRootTarget,
@@ -83,6 +84,7 @@ export function App({
   const [status, setStatus] = useState('Ready');
   const [statusTone, setStatusTone] = useState<StatusTone>('default');
   const mountedRef = useRef(true);
+  const skillDetailPanelRef = useRef<HTMLElement | null>(null);
 
   const viewModel = useMemo(() => createWorkspaceViewModel(state), [state]);
   const uxModel = useMemo(
@@ -288,6 +290,13 @@ export function App({
       cancelled = true;
     };
   }, [initialPluginRegistry, runRootScan, setRootsAndSources, setStatusMessage]);
+
+  useEffect(() => {
+    if (!selectedSkillDetail || !window.matchMedia?.('(max-width: 900px)').matches) {
+      return;
+    }
+    skillDetailPanelRef.current?.scrollIntoView({ block: 'start', inline: 'nearest', behavior: 'smooth' });
+  }, [selectedSkillDetail]);
 
   async function refreshWorkspaceCommand() {
     try {
@@ -674,6 +683,7 @@ export function App({
               setProjectionMode={setProjectionMode}
               pendingPlan={pendingPlan}
               selectedSkillDetail={selectedSkillDetail}
+              skillDetailPanelRef={skillDetailPanelRef}
               favoritesOnly={favoritesOnly}
               setFavoritesOnly={setFavoritesOnly}
               importedCandidates={importedCandidates}
@@ -777,6 +787,7 @@ function SkillsPage({
   setProjectionMode,
   pendingPlan,
   selectedSkillDetail,
+  skillDetailPanelRef,
   favoritesOnly,
   setFavoritesOnly,
   importedCandidates,
@@ -805,6 +816,7 @@ function SkillsPage({
   setProjectionMode: (value: 'copy' | 'symlink') => void;
   pendingPlan: InstallPlan | null;
   selectedSkillDetail: SkillDetail | null;
+  skillDetailPanelRef: RefObject<HTMLElement | null>;
   favoritesOnly: boolean;
   setFavoritesOnly: (value: boolean) => void;
   importedCandidates: Record<string, string>;
@@ -936,7 +948,7 @@ function SkillsPage({
             </section>
           ))}
         </section>
-        <SkillDetailPanel detail={selectedSkillDetail} />
+        <SkillDetailPanel detail={selectedSkillDetail} detailPanelRef={skillDetailPanelRef} />
         </>
       )}
     </div>
@@ -1125,17 +1137,17 @@ function ConflictBox({ plan, onConfirmOverwrite }: { plan: InstallPlan; onConfir
   );
 }
 
-function SkillDetailPanel({ detail }: { detail: SkillDetail | null }) {
+function SkillDetailPanel({ detail, detailPanelRef }: { detail: SkillDetail | null; detailPanelRef: RefObject<HTMLElement | null> }) {
   if (!detail) {
     return (
-      <section className="panel detail-panel" aria-label="Skill detail">
+      <section className="panel detail-panel" aria-label="Skill detail" ref={detailPanelRef}>
         <p className="empty">Select a skill to inspect files and versions.</p>
       </section>
     );
   }
 
   return (
-    <section className="panel detail-panel" aria-label={`${detail.skill.name} details`}>
+    <section className="panel detail-panel" aria-label={`${detail.skill.name} details`} ref={detailPanelRef}>
       <div className="detail-heading">
         <div>
           <h2>{detail.skill.name}</h2>

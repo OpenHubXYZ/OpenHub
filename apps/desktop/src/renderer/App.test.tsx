@@ -10,9 +10,19 @@ import { App } from './App';
 import { createEmptyWorkspaceState } from './workspace-view-model';
 
 describe('desktop app shell', () => {
+  const originalMatchMedia = window.matchMedia;
+  const originalScrollIntoView = HTMLElement.prototype.scrollIntoView;
+
   afterEach(() => {
     cleanup();
     delete window.theOpenHub;
+    vi.restoreAllMocks();
+    Object.defineProperty(window, 'matchMedia', { configurable: true, writable: true, value: originalMatchMedia });
+    Object.defineProperty(HTMLElement.prototype, 'scrollIntoView', {
+      configurable: true,
+      writable: true,
+      value: originalScrollIntoView
+    });
   });
 
   it('renders the skills workbench without Sources, Deploy, or Trust navigation', () => {
@@ -1195,6 +1205,90 @@ describe('desktop app shell', () => {
     expect(screen.queryByRole('button', { name: /run test task/i })).not.toBeInTheDocument();
   });
 
+  it('scrolls mobile skill details into view after opening from a long indexed list', async () => {
+    const state = workspaceWithRepeatedAgentSkills(createEmptyWorkspaceState(), 12);
+    const scrollIntoView = vi.fn();
+    mockCompactViewport(true);
+    Object.defineProperty(HTMLElement.prototype, 'scrollIntoView', {
+      configurable: true,
+      value: scrollIntoView
+    });
+    window.theOpenHub = {
+      getWorkspaceState: vi.fn().mockResolvedValue(state),
+      listAgentRoots: vi.fn().mockResolvedValue([]),
+      listDiscoverSources: vi.fn().mockResolvedValue([]),
+      getSkillDetail: vi.fn().mockResolvedValue({
+        skill: {
+          id: 'skill-mobile-detail-01',
+          versionId: 'version-mobile-detail-01',
+          slug: 'mobile-detail-01',
+          name: 'Mobile Detail 01',
+          description: 'Open mobile details',
+          tags: ['mobile'],
+          versionNo: 1,
+          favorite: false
+        },
+        source: { type: 'local', url: '/tmp/.codex/skills/mobile-detail-01' },
+        versions: [],
+        files: [{ relativePath: 'SKILL.md', hash: 'hash-mobile-detail-01', size: 120, kind: 'markdown' }],
+        skillMarkdown: '# Mobile Detail 01'
+      })
+    } as unknown as NonNullable<typeof window.theOpenHub>;
+
+    render(<App initialState={state} />);
+    fireEvent.click(screen.getByRole('button', { name: 'Skills' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Open Mobile Detail 01 details' }));
+
+    expect(await screen.findByRole('heading', { name: 'Mobile Detail 01' })).toBeInTheDocument();
+    await waitFor(() =>
+      expect(scrollIntoView).toHaveBeenCalledWith({ block: 'start', inline: 'nearest', behavior: 'smooth' })
+    );
+    expect(scrollIntoView.mock.contexts[0]).toBe(screen.getByLabelText('Mobile Detail 01 details'));
+  });
+
+  it('does not scroll desktop skill details that are already in the side-by-side layout', async () => {
+    const state = workspaceWithAgentSkill(createEmptyWorkspaceState(), {
+      agentCode: 'codex',
+      agentDisplayName: 'Codex',
+      name: 'Desktop Detail',
+      rootPath: '/tmp/.codex/skills'
+    });
+    const scrollIntoView = vi.fn();
+    mockCompactViewport(false);
+    Object.defineProperty(HTMLElement.prototype, 'scrollIntoView', {
+      configurable: true,
+      value: scrollIntoView
+    });
+    window.theOpenHub = {
+      getWorkspaceState: vi.fn().mockResolvedValue(state),
+      listAgentRoots: vi.fn().mockResolvedValue([]),
+      listDiscoverSources: vi.fn().mockResolvedValue([]),
+      getSkillDetail: vi.fn().mockResolvedValue({
+        skill: {
+          id: 'skill-desktop-detail',
+          versionId: 'version-desktop-detail',
+          slug: 'desktop-detail',
+          name: 'Desktop Detail',
+          description: 'Open desktop details',
+          tags: [],
+          versionNo: 1,
+          favorite: false
+        },
+        source: { type: 'local', url: '/tmp/.codex/skills/desktop-detail' },
+        versions: [],
+        files: [{ relativePath: 'SKILL.md', hash: 'hash-desktop-detail', size: 120, kind: 'markdown' }],
+        skillMarkdown: '# Desktop Detail'
+      })
+    } as unknown as NonNullable<typeof window.theOpenHub>;
+
+    render(<App initialState={state} />);
+    fireEvent.click(screen.getByRole('button', { name: 'Skills' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Open Desktop Detail details' }));
+
+    expect(await screen.findByRole('heading', { name: 'Desktop Detail' })).toBeInTheDocument();
+    expect(scrollIntoView).not.toHaveBeenCalled();
+  });
+
   it('toggles a skill favorite through typed preload IPC', async () => {
     const state = workspaceWithSkills(createEmptyWorkspaceState());
     const setFavorite = vi.fn().mockResolvedValue({
@@ -1441,6 +1535,39 @@ function workspaceWithAgentSkill(
   };
 }
 
+function workspaceWithRepeatedAgentSkills(state: DesktopWorkspaceState, count: number): DesktopWorkspaceState {
+  const librarySkills = Array.from({ length: count }, (_, index) => {
+    const skillNumber = String(index + 1).padStart(2, '0');
+    const name = `Mobile Detail ${skillNumber}`;
+    const slug = `mobile-detail-${skillNumber}`;
+    return {
+      id: `skill-${slug}`,
+      name,
+      sourceAgent: 'Codex',
+      agentCode: 'codex',
+      path: `/tmp/.codex/skills/${slug}`,
+      visibilityStatus: 'indexed',
+      rootPath: '/tmp/.codex/skills',
+      scope: 'user',
+      rootKind: 'user' as const,
+      writable: true,
+      ownership: 'indexed' as const
+    };
+  });
+
+  return {
+    ...state,
+    librarySkills,
+    skills: librarySkills.map((skill) => ({
+      id: skill.id,
+      versionId: `version-${skill.id.replace(/^skill-/, '')}`,
+      name: skill.name,
+      description: `${skill.name} description`,
+      versionNo: 1
+    }))
+  };
+}
+
 function workspaceWithInstalledSkill(
   state: DesktopWorkspaceState,
   name: string,
@@ -1564,6 +1691,19 @@ function marketCandidate(): HTMLElement {
     throw new Error('Missing market-helper candidate');
   }
   return candidate;
+}
+
+function mockCompactViewport(matches: boolean) {
+  window.matchMedia = vi.fn().mockImplementation((query: string) => ({
+    matches: query === '(max-width: 900px)' ? matches : false,
+    media: query,
+    onchange: null,
+    addListener: vi.fn(),
+    removeListener: vi.fn(),
+    addEventListener: vi.fn(),
+    removeEventListener: vi.fn(),
+    dispatchEvent: vi.fn()
+  }));
 }
 
 function deferred<T>() {
