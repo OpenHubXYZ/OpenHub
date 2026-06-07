@@ -393,7 +393,7 @@ describe('desktop app shell', () => {
     expect(within(skillsPage).queryByText(/trust/i)).not.toBeInTheDocument();
   });
 
-  it('reports marketplace preview failures without clearing current candidates', async () => {
+  it('clears stale marketplace candidates when preview fails', async () => {
     window.theOpenHub = {
       getWorkspaceState: vi.fn().mockResolvedValue(createEmptyWorkspaceState()),
       listAgentRoots: vi.fn().mockResolvedValue([]),
@@ -421,7 +421,8 @@ describe('desktop app shell', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Preview source' }));
 
     expect(await screen.findByText('Preview failed')).toHaveClass('status-error');
-    expect(screen.getByText('market-helper')).toBeInTheDocument();
+    expect(screen.queryByText('market-helper')).not.toBeInTheDocument();
+    expect(screen.getByText('No sources previewed')).toBeInTheDocument();
   });
 
   it('filters marketplace preview candidates by description, tags, and path', async () => {

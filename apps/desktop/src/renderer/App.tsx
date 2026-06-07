@@ -283,6 +283,12 @@ export function App({
     await runRootScan();
   }
 
+  function selectMarketplaceSource(sourceId: string) {
+    setSelectedSourceId(sourceId);
+    setPreviewSkills([]);
+    setPendingPlan(null);
+  }
+
   async function previewSource() {
     const api = window.theOpenHub;
     if (!api || !selectedSourceId) {
@@ -291,8 +297,11 @@ export function App({
     try {
       const preview = await api.previewDiscoverSource(selectedSourceId);
       setPreviewSkills(preview.skills);
+      setPendingPlan(null);
       setStatusMessage(`${preview.skills.length} candidates`);
     } catch (error: unknown) {
+      setPreviewSkills([]);
+      setPendingPlan(null);
       setStatusMessage(formatError(error), 'error');
     }
   }
@@ -310,6 +319,8 @@ export function App({
       });
       setDiscoverSources((current) => [source, ...current.filter((item) => item.id !== source.id)]);
       setSelectedSourceId(source.id);
+      setPreviewSkills([]);
+      setPendingPlan(null);
       setStatusMessage(`Source added: ${source.name}`);
     } catch (error: unknown) {
       setStatusMessage(formatError(error), 'error');
@@ -538,7 +549,7 @@ export function App({
               agentRoots={agentRoots}
               discoverSources={discoverSources}
               selectedSourceId={selectedSourceId}
-              setSelectedSourceId={setSelectedSourceId}
+              setSelectedSourceId={selectMarketplaceSource}
               previewSkills={previewSkills}
               selectedTargetRoot={selectedTargetRoot}
               setSelectedTargetRoot={setSelectedTargetRoot}
