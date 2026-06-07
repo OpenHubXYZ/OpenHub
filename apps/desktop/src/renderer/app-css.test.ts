@@ -88,6 +88,17 @@ describe('renderer layout containment CSS', () => {
     expect(compactRules).toContain('overflow-wrap: anywhere;');
   });
 
+  it('lets mobile page status messages wrap instead of truncating long skill names', async () => {
+    const css = await readFile(cssPath, 'utf8');
+    const compactRules = atRuleBlock(css, '@media (max-width: 900px)');
+
+    expect(compactRules).toContain('.page-title .status {');
+    expect(compactRules).toContain('flex-basis: 100%;');
+    expect(compactRules).toContain('white-space: normal;');
+    expect(compactRules).toContain('overflow-wrap: anywhere;');
+    expect(compactRules).toContain('text-overflow: clip;');
+  });
+
   it('keeps compact labels clipped inside table cells', async () => {
     const css = await readFile(cssPath, 'utf8');
     const tagBlock = cssBlock(css, '.tag,\n.status');

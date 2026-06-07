@@ -858,4 +858,11 @@ button {
     overflow-wrap: anywhere;
     text-overflow: clip;
   }
+
+  .page-title .status {
+    flex-basis: 100%;
+    white-space: normal;
+    overflow-wrap: anywhere;
+    text-overflow: clip;
+  }
 }
