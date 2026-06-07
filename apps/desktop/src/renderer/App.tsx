@@ -135,7 +135,13 @@ export function App({
     setAgentRoots(roots);
     setDiscoverSources(sources);
     setSelectedSourceId((current) => current || sources[0]?.id || '');
-    setSelectedTargetRoot((current) => current || roots.find((root) => root.writable)?.rootPath || roots[0]?.rootPath || '');
+    setSelectedTargetRoot((current) => {
+      const currentRoot = roots.find((root) => root.rootPath === current);
+      if (currentRoot?.writable) {
+        return current;
+      }
+      return roots.find((root) => root.writable)?.rootPath || '';
+    });
   }, []);
   const setStatusMessage = useCallback((message: string, tone: StatusTone = 'default') => {
     setStatus(message);
@@ -381,7 +387,9 @@ export function App({
 
   async function installCandidate(skill: DiscoverSkillPreview) {
     const api = window.theOpenHub;
-    const root = agentRoots.find((candidate) => candidate.rootPath === selectedTargetRoot) ?? agentRoots.find((candidate) => candidate.writable);
+    const root =
+      agentRoots.find((candidate) => candidate.rootPath === selectedTargetRoot && candidate.writable) ??
+      agentRoots.find((candidate) => candidate.writable);
     if (!api || !root) {
       setStatusMessage('Select a writable root first', 'error');
       return;
@@ -800,6 +808,7 @@ function MarketplaceTab({
   const visiblePreviewSkills = normalizedSearchQuery
     ? previewSkills.filter((skill) => candidateMatchesSearch(skill, normalizedSearchQuery))
     : previewSkills;
+  const writableRoots = roots.filter((root) => root.writable);
   const candidateEmptyMessage =
     previewSkills.length > 0 && normalizedSearchQuery ? `No candidates match "${searchQuery.trim()}"` : 'No sources previewed';
 
@@ -831,13 +840,14 @@ function MarketplaceTab({
               onChange={(event) => setSelectedTargetRoot(event.target.value)}
             >
               <option value="">Select root</option>
-              {roots.map((root) => (
+              {writableRoots.map((root) => (
                 <option value={root.rootPath} key={`${root.agentCode}:${root.rootPath}`}>
                   {root.agentDisplayName} - {root.rootPath}
                 </option>
               ))}
             </select>
           </label>
+          {writableRoots.length === 0 ? <p className="empty">No writable install roots</p> : null}
           <label>
             Projection mode
             <select

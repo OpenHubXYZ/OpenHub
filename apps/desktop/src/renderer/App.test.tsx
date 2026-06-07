@@ -691,6 +691,57 @@ describe('desktop app shell', () => {
     expect(window.theOpenHub?.applyInstallPlan).not.toHaveBeenCalled();
   });
 
+  it('keeps read-only roots out of marketplace install targets', async () => {
+    const readOnlyRoot = createReadOnlyRoot('/tmp/.codex/skills');
+    window.theOpenHub = {
+      getWorkspaceState: vi.fn().mockResolvedValue(createEmptyWorkspaceState()),
+      listAgentRoots: vi.fn().mockResolvedValue([readOnlyRoot]),
+      listDiscoverSources: vi.fn().mockResolvedValue([createSource()]),
+      previewDiscoverSource: vi.fn().mockResolvedValue({
+        source: createSource(),
+        skills: [
+          {
+            name: 'market-helper',
+            description: 'Marketplace helper',
+            tags: ['market'],
+            path: '/tmp/source/market-helper'
+          }
+        ],
+        cachedAt: '2026-06-07T00:00:00.000Z'
+      }),
+      importLocalFolder: vi.fn().mockResolvedValue({
+        skill: {
+          id: 'skill-market',
+          versionId: 'version-market',
+          name: 'market-helper',
+          description: 'Marketplace helper',
+          versionNo: 1
+        },
+        files: []
+      }),
+      createInstallPlan: vi.fn(),
+      applyInstallPlan: vi.fn()
+    } as unknown as NonNullable<typeof window.theOpenHub>;
+
+    render(<App />);
+    fireEvent.click(screen.getByRole('button', { name: 'Skills' }));
+    fireEvent.click(screen.getByRole('tab', { name: 'Marketplace' }));
+    await screen.findByText('Local Source');
+    fireEvent.click(screen.getByRole('button', { name: 'Preview source' }));
+
+    expect(await screen.findByText('market-helper')).toBeInTheDocument();
+    const targetRootSelect = screen.getByLabelText('Install target root');
+    expect(within(targetRootSelect).queryByRole('option', { name: `Codex - ${readOnlyRoot.rootPath}` })).not.toBeInTheDocument();
+    expect(screen.getByText('No writable install roots')).toBeInTheDocument();
+
+    fireEvent.click(within(marketCandidate()).getByRole('button', { name: 'Install' }));
+
+    expect(await screen.findByText('Select a writable root first')).toHaveClass('status-error');
+    expect(window.theOpenHub?.importLocalFolder).not.toHaveBeenCalled();
+    expect(window.theOpenHub?.createInstallPlan).not.toHaveBeenCalled();
+    expect(window.theOpenHub?.applyInstallPlan).not.toHaveBeenCalled();
+  });
+
   it('reports refresh failures without clearing the loaded workspace', async () => {
     const state = workspaceWithSkill(createEmptyWorkspaceState(), 'Cached Helper');
     window.theOpenHub = {
@@ -1020,6 +1071,13 @@ function createProjectRoot(rootPath: string) {
     scope: 'project',
     rootKind: 'project' as const,
     isDefault: false
+  };
+}
+
+function createReadOnlyRoot(rootPath: string) {
+  return {
+    ...createRoot(rootPath),
+    writable: false
   };
 }
 
