@@ -308,14 +308,19 @@ export function App({
 
   async function addMarketplaceSource() {
     const api = window.theOpenHub;
-    if (!api || !sourceUrl.trim()) {
+    const trimmedSourceUrl = sourceUrl.trim();
+    if (!trimmedSourceUrl) {
+      setStatusMessage('Enter a marketplace source URL first', 'error');
+      return;
+    }
+    if (!api) {
       return;
     }
     try {
       const source = await api.addDiscoverSource({
         name: sourceName.trim() || 'Local Source',
-        sourceType: sourceUrl.includes('://') ? 'git' : 'local',
-        url: sourceUrl.trim()
+        sourceType: trimmedSourceUrl.includes('://') ? 'git' : 'local',
+        url: trimmedSourceUrl
       });
       setDiscoverSources((current) => [source, ...current.filter((item) => item.id !== source.id)]);
       setSelectedSourceId(source.id);
@@ -363,13 +368,18 @@ export function App({
 
   async function addRoot() {
     const api = window.theOpenHub;
-    if (!api || !rootPath.trim()) {
+    const trimmedRootPath = rootPath.trim();
+    if (!trimmedRootPath) {
+      setStatusMessage('Enter a root path first', 'error');
+      return;
+    }
+    if (!api) {
       return;
     }
     try {
       const root = await api.addProjectRoot({
         agentCode: rootAgentCode,
-        rootPath: rootPath.trim()
+        rootPath: trimmedRootPath
       });
       setAgentRoots((current) => [root, ...current.filter((item) => item.rootPath !== root.rootPath || item.agentCode !== root.agentCode)]);
       setSelectedTargetRoot(root.rootPath);

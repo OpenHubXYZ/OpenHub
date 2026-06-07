@@ -850,6 +850,28 @@ describe('desktop app shell', () => {
     expect(screen.getByText('No marketplace sources')).toBeInTheDocument();
   });
 
+  it('reports missing Settings paths before invoking add actions', async () => {
+    window.theOpenHub = {
+      getWorkspaceState: vi.fn().mockResolvedValue(createEmptyWorkspaceState()),
+      listAgentRoots: vi.fn().mockResolvedValue([]),
+      listDiscoverSources: vi.fn().mockResolvedValue([]),
+      addProjectRoot: vi.fn(),
+      addDiscoverSource: vi.fn()
+    } as unknown as NonNullable<typeof window.theOpenHub>;
+
+    render(<App />);
+    fireEvent.click(screen.getByRole('button', { name: 'Settings' }));
+    expect(await screen.findByText('No local roots')).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Add root' }));
+    expect(await screen.findByText('Enter a root path first')).toHaveClass('status-error');
+    expect(window.theOpenHub?.addProjectRoot).not.toHaveBeenCalled();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Add source' }));
+    expect(await screen.findByText('Enter a marketplace source URL first')).toHaveClass('status-error');
+    expect(window.theOpenHub?.addDiscoverSource).not.toHaveBeenCalled();
+  });
+
   it('reports uninstall failures without hiding app-owned skills', async () => {
     const state = workspaceWithInstalledSkill(createEmptyWorkspaceState(), 'market-helper');
     window.theOpenHub = {
