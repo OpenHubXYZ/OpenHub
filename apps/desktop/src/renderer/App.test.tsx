@@ -398,7 +398,9 @@ describe('desktop app shell', () => {
       getWorkspaceState: vi.fn().mockResolvedValue(createEmptyWorkspaceState()),
       listAgentRoots: vi.fn().mockResolvedValue([]),
       listDiscoverSources: vi.fn().mockResolvedValue([createSource()]),
-      previewDiscoverSource: vi.fn().mockRejectedValue(new Error('Preview failed'))
+      previewDiscoverSource: vi
+        .fn()
+        .mockRejectedValue(new Error("Error invoking remote method 'discover.previewSource': Error: Preview failed"))
     } as unknown as NonNullable<typeof window.theOpenHub>;
 
     render(
@@ -421,6 +423,7 @@ describe('desktop app shell', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Preview source' }));
 
     expect(await screen.findByText('Preview failed')).toHaveClass('status-error');
+    expect(screen.queryByText(/Error invoking remote method/)).not.toBeInTheDocument();
     expect(screen.queryByText('market-helper')).not.toBeInTheDocument();
     expect(screen.getByText('No sources previewed')).toBeInTheDocument();
   });

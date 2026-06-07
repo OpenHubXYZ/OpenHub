@@ -1131,5 +1131,7 @@ function formatConflictCount(plan: InstallPlan): string {
 }
 
 function formatError(error: unknown): string {
-  return error instanceof Error ? error.message : String(error);
+  return (error instanceof Error ? error.message : String(error))
+    .replace(/^Error invoking remote method ['"][^'"]+['"]:\s*/, '')
+    .replace(/^Error:\s*/, '');
 }
