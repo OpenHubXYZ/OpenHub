@@ -36,6 +36,14 @@ describe('renderer layout containment CSS', () => {
     expect(css).not.toMatch(/deploy|trust|install|security/i);
   });
 
+  it('lets the collapsed topbar reserve vertical space for wrapped command buttons', async () => {
+    const css = await readFile(cssPath, 'utf8');
+    const compactRules = atRuleBlock(css, '@media (max-width: 900px)');
+
+    expect(compactRules).toContain('.app-frame {');
+    expect(compactRules).toContain('grid-template-rows: auto minmax(0, 1fr);');
+  });
+
   it('keeps compact labels clipped inside table cells', async () => {
     const css = await readFile(cssPath, 'utf8');
     const tagBlock = cssBlock(css, '.tag,\n.status');
@@ -98,4 +106,27 @@ function cssBlock(css: string, selector: string): string {
   const blockStart = css.indexOf('{', start);
   const blockEnd = css.indexOf('}', blockStart);
   return css.slice(blockStart + 1, blockEnd);
+}
+
+function atRuleBlock(css: string, atRule: string): string {
+  const start = css.indexOf(`${atRule} {`);
+  if (start === -1) {
+    throw new Error(`Missing CSS at-rule for ${atRule}`);
+  }
+
+  const blockStart = css.indexOf('{', start);
+  let depth = 0;
+  for (let index = blockStart; index < css.length; index += 1) {
+    if (css[index] === '{') {
+      depth += 1;
+    }
+    if (css[index] === '}') {
+      depth -= 1;
+      if (depth === 0) {
+        return css.slice(blockStart + 1, index);
+      }
+    }
+  }
+
+  throw new Error(`Unclosed CSS at-rule for ${atRule}`);
 }

@@ -750,6 +750,10 @@ button {
     grid-template-columns: 84px minmax(0, 1fr);
   }
 
+  .app-frame {
+    grid-template-rows: auto minmax(0, 1fr);
+  }
+
   .brand span,
   .brand strong,
   .nav-list span {
