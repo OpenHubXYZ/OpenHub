@@ -384,6 +384,74 @@ describe('desktop app shell', () => {
     expect(screen.getByText('market-helper')).toBeInTheDocument();
   });
 
+  it('filters marketplace preview candidates by description, tags, and path', async () => {
+    window.theOpenHub = {
+      getWorkspaceState: vi.fn().mockResolvedValue(createEmptyWorkspaceState()),
+      listAgentRoots: vi.fn().mockResolvedValue([]),
+      listDiscoverSources: vi.fn().mockResolvedValue([createSource()])
+    } as unknown as NonNullable<typeof window.theOpenHub>;
+
+    render(
+      <App
+        initialPreviewSkills={[
+          {
+            name: 'market-helper',
+            description: 'Marketplace helper',
+            tags: ['market'],
+            path: '/tmp/source/market-helper'
+          },
+          {
+            name: 'palette-helper',
+            description: 'Visual asset palette',
+            tags: ['visual', 'asset'],
+            path: '/tmp/source/visual-assets/palette-helper'
+          }
+        ]}
+      />
+    );
+    fireEvent.click(screen.getByRole('button', { name: 'Skills' }));
+    fireEvent.click(screen.getByRole('tab', { name: 'Marketplace' }));
+
+    await screen.findByText('Local Source');
+    expect(screen.getByText('market-helper')).toBeInTheDocument();
+    expect(screen.getByText('palette-helper')).toBeInTheDocument();
+
+    fireEvent.change(screen.getByLabelText('Search skills'), { target: { value: 'visual' } });
+
+    expect(screen.getByText('palette-helper')).toBeInTheDocument();
+    expect(screen.queryByText('market-helper')).not.toBeInTheDocument();
+  });
+
+  it('shows a marketplace search empty state when preview candidates do not match', async () => {
+    window.theOpenHub = {
+      getWorkspaceState: vi.fn().mockResolvedValue(createEmptyWorkspaceState()),
+      listAgentRoots: vi.fn().mockResolvedValue([]),
+      listDiscoverSources: vi.fn().mockResolvedValue([createSource()])
+    } as unknown as NonNullable<typeof window.theOpenHub>;
+
+    render(
+      <App
+        initialPreviewSkills={[
+          {
+            name: 'market-helper',
+            description: 'Marketplace helper',
+            tags: ['market'],
+            path: '/tmp/source/market-helper'
+          }
+        ]}
+      />
+    );
+    fireEvent.click(screen.getByRole('button', { name: 'Skills' }));
+    fireEvent.click(screen.getByRole('tab', { name: 'Marketplace' }));
+    await screen.findByText('Local Source');
+
+    fireEvent.change(screen.getByLabelText('Search skills'), { target: { value: 'no-candidate' } });
+
+    expect(screen.getByText('No candidates match "no-candidate"')).toBeInTheDocument();
+    expect(screen.queryByText('No sources previewed')).not.toBeInTheDocument();
+    expect(screen.queryByText('market-helper')).not.toBeInTheDocument();
+  });
+
   it('marks marketplace candidates as imported and installed instead of repeating actions', async () => {
     const plan = {
       id: 'plan-market',

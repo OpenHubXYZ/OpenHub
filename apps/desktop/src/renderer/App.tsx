@@ -660,6 +660,7 @@ function SkillsPage({
           selectedSourceId={selectedSourceId}
           setSelectedSourceId={setSelectedSourceId}
           previewSkills={previewSkills}
+          searchQuery={searchQuery}
           selectedTargetRoot={selectedTargetRoot}
           setSelectedTargetRoot={setSelectedTargetRoot}
           projectionMode={projectionMode}
@@ -728,6 +729,7 @@ function MarketplaceTab({
   selectedSourceId,
   setSelectedSourceId,
   previewSkills,
+  searchQuery,
   selectedTargetRoot,
   setSelectedTargetRoot,
   projectionMode,
@@ -746,6 +748,7 @@ function MarketplaceTab({
   selectedSourceId: string;
   setSelectedSourceId: (value: string) => void;
   previewSkills: DiscoverSkillPreview[];
+  searchQuery: string;
   selectedTargetRoot: string;
   setSelectedTargetRoot: (value: string) => void;
   projectionMode: 'copy' | 'symlink';
@@ -759,6 +762,13 @@ function MarketplaceTab({
   onInstall: (skill: DiscoverSkillPreview) => void;
   onConfirmOverwrite: () => void;
 }) {
+  const normalizedSearchQuery = normalizeSearchText(searchQuery);
+  const visiblePreviewSkills = normalizedSearchQuery
+    ? previewSkills.filter((skill) => candidateMatchesSearch(skill, normalizedSearchQuery))
+    : previewSkills;
+  const candidateEmptyMessage =
+    previewSkills.length > 0 && normalizedSearchQuery ? `No candidates match "${searchQuery.trim()}"` : 'No sources previewed';
+
   return (
     <div className="split-two">
       <section className="panel">
@@ -822,9 +832,9 @@ function MarketplaceTab({
       <section className="panel">
         <h2>Candidates</h2>
         {sources.length === 0 ? <p className="empty">No marketplace sources</p> : null}
-        {previewSkills.length === 0 ? <p className="empty">No sources previewed</p> : null}
+        {visiblePreviewSkills.length === 0 ? <p className="empty">{candidateEmptyMessage}</p> : null}
         <div className="candidate-list">
-          {previewSkills.map((skill) => {
+          {visiblePreviewSkills.map((skill) => {
             const importedSkillId = importedCandidates[skill.path];
             const isInstalled = Boolean(
               installedCandidateNames[skill.name] || (importedSkillId && installedSkillIds[importedSkillId])
@@ -1018,6 +1028,12 @@ function skillMatchesSearch(skill: DesktopWorkspaceState['librarySkills'][number
     skill.visibilityStatus,
     skill.ownership
   ].some((value) => normalizeSearchText(value).includes(normalizedSearchQuery));
+}
+
+function candidateMatchesSearch(skill: DiscoverSkillPreview, normalizedSearchQuery: string): boolean {
+  return [skill.name, skill.description, skill.path, ...skill.tags].some((value) =>
+    normalizeSearchText(value).includes(normalizedSearchQuery)
+  );
 }
 
 function normalizeSearchText(value: string): string {
