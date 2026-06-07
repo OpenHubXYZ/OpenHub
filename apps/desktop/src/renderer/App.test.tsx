@@ -653,6 +653,30 @@ describe('desktop app shell', () => {
     expect(within(marketCandidate()).queryByRole('button', { name: 'Install' })).not.toBeInTheDocument();
   });
 
+  it('does not mark different marketplace candidates installed just because their names match', () => {
+    render(
+      <App
+        initialState={workspaceWithInstalledSkill(createEmptyWorkspaceState(), 'market-helper')}
+        initialAgentRoots={[createRoot('/tmp/.codex/skills')]}
+        initialPreviewSkills={[
+          {
+            name: 'market-helper',
+            description: 'Different marketplace helper',
+            tags: ['market'],
+            path: '/tmp/other-source/market-helper'
+          }
+        ]}
+      />
+    );
+
+    fireEvent.click(screen.getByRole('button', { name: 'Skills' }));
+    fireEvent.click(screen.getByRole('tab', { name: 'Marketplace' }));
+
+    expect(within(marketCandidate()).queryByText('Installed')).not.toBeInTheDocument();
+    expect(within(marketCandidate()).getByRole('button', { name: 'Import' })).toBeInTheDocument();
+    expect(within(marketCandidate()).getByRole('button', { name: 'Install' })).toBeInTheDocument();
+  });
+
   it('shows singular overwrite confirmation before applying a conflicting marketplace install', async () => {
     const plan = createMarketInstallPlan('conflict');
     window.theOpenHub = {
@@ -1123,7 +1147,11 @@ function workspaceWithAgentSkill(
   };
 }
 
-function workspaceWithInstalledSkill(state: DesktopWorkspaceState, name: string): DesktopWorkspaceState {
+function workspaceWithInstalledSkill(
+  state: DesktopWorkspaceState,
+  name: string,
+  input: { sourceUrl?: string } = {}
+): DesktopWorkspaceState {
   const id = `skill-${name}`;
   return {
     ...state,
@@ -1140,6 +1168,7 @@ function workspaceWithInstalledSkill(state: DesktopWorkspaceState, name: string)
         rootKind: 'user',
         writable: true,
         installationId: `installation-${name}`,
+        sourceUrl: input.sourceUrl ?? `/tmp/source/${name}`,
         ownership: 'app-owned'
       }
     ],

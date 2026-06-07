@@ -263,8 +263,9 @@ describe('desktop runtime IPC dispatch', () => {
       homeDirectory: path.join(workspace, 'home'),
       secretStore: createInMemorySecretStore()
     });
+    const sourcePath = await createSkillFixture(path.join(workspace, 'install-source'), 'install-helper');
     const imported = (await runtime.dispatch('import.localFolder', {
-      folderPath: await createSkillFixture(path.join(workspace, 'install-source'), 'install-helper')
+      folderPath: sourcePath
     })) as RuntimeImportedResult;
 
     const plan = await runtime.dispatch('install.createPlan', {
@@ -290,7 +291,8 @@ describe('desktop runtime IPC dispatch', () => {
         name: 'install-helper',
         visibilityStatus: 'installed',
         ownership: 'app-owned',
-        installationId: installed.installationId
+        installationId: installed.installationId,
+        sourceUrl: sourcePath
       })
     ]);
 

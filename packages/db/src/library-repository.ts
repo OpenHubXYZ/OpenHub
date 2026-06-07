@@ -31,6 +31,7 @@ export interface LibrarySkillSummary {
   rootKind: 'user' | 'project';
   writable: boolean;
   installationId?: string;
+  sourceUrl?: string;
   ownership: 'indexed' | 'app-owned';
   favorite: boolean;
 }
@@ -102,10 +103,34 @@ export function createLibraryRepository(database: SqliteDatabase): LibraryReposi
               values
                 (@id, @skillId, @rootId, @versionId, @skillPath, @visibilityStatus, @installationId, @ownership, current_timestamp)
               on conflict(id) do update set
-                skill_version_id = excluded.skill_version_id,
-                visibility_status = excluded.visibility_status,
-                installation_id = excluded.installation_id,
-                ownership = excluded.ownership,
+                skill_version_id = case
+                  when indexed_skill_locations.ownership = 'app-owned'
+                    and indexed_skill_locations.visibility_status = 'installed'
+                    and excluded.ownership = 'indexed'
+                  then indexed_skill_locations.skill_version_id
+                  else excluded.skill_version_id
+                end,
+                visibility_status = case
+                  when indexed_skill_locations.ownership = 'app-owned'
+                    and indexed_skill_locations.visibility_status = 'installed'
+                    and excluded.ownership = 'indexed'
+                  then indexed_skill_locations.visibility_status
+                  else excluded.visibility_status
+                end,
+                installation_id = case
+                  when indexed_skill_locations.ownership = 'app-owned'
+                    and indexed_skill_locations.visibility_status = 'installed'
+                    and excluded.ownership = 'indexed'
+                  then indexed_skill_locations.installation_id
+                  else excluded.installation_id
+                end,
+                ownership = case
+                  when indexed_skill_locations.ownership = 'app-owned'
+                    and indexed_skill_locations.visibility_status = 'installed'
+                    and excluded.ownership = 'indexed'
+                  then indexed_skill_locations.ownership
+                  else excluded.ownership
+                end,
                 last_indexed_at = current_timestamp
             `
           )
@@ -140,12 +165,14 @@ export function createLibraryRepository(database: SqliteDatabase): LibraryReposi
               ar.root_kind as rootKind,
               ar.writable,
               isl.installation_id as installationId,
+              src.url as sourceUrl,
               coalesce(isl.ownership, 'indexed') as ownership,
               case when sfav.skill_id is null then 0 else 1 end as favorite
             from indexed_skill_locations isl
             join skills s on s.id = isl.skill_id
             join agent_roots ar on ar.id = isl.agent_root_id
             join agents a on a.id = ar.agent_id
+            left join sources src on src.id = s.canonical_source_id
             left join skill_favorites sfav on sfav.skill_id = s.id
             where isl.visibility_status != 'uninstalled'
             order by s.name collate nocase, a.display_name collate nocase
@@ -166,6 +193,7 @@ function librarySkillRow(row: unknown): LibrarySkillSummary {
     favorite: number;
     writable: number;
     installationId: string | null;
+    sourceUrl: string | null;
   };
   const result: LibrarySkillSummary = {
     ...typed,
@@ -174,6 +202,9 @@ function librarySkillRow(row: unknown): LibrarySkillSummary {
   };
   if (!typed.installationId) {
     delete result.installationId;
+  }
+  if (!typed.sourceUrl) {
+    delete result.sourceUrl;
   }
   return result;
 }

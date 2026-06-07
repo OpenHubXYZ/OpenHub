@@ -26,6 +26,7 @@ export const librarySkillSummarySchema = z
     rootKind: z.enum(['user', 'project']),
     writable: z.boolean(),
     installationId: z.string().min(1).optional(),
+    sourceUrl: z.string().min(1).optional(),
     ownership: z.enum(['indexed', 'app-owned']),
     favorite: z.boolean().optional()
   })

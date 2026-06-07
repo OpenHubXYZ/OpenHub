@@ -188,4 +188,83 @@ describe('agent library scanner', () => {
       })
     ]);
   });
+
+  it('preserves app-owned install ownership when rescanning installed projections', async () => {
+    const homeDirectory = await mkdtemp(path.join(tmpdir(), 'theopenhub-scan-'));
+    tempDirectories.push(homeDirectory);
+
+    const targetRoot = path.join(homeDirectory, 'project-skills');
+    const targetSkill = path.join(targetRoot, 'market-helper');
+    const sourceSkill = path.join(homeDirectory, 'marketplace-source/market-helper');
+    await mkdir(targetSkill, { recursive: true });
+    await writeFile(
+      path.join(targetSkill, 'SKILL.md'),
+      [
+        '---',
+        'name: market-helper',
+        'description: Marketplace helper.',
+        'tags: [market]',
+        '---',
+        '# Market Helper'
+      ].join('\n')
+    );
+
+    const database = createMemoryDatabase();
+    runMigrations(database);
+    const skill = createSkillRepository(database).createSkill({
+      slug: 'market-helper',
+      name: 'market-helper',
+      description: 'Marketplace helper.',
+      tags: ['market'],
+      source: {
+        type: 'local',
+        url: sourceSkill
+      },
+      files: [
+        {
+          relativePath: 'SKILL.md',
+          content: [
+            '---',
+            'name: market-helper',
+            'description: Marketplace helper.',
+            'tags: [market]',
+            '---',
+            '# Market Helper'
+          ].join('\n')
+        }
+      ]
+    });
+    createLibraryRepository(database).recordIndexedSkillLocation({
+      skillId: skill.id,
+      versionId: skill.versionId,
+      agentCode: 'codex',
+      agentDisplayName: 'Codex',
+      adapterVersion: 'test',
+      rootPath: targetRoot,
+      rootScope: 'project',
+      rootKind: 'project',
+      writable: true,
+      isDefault: false,
+      skillPath: targetSkill,
+      visibilityStatus: 'installed',
+      installationId: 'installation-market-helper',
+      ownership: 'app-owned'
+    });
+
+    await scanAgentLibraries({
+      database,
+      adapters: createBuiltInAgentAdapters({ homeDirectory, adapterVersion: 'test' })
+    });
+
+    expect(createLibraryRepository(database).listLibrarySkills()).toEqual([
+      expect.objectContaining({
+        name: 'market-helper',
+        path: targetSkill,
+        visibilityStatus: 'installed',
+        ownership: 'app-owned',
+        installationId: 'installation-market-helper',
+        sourceUrl: sourceSkill
+      })
+    ]);
+  });
 });

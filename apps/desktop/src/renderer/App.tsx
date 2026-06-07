@@ -90,11 +90,11 @@ export function App({
       }),
     [activePage, agentRoots, previewSkills, state]
   );
-  const installedCandidateNames = useMemo(
+  const installedCandidateSourcePaths = useMemo(
     () =>
       state.librarySkills.reduce<Record<string, string>>((installed, skill) => {
-        if (skill.ownership === 'app-owned' && skill.installationId) {
-          installed[skill.name] = skill.installationId;
+        if (skill.ownership === 'app-owned' && skill.installationId && skill.sourceUrl) {
+          installed[normalizeSourcePath(skill.sourceUrl)] = skill.installationId;
         }
         return installed;
       }, {}),
@@ -579,7 +579,7 @@ export function App({
               pendingPlan={pendingPlan}
               importedCandidates={importedCandidates}
               installedSkillIds={installedSkillIds}
-              installedCandidateNames={installedCandidateNames}
+              installedCandidateSourcePaths={installedCandidateSourcePaths}
               onPreview={previewSource}
               onImport={importCandidate}
               onInstall={installCandidate}
@@ -674,7 +674,7 @@ function SkillsPage({
   pendingPlan,
   importedCandidates,
   installedSkillIds,
-  installedCandidateNames,
+  installedCandidateSourcePaths,
   onPreview,
   onImport,
   onInstall,
@@ -697,7 +697,7 @@ function SkillsPage({
   pendingPlan: InstallPlan | null;
   importedCandidates: Record<string, string>;
   installedSkillIds: Record<string, string>;
-  installedCandidateNames: Record<string, string>;
+  installedCandidateSourcePaths: Record<string, string>;
   onPreview: () => void;
   onImport: (skill: DiscoverSkillPreview) => Promise<string | null>;
   onInstall: (skill: DiscoverSkillPreview) => void;
@@ -742,7 +742,7 @@ function SkillsPage({
           pendingPlan={pendingPlan}
           importedCandidates={importedCandidates}
           installedSkillIds={installedSkillIds}
-          installedCandidateNames={installedCandidateNames}
+          installedCandidateSourcePaths={installedCandidateSourcePaths}
           onPreview={onPreview}
           onImport={onImport}
           onInstall={onInstall}
@@ -811,7 +811,7 @@ function MarketplaceTab({
   pendingPlan,
   importedCandidates,
   installedSkillIds,
-  installedCandidateNames,
+  installedCandidateSourcePaths,
   onPreview,
   onImport,
   onInstall,
@@ -830,7 +830,7 @@ function MarketplaceTab({
   pendingPlan: InstallPlan | null;
   importedCandidates: Record<string, string>;
   installedSkillIds: Record<string, string>;
-  installedCandidateNames: Record<string, string>;
+  installedCandidateSourcePaths: Record<string, string>;
   onPreview: () => void;
   onImport: (skill: DiscoverSkillPreview) => Promise<string | null>;
   onInstall: (skill: DiscoverSkillPreview) => void;
@@ -913,7 +913,7 @@ function MarketplaceTab({
           {visiblePreviewSkills.map((skill) => {
             const importedSkillId = importedCandidates[skill.path];
             const isInstalled = Boolean(
-              installedCandidateNames[skill.name] || (importedSkillId && installedSkillIds[importedSkillId])
+              installedCandidateSourcePaths[normalizeSourcePath(skill.path)] || (importedSkillId && installedSkillIds[importedSkillId])
             );
 
             return (
@@ -1155,6 +1155,11 @@ function candidateMatchesSearch(skill: DiscoverSkillPreview, normalizedSearchQue
 
 function normalizeSearchText(value: string): string {
   return value.trim().toLowerCase();
+}
+
+function normalizeSourcePath(value: string): string {
+  const trimmed = value.trim();
+  return trimmed.replace(/[/\\]+$/, '') || trimmed;
 }
 
 function formatScanStatus(scan: LibraryScanResult): string {
