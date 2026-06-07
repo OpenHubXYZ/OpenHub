@@ -167,6 +167,16 @@ export function App({
     },
     [state.librarySkills]
   );
+  const updateSearchQuery = useCallback(
+    (value: string) => {
+      setQuery(value);
+      if (value.trim() && activePage !== 'skills') {
+        setActivePage('skills');
+        setSkillsTab((current) => firstSearchResultTab(state.librarySkills, previewSkills, value, current));
+      }
+    },
+    [activePage, previewSkills, state.librarySkills]
+  );
 
   const isInactive = useCallback((isCancelled?: AsyncGuard) => !mountedRef.current || Boolean(isCancelled?.()), []);
 
@@ -523,7 +533,7 @@ export function App({
               aria-label="Search skills"
               placeholder="Search skills"
               value={query}
-              onChange={(event) => setQuery(event.target.value)}
+              onChange={(event) => updateSearchQuery(event.target.value)}
             />
           </label>
           <div className="context-commandbar" role="toolbar" aria-label="Workspace commands">
@@ -1094,6 +1104,25 @@ function firstPopulatedAgentTab(agentCodes: string[], current: SkillsTabKey): Sk
   }
 
   return agentTabs.find((tab) => tab.key !== 'marketplace' && populatedAgents.has(tab.key))?.key ?? current;
+}
+
+function firstSearchResultTab(
+  rows: DesktopWorkspaceState['librarySkills'],
+  previewSkills: DiscoverSkillPreview[],
+  searchQuery: string,
+  current: SkillsTabKey
+): SkillsTabKey {
+  const normalizedSearchQuery = normalizeSearchText(searchQuery);
+  const matchingAgentTab = agentTabs.find(
+    (tab) => tab.key !== 'marketplace' && rows.some((skill) => skill.agentCode === tab.key && skillMatchesSearch(skill, normalizedSearchQuery))
+  );
+  if (matchingAgentTab) {
+    return matchingAgentTab.key;
+  }
+  if (previewSkills.some((skill) => candidateMatchesSearch(skill, normalizedSearchQuery))) {
+    return 'marketplace';
+  }
+  return agentTabs.find((tab) => tab.key !== 'marketplace' && rows.some((skill) => skill.agentCode === tab.key))?.key ?? current;
 }
 
 function groupByRoot(rows: DesktopWorkspaceState['librarySkills']) {

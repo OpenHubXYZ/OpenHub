@@ -97,6 +97,25 @@ describe('desktop app shell', () => {
     expect(screen.queryByText('Prompt Writer')).not.toBeInTheDocument();
   });
 
+  it('opens matching skills when searching from Home', () => {
+    render(
+      <App
+        initialState={workspaceWithAgentSkill(createEmptyWorkspaceState(), {
+          agentCode: 'claude',
+          agentDisplayName: 'Claude',
+          name: 'Claude Helper',
+          rootPath: '/tmp/claude-project-skills'
+        })}
+      />
+    );
+
+    fireEvent.change(screen.getByLabelText('Search skills'), { target: { value: 'Claude' } });
+
+    expect(screen.getByRole('heading', { name: 'Skills' })).toBeInTheDocument();
+    expect(screen.getByRole('tab', { name: 'Claude' })).toHaveAttribute('aria-selected', 'true');
+    expect(screen.getByText('Claude Helper')).toBeInTheDocument();
+  });
+
   it('shows a search-specific empty state when indexed skills do not match', () => {
     render(<App initialState={workspaceWithSkills(createEmptyWorkspaceState())} />);
 
