@@ -402,6 +402,30 @@ describe('desktop app shell', () => {
     expect(window.theOpenHub?.createInstallPlan).toHaveBeenCalledWith(expect.objectContaining({ skillId: 'skill-market' }));
   });
 
+  it('keeps installed marketplace candidates marked after workspace state reloads', () => {
+    render(
+      <App
+        initialState={workspaceWithInstalledSkill(createEmptyWorkspaceState(), 'market-helper')}
+        initialAgentRoots={[createRoot('/tmp/.codex/skills')]}
+        initialPreviewSkills={[
+          {
+            name: 'market-helper',
+            description: 'Marketplace helper',
+            tags: ['market'],
+            path: '/tmp/source/market-helper'
+          }
+        ]}
+      />
+    );
+
+    fireEvent.click(screen.getByRole('button', { name: 'Skills' }));
+    fireEvent.click(screen.getByRole('tab', { name: 'Marketplace' }));
+
+    expect(within(marketCandidate()).getByText('Installed')).toBeInTheDocument();
+    expect(within(marketCandidate()).queryByRole('button', { name: 'Import' })).not.toBeInTheDocument();
+    expect(within(marketCandidate()).queryByRole('button', { name: 'Install' })).not.toBeInTheDocument();
+  });
+
   it('manages marketplace sources from Settings', async () => {
     const source = {
       id: 'source-local',
@@ -506,6 +530,38 @@ function workspaceWithSkill(state: DesktopWorkspaceState, name: string): Desktop
   };
 }
 
+function workspaceWithInstalledSkill(state: DesktopWorkspaceState, name: string): DesktopWorkspaceState {
+  const id = `skill-${name}`;
+  return {
+    ...state,
+    librarySkills: [
+      {
+        id,
+        name,
+        sourceAgent: 'Codex',
+        agentCode: 'codex',
+        path: `/tmp/.codex/skills/${name}`,
+        visibilityStatus: 'installed',
+        rootPath: '/tmp/.codex/skills',
+        scope: 'user',
+        rootKind: 'user',
+        writable: true,
+        installationId: `installation-${name}`,
+        ownership: 'app-owned'
+      }
+    ],
+    skills: [
+      {
+        id,
+        versionId: `version-${name}`,
+        name,
+        description: `${name} description`,
+        versionNo: 1
+      }
+    ]
+  };
+}
+
 function createRoot(rootPath: string) {
   return {
     agentCode: 'codex' as const,
@@ -514,7 +570,8 @@ function createRoot(rootPath: string) {
     rootPath,
     scope: 'user',
     rootKind: 'user' as const,
-    writable: true
+    writable: true,
+    isDefault: true
   };
 }
 

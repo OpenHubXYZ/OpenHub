@@ -91,6 +91,16 @@ export function App({
   const skillRows = query.trim()
     ? state.librarySkills.filter((skill) => skill.name.toLowerCase().includes(query.trim().toLowerCase()))
     : state.librarySkills;
+  const installedCandidateNames = useMemo(
+    () =>
+      state.librarySkills.reduce<Record<string, string>>((installed, skill) => {
+        if (skill.ownership === 'app-owned' && skill.installationId) {
+          installed[skill.name] = skill.installationId;
+        }
+        return installed;
+      }, {}),
+    [state.librarySkills]
+  );
   const homeMetrics = useMemo(
     () => [
       {
@@ -357,6 +367,9 @@ export function App({
       return;
     }
     await api.uninstallSkill(installationId);
+    setInstalledSkillIds((current) =>
+      Object.fromEntries(Object.entries(current).filter(([, currentInstallationId]) => currentInstallationId !== installationId))
+    );
     await refreshWorkspace();
     setStatus('Uninstalled');
   }
@@ -444,6 +457,7 @@ export function App({
               pendingPlan={pendingPlan}
               importedCandidates={importedCandidates}
               installedSkillIds={installedSkillIds}
+              installedCandidateNames={installedCandidateNames}
               onPreview={previewSource}
               onImport={importCandidate}
               onInstall={installCandidate}
@@ -527,6 +541,7 @@ function SkillsPage({
   pendingPlan,
   importedCandidates,
   installedSkillIds,
+  installedCandidateNames,
   onPreview,
   onImport,
   onInstall,
@@ -548,6 +563,7 @@ function SkillsPage({
   pendingPlan: InstallPlan | null;
   importedCandidates: Record<string, string>;
   installedSkillIds: Record<string, string>;
+  installedCandidateNames: Record<string, string>;
   onPreview: () => void;
   onImport: (skill: DiscoverSkillPreview) => Promise<string | null>;
   onInstall: (skill: DiscoverSkillPreview) => void;
@@ -587,6 +603,7 @@ function SkillsPage({
           pendingPlan={pendingPlan}
           importedCandidates={importedCandidates}
           installedSkillIds={installedSkillIds}
+          installedCandidateNames={installedCandidateNames}
           onPreview={onPreview}
           onImport={onImport}
           onInstall={onInstall}
@@ -654,6 +671,7 @@ function MarketplaceTab({
   pendingPlan,
   importedCandidates,
   installedSkillIds,
+  installedCandidateNames,
   onPreview,
   onImport,
   onInstall,
@@ -671,6 +689,7 @@ function MarketplaceTab({
   pendingPlan: InstallPlan | null;
   importedCandidates: Record<string, string>;
   installedSkillIds: Record<string, string>;
+  installedCandidateNames: Record<string, string>;
   onPreview: () => void;
   onImport: (skill: DiscoverSkillPreview) => Promise<string | null>;
   onInstall: (skill: DiscoverSkillPreview) => void;
@@ -743,7 +762,9 @@ function MarketplaceTab({
         <div className="candidate-list">
           {previewSkills.map((skill) => {
             const importedSkillId = importedCandidates[skill.path];
-            const isInstalled = Boolean(importedSkillId && installedSkillIds[importedSkillId]);
+            const isInstalled = Boolean(
+              installedCandidateNames[skill.name] || (importedSkillId && installedSkillIds[importedSkillId])
+            );
 
             return (
               <article key={skill.path} className="candidate">
