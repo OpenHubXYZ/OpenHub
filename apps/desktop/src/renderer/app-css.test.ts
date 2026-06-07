@@ -69,6 +69,25 @@ describe('renderer layout containment CSS', () => {
     expect(compactRules).toContain('text-overflow: clip;');
   });
 
+  it('lets mobile skill tables and detail file rows wrap long paths', async () => {
+    const css = await readFile(cssPath, 'utf8');
+    const compactRules = atRuleBlock(css, '@media (max-width: 900px)');
+
+    expect(compactRules).toContain('.skills-table .table-head {');
+    expect(compactRules).toContain('display: none;');
+    expect(compactRules).toContain('.skills-table .table-row {');
+    expect(compactRules).toContain('grid-template-columns: 1fr;');
+    expect(compactRules).toContain('.skills-table .table-row span {');
+    expect(compactRules).toContain('overflow-wrap: anywhere;');
+    expect(compactRules).toContain('.detail-heading {');
+    expect(compactRules).toContain('flex-direction: column;');
+    expect(compactRules).toContain('.detail-panel .key-row {');
+    expect(compactRules).toContain('grid-template-columns: 1fr;');
+    expect(compactRules).toContain('.detail-panel .key-row strong {');
+    expect(compactRules).toContain('white-space: normal;');
+    expect(compactRules).toContain('overflow-wrap: anywhere;');
+  });
+
   it('keeps compact labels clipped inside table cells', async () => {
     const css = await readFile(cssPath, 'utf8');
     const tagBlock = cssBlock(css, '.tag,\n.status');

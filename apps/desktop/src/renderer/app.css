@@ -826,4 +826,36 @@ button {
     overflow-wrap: anywhere;
     text-overflow: clip;
   }
+
+  .skills-table .table-head {
+    display: none;
+  }
+
+  .skills-table .table-row {
+    grid-template-columns: 1fr;
+    align-items: start;
+    gap: 8px;
+    padding: 10px 0;
+  }
+
+  .skills-table .table-row span {
+    white-space: normal;
+    overflow-wrap: anywhere;
+    text-overflow: clip;
+  }
+
+  .detail-heading {
+    flex-direction: column;
+  }
+
+  .detail-panel .key-row {
+    grid-template-columns: 1fr;
+    align-items: start;
+  }
+
+  .detail-panel .key-row strong {
+    white-space: normal;
+    overflow-wrap: anywhere;
+    text-overflow: clip;
+  }
 }
