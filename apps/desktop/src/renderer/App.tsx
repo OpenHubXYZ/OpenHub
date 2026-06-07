@@ -531,11 +531,25 @@ export function App({
     }
     try {
       await api.uninstallSkill(installationId);
+      const removedSkillIds = new Set(
+        state.librarySkills.filter((skill) => skill.installationId === installationId).map((skill) => skill.id)
+      );
       setInstalledSkillIds((current) =>
         Object.fromEntries(Object.entries(current).filter(([, currentInstallationId]) => currentInstallationId !== installationId))
       );
-      await refreshWorkspace();
-      setStatusMessage('Uninstalled');
+      setState((current) => ({
+        ...current,
+        librarySkills: current.librarySkills.filter((skill) => skill.installationId !== installationId)
+      }));
+      setSelectedSkillDetail((detail) => (detail && removedSkillIds.has(detail.skill.id) ? null : detail));
+      let refreshFailed = false;
+      await refreshWorkspace().catch((error: unknown) => {
+        refreshFailed = true;
+        setStatusMessage(`Uninstalled; ${formatError(error)}`, 'error');
+      });
+      if (!refreshFailed) {
+        setStatusMessage('Uninstalled');
+      }
     } catch (error: unknown) {
       setStatusMessage(formatError(error), 'error');
     }

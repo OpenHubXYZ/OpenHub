@@ -1075,6 +1075,65 @@ describe('desktop app shell', () => {
     expect(window.theOpenHub.uninstallSkill).toHaveBeenCalledWith('installation-market-helper');
   });
 
+  it('removes app-owned skills after successful uninstall even when refresh fails', async () => {
+    const state = workspaceWithInstalledSkill(createEmptyWorkspaceState(), 'market-helper');
+    window.theOpenHub = {
+      getWorkspaceState: vi.fn().mockResolvedValueOnce(state).mockRejectedValueOnce(new Error('Refresh failed')),
+      listAgentRoots: vi.fn().mockResolvedValue([]),
+      listDiscoverSources: vi.fn().mockResolvedValue([]),
+      uninstallSkill: vi.fn().mockResolvedValue({ status: 'uninstalled', installationId: 'installation-market-helper' })
+    } as unknown as NonNullable<typeof window.theOpenHub>;
+
+    render(<App initialState={state} />);
+    fireEvent.click(screen.getByRole('button', { name: 'Skills' }));
+    expect(await screen.findByText('market-helper')).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Uninstall market-helper' }));
+
+    expect(await screen.findByText('Uninstalled; Refresh failed')).toHaveClass('status-error');
+    expect(screen.queryByText('market-helper')).not.toBeInTheDocument();
+    expect(screen.getByText('No indexed skills')).toBeInTheDocument();
+    expect(window.theOpenHub.uninstallSkill).toHaveBeenCalledWith('installation-market-helper');
+  });
+
+  it('clears selected app-owned skill details after successful uninstall even when refresh fails', async () => {
+    const state = workspaceWithInstalledSkill(createEmptyWorkspaceState(), 'market-helper');
+    window.theOpenHub = {
+      getWorkspaceState: vi.fn().mockResolvedValueOnce(state).mockRejectedValueOnce(new Error('Refresh failed')),
+      listAgentRoots: vi.fn().mockResolvedValue([]),
+      listDiscoverSources: vi.fn().mockResolvedValue([]),
+      uninstallSkill: vi.fn().mockResolvedValue({ status: 'uninstalled', installationId: 'installation-market-helper' }),
+      getSkillDetail: vi.fn().mockResolvedValue({
+        skill: {
+          id: 'skill-market-helper',
+          versionId: 'version-market-helper',
+          slug: 'market-helper',
+          name: 'market-helper',
+          description: 'Installed helper',
+          tags: [],
+          versionNo: 1,
+          favorite: false
+        },
+        source: { type: 'local', url: '/tmp/source/market-helper' },
+        versions: [],
+        files: [{ relativePath: 'SKILL.md', hash: 'hash-market-helper', size: 120, kind: 'markdown' }],
+        skillMarkdown: '# market-helper'
+      })
+    } as unknown as NonNullable<typeof window.theOpenHub>;
+
+    render(<App initialState={state} />);
+    fireEvent.click(screen.getByRole('button', { name: 'Skills' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Open market-helper details' }));
+    expect(await screen.findByRole('heading', { name: 'market-helper' })).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Uninstall market-helper' }));
+
+    expect(await screen.findByText('Uninstalled; Refresh failed')).toHaveClass('status-error');
+    expect(screen.queryByRole('heading', { name: 'market-helper' })).not.toBeInTheDocument();
+    expect(screen.queryByText('# market-helper')).not.toBeInTheDocument();
+    expect(screen.getByText('Select a skill to inspect files and versions.')).toBeInTheDocument();
+  });
+
   it('opens a live skill detail view from an indexed skill row', async () => {
     const state = workspaceWithAgentSkill(createEmptyWorkspaceState(), {
       agentCode: 'codex',
