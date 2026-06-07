@@ -3,6 +3,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 
 import type {
   AgentRootTarget,
+  AppSettings,
   DesktopWorkspaceState,
   DiscoverSkillPreview,
   DiscoverSource,
@@ -64,6 +65,7 @@ export function App({
   const [previewSkills, setPreviewSkills] = useState<DiscoverSkillPreview[]>(initialPreviewSkills);
   const [discoverSources, setDiscoverSources] = useState<DiscoverSource[]>([]);
   const [pluginRegistry, setPluginRegistry] = useState<PluginRegistry>(initialPluginRegistry);
+  const [appSettings, setAppSettings] = useState<AppSettings | null>(null);
   const [query, setQuery] = useState('');
   const [skillsTab, setSkillsTab] = useState<SkillsTabKey>('codex');
   const [sourceName, setSourceName] = useState('Local Source');
@@ -263,15 +265,17 @@ export function App({
       api.getWorkspaceState(),
       api.listAgentRoots(),
       api.listDiscoverSources?.() ?? Promise.resolve([]),
-      api.getPluginRegistry?.() ?? Promise.resolve(initialPluginRegistry)
+      api.getPluginRegistry?.() ?? Promise.resolve(initialPluginRegistry),
+      api.getSettings?.() ?? Promise.resolve(null)
     ])
-      .then(([workspace, roots, sources, registry]) => {
+      .then(([workspace, roots, sources, registry, settings]) => {
         if (cancelled) {
           return;
         }
         setState(workspace);
         setRootsAndSources(roots, sources);
         setPluginRegistry(registry);
+        setAppSettings(settings);
         void runRootScan(() => cancelled);
       })
       .catch((error: unknown) => {
@@ -376,6 +380,34 @@ export function App({
       );
       setSelectedTargetRoot((current) => (current === root.rootPath ? '' : current));
       setStatusMessage('Root removed');
+    } catch (error: unknown) {
+      setStatusMessage(formatError(error), 'error');
+    }
+  }
+
+  async function setUpdateChecksPreference(enabled: boolean) {
+    const api = window.theOpenHub;
+    if (!api?.setUpdateChecks) {
+      return;
+    }
+    try {
+      const settings = await api.setUpdateChecks(enabled);
+      setAppSettings(settings);
+      setStatusMessage('Settings updated');
+    } catch (error: unknown) {
+      setStatusMessage(formatError(error), 'error');
+    }
+  }
+
+  async function setLogLevelPreference(logLevel: AppSettings['logLevel']) {
+    const api = window.theOpenHub;
+    if (!api?.setLogLevel) {
+      return;
+    }
+    try {
+      const settings = await api.setLogLevel(logLevel);
+      setAppSettings(settings);
+      setStatusMessage('Settings updated');
     } catch (error: unknown) {
       setStatusMessage(formatError(error), 'error');
     }
@@ -637,6 +669,7 @@ export function App({
               roots={agentRoots}
               state={state}
               pluginRegistry={pluginRegistry}
+              appSettings={appSettings}
               sourceName={sourceName}
               sourceUrl={sourceUrl}
               setSourceName={setSourceName}
@@ -650,6 +683,8 @@ export function App({
               onRemoveRoot={removeProjectRoot}
               onAddSource={addMarketplaceSource}
               onRemoveSource={removeMarketplaceSource}
+              onSetUpdateChecks={setUpdateChecksPreference}
+              onSetLogLevel={setLogLevelPreference}
             />
           ) : null}
         </section>
@@ -1099,6 +1134,7 @@ function SettingsPage({
   roots,
   state,
   pluginRegistry,
+  appSettings,
   sourceName,
   sourceUrl,
   setSourceName,
@@ -1111,11 +1147,14 @@ function SettingsPage({
   onAddRoot,
   onRemoveRoot,
   onAddSource,
-  onRemoveSource
+  onRemoveSource,
+  onSetUpdateChecks,
+  onSetLogLevel
 }: {
   roots: AgentRootTarget[];
   state: DesktopWorkspaceState;
   pluginRegistry: PluginRegistry;
+  appSettings: AppSettings | null;
   sourceName: string;
   sourceUrl: string;
   setSourceName: (value: string) => void;
@@ -1129,106 +1168,149 @@ function SettingsPage({
   onRemoveRoot: (root: AgentRootTarget) => void;
   onAddSource: () => void;
   onRemoveSource: (sourceId: string) => void;
+  onSetUpdateChecks: (enabled: boolean) => void;
+  onSetLogLevel: (logLevel: AppSettings['logLevel']) => void;
 }) {
   return (
     <div className="split-two">
-      <section className="panel">
-        <h2>Local roots</h2>
-        <div className="form-grid compact-form">
-          <label>
-            Agent
-            <select
-              aria-label="Root agent"
-              value={rootAgentCode}
-              onChange={(event) => setRootAgentCode(event.target.value as RootAgentCode)}
-            >
-              <option value="codex">Codex</option>
-              <option value="claude">Claude</option>
-              <option value="gemini">Gemini</option>
-              <option value="opencode">OpenCode</option>
-              <option value="agents">Agents</option>
-            </select>
-          </label>
-          <label>
-            Root path
-            <input value={rootPath} onChange={(event) => setRootPath(event.target.value)} />
-          </label>
-          <button type="button" onClick={onAddRoot}>
-            Add root
-          </button>
-        </div>
-        {roots.length === 0 ? <p className="empty">No local roots</p> : null}
-        {roots.map((root) => (
-          <div className="key-row three-col" key={`${root.agentCode}:${root.rootPath}:${root.scope}`}>
-            <span>{root.agentDisplayName}</span>
-            <strong>{root.rootPath}</strong>
-            {root.rootKind === 'project' ? (
-              <button type="button" className="inline-action" aria-label={`Remove ${root.rootPath}`} onClick={() => onRemoveRoot(root)}>
-                Remove
-              </button>
-            ) : (
-              <span className="muted">Detected</span>
-            )}
-          </div>
-        ))}
-        <h2>Marketplace sources</h2>
-        <div className="form-grid compact-form">
-          <label>
-            Marketplace source name
-            <input value={sourceName} onChange={(event) => setSourceName(event.target.value)} />
-          </label>
-          <label>
-            Marketplace source URL
-            <input value={sourceUrl} onChange={(event) => setSourceUrl(event.target.value)} />
-          </label>
-          <button type="button" onClick={onAddSource}>
-            Add source
-          </button>
-        </div>
-        {discoverSources.length === 0 ? <p className="empty">No marketplace sources</p> : null}
-        {discoverSources.map((source) => (
-          <div className="key-row three-col" key={source.id}>
-            <span>{source.name}</span>
-            <strong>{source.url}</strong>
-            <button type="button" className="inline-action" aria-label={`Remove ${source.name}`} onClick={() => onRemoveSource(source.id)}>
-              Remove
+      <div className="settings-stack">
+        <section className="panel">
+          <h2>Local roots</h2>
+          <div className="form-grid compact-form">
+            <label>
+              Agent
+              <select
+                aria-label="Root agent"
+                value={rootAgentCode}
+                onChange={(event) => setRootAgentCode(event.target.value as RootAgentCode)}
+              >
+                <option value="codex">Codex</option>
+                <option value="claude">Claude</option>
+                <option value="gemini">Gemini</option>
+                <option value="opencode">OpenCode</option>
+                <option value="agents">Agents</option>
+              </select>
+            </label>
+            <label>
+              Root path
+              <input value={rootPath} onChange={(event) => setRootPath(event.target.value)} />
+            </label>
+            <button type="button" onClick={onAddRoot}>
+              Add root
             </button>
           </div>
-        ))}
-        <h2>Sync</h2>
-        {state.syncCenter.profiles.length === 0 ? <p className="empty">No sync profiles</p> : null}
-        {state.syncCenter.profiles.map((profile) => (
-          <div className="key-row" key={`${profile.mode}:${profile.status}`}>
-            <span>{profile.mode}</span>
-            <strong>{profile.status}</strong>
+          {roots.length === 0 ? <p className="empty">No local roots</p> : null}
+          {roots.map((root) => (
+            <div className="key-row three-col" key={`${root.agentCode}:${root.rootPath}:${root.scope}`}>
+              <span>{root.agentDisplayName}</span>
+              <strong>{root.rootPath}</strong>
+              {root.rootKind === 'project' ? (
+                <button type="button" className="inline-action" aria-label={`Remove ${root.rootPath}`} onClick={() => onRemoveRoot(root)}>
+                  Remove
+                </button>
+              ) : (
+                <span className="muted">Detected</span>
+              )}
+            </div>
+          ))}
+          <h2>Marketplace sources</h2>
+          <div className="form-grid compact-form">
+            <label>
+              Marketplace source name
+              <input value={sourceName} onChange={(event) => setSourceName(event.target.value)} />
+            </label>
+            <label>
+              Marketplace source URL
+              <input value={sourceUrl} onChange={(event) => setSourceUrl(event.target.value)} />
+            </label>
+            <button type="button" onClick={onAddSource}>
+              Add source
+            </button>
           </div>
-        ))}
-      </section>
-      <section className="panel">
-        <h2>Plugins</h2>
-        <div className="capability-grid">
-          <div>
-            <span>Agent adapters</span>
-            <strong>{pluginRegistry.agentAdapters.length}</strong>
+          {discoverSources.length === 0 ? <p className="empty">No marketplace sources</p> : null}
+          {discoverSources.map((source) => (
+            <div className="key-row three-col" key={source.id}>
+              <span>{source.name}</span>
+              <strong>{source.url}</strong>
+              <button type="button" className="inline-action" aria-label={`Remove ${source.name}`} onClick={() => onRemoveSource(source.id)}>
+                Remove
+              </button>
+            </div>
+          ))}
+          <h2>Sync</h2>
+          {state.syncCenter.profiles.length === 0 ? <p className="empty">No sync profiles</p> : null}
+          {state.syncCenter.profiles.map((profile) => (
+            <div className="key-row" key={`${profile.mode}:${profile.status}`}>
+              <span>{profile.mode}</span>
+              <strong>{profile.status}</strong>
+            </div>
+          ))}
+        </section>
+      </div>
+      <div className="settings-stack">
+        <section className="panel">
+          <h2>Plugins</h2>
+          <div className="capability-grid">
+            <div>
+              <span>Agent adapters</span>
+              <strong>{pluginRegistry.agentAdapters.length}</strong>
+            </div>
+            <div>
+              <span>Importers</span>
+              <strong>{pluginRegistry.importers.length}</strong>
+            </div>
+            <div>
+              <span>Sync drivers</span>
+              <strong>{pluginRegistry.syncDrivers.length}</strong>
+            </div>
           </div>
-          <div>
-            <span>Importers</span>
-            <strong>{pluginRegistry.importers.length}</strong>
-          </div>
-          <div>
-            <span>Sync drivers</span>
-            <strong>{pluginRegistry.syncDrivers.length}</strong>
-          </div>
-        </div>
-        {state.plugins.plugins.length === 0 ? <p className="empty">No plugins enabled</p> : null}
-        {state.plugins.plugins.map((plugin) => (
-          <div className="plugin-row" key={plugin.id ?? plugin.name}>
-            <Plug size={16} aria-hidden="true" />
-            <span>{plugin.name}</span>
-            <strong>{plugin.status}</strong>
-          </div>
-        ))}
-      </section>
+          {state.plugins.plugins.length === 0 ? <p className="empty">No plugins enabled</p> : null}
+          {state.plugins.plugins.map((plugin) => (
+            <div className="plugin-row" key={plugin.id ?? plugin.name}>
+              <Plug size={16} aria-hidden="true" />
+              <span>{plugin.name}</span>
+              <strong>{plugin.status}</strong>
+            </div>
+          ))}
+        </section>
+        <section className="panel">
+          <h2>App preferences</h2>
+          {appSettings ? (
+            <div className="settings-stack">
+              <label className="preference-row">
+                <span>
+                  <strong>Check for updates</strong>
+                  <small>Local setting for OpenHub desktop update checks.</small>
+                </span>
+                <input
+                  type="checkbox"
+                  aria-label="Check for updates"
+                  checked={appSettings.updateChecksEnabled}
+                  onChange={(event) => onSetUpdateChecks(event.target.checked)}
+                />
+              </label>
+              <label className="preference-row">
+                <span>
+                  <strong>Log level</strong>
+                  <small>Controls local runtime log filtering.</small>
+                </span>
+                <select
+                  aria-label="Log level"
+                  value={appSettings.logLevel}
+                  onChange={(event) => onSetLogLevel(event.target.value as AppSettings['logLevel'])}
+                >
+                  <option value="debug">debug</option>
+                  <option value="info">info</option>
+                  <option value="warn">warn</option>
+                  <option value="error">error</option>
+                </select>
+              </label>
+            </div>
+          ) : (
+            <p className="empty">Local app preferences unavailable</p>
+          )}
+        </section>
+      </div>
     </div>
   );
 }

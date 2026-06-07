@@ -4,7 +4,7 @@
 import { act, cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
-import type { DesktopWorkspaceState, InstallPlan, LibraryScanResult } from '@theopenhub/shared';
+import type { AppSettings, DesktopWorkspaceState, InstallPlan, LibraryScanResult } from '@theopenhub/shared';
 
 import { App } from './App';
 import { createEmptyWorkspaceState } from './workspace-view-model';
@@ -1117,6 +1117,37 @@ describe('desktop app shell', () => {
     expect(screen.queryByText(/share usage analytics|telemetry|crash reports/i)).not.toBeInTheDocument();
   });
 
+  it('wires Settings app preferences to existing local settings IPC', async () => {
+    const settings = createAppSettings({ updateChecksEnabled: true, logLevel: 'info' });
+    const updatedChecks = createAppSettings({ updateChecksEnabled: false, logLevel: 'info' });
+    const updatedLogLevel = createAppSettings({ updateChecksEnabled: false, logLevel: 'warn' });
+    const setUpdateChecks = vi.fn().mockResolvedValue(updatedChecks);
+    const setLogLevel = vi.fn().mockResolvedValue(updatedLogLevel);
+    window.theOpenHub = {
+      getWorkspaceState: vi.fn().mockResolvedValue(createEmptyWorkspaceState()),
+      listAgentRoots: vi.fn().mockResolvedValue([]),
+      listDiscoverSources: vi.fn().mockResolvedValue([]),
+      getSettings: vi.fn().mockResolvedValue(settings),
+      setUpdateChecks,
+      setLogLevel
+    } as unknown as NonNullable<typeof window.theOpenHub>;
+
+    render(<App />);
+    fireEvent.click(screen.getByRole('button', { name: 'Settings' }));
+
+    expect(await screen.findByRole('heading', { name: 'App preferences' })).toBeInTheDocument();
+    expect(screen.getByRole('checkbox', { name: 'Check for updates' })).toBeChecked();
+    expect(screen.getByLabelText('Log level')).toHaveValue('info');
+
+    fireEvent.click(screen.getByRole('checkbox', { name: 'Check for updates' }));
+    await waitFor(() => expect(setUpdateChecks).toHaveBeenCalledWith(false));
+    expect(await screen.findByText('Settings updated')).toBeInTheDocument();
+
+    fireEvent.change(screen.getByLabelText('Log level'), { target: { value: 'warn' } });
+    await waitFor(() => expect(setLogLevel).toHaveBeenCalledWith('warn'));
+    expect(screen.getByLabelText('Log level')).toHaveValue('warn');
+  });
+
   it('shows retained plugin capabilities only', async () => {
     const state = createEmptyWorkspaceState();
     render(
@@ -1156,6 +1187,16 @@ describe('desktop app shell', () => {
     expect(screen.queryByText('Exporters')).not.toBeInTheDocument();
   });
 });
+
+function createAppSettings(input: Partial<AppSettings> = {}): AppSettings {
+  return {
+    mirrorSources: [],
+    updateChecksEnabled: false,
+    logLevel: 'info',
+    pluginDirectories: [],
+    ...input
+  };
+}
 
 function workspaceWithSkill(state: DesktopWorkspaceState, name: string): DesktopWorkspaceState {
   return {

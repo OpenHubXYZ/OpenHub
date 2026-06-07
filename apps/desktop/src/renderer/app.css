@@ -652,6 +652,51 @@ button {
   grid-template-columns: 22px minmax(0, 1fr) minmax(80px, auto);
 }
 
+.settings-stack {
+  display: grid;
+  gap: 16px;
+}
+
+.preference-row {
+  min-width: 0;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(120px, auto);
+  gap: 14px;
+  align-items: center;
+  border-bottom: 1px solid var(--oh-border-soft);
+  padding-bottom: 12px;
+}
+
+.preference-row:last-child {
+  border-bottom: 0;
+  padding-bottom: 0;
+}
+
+.preference-row span {
+  min-width: 0;
+  display: grid;
+  gap: 3px;
+}
+
+.preference-row small {
+  color: var(--oh-text-muted);
+}
+
+.preference-row input[type="checkbox"] {
+  width: 20px;
+  height: 20px;
+  justify-self: end;
+}
+
+.preference-row select {
+  min-height: 36px;
+  border: 1px solid var(--oh-border);
+  border-radius: var(--oh-radius);
+  padding: 0 10px;
+  background: var(--oh-panel);
+  color: var(--oh-text);
+}
+
 .detail-panel {
   display: grid;
   gap: 14px;
