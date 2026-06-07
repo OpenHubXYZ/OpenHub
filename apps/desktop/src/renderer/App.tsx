@@ -72,6 +72,7 @@ export function App({
   const [projectionMode, setProjectionMode] = useState<'copy' | 'symlink'>('copy');
   const [pendingPlan, setPendingPlan] = useState<InstallPlan | null>(null);
   const [importedCandidates, setImportedCandidates] = useState<Record<string, string>>({});
+  const [installedSkillIds, setInstalledSkillIds] = useState<Record<string, string>>({});
   const [status, setStatus] = useState('Ready');
   const mountedRef = useRef(true);
 
@@ -332,7 +333,8 @@ export function App({
       setStatus('Install plan blocked');
       return;
     }
-    await api.applyInstallPlan(plan, false);
+    const installed = await api.applyInstallPlan(plan, false);
+    setInstalledSkillIds((current) => ({ ...current, [installed.skillId]: installed.installationId }));
     await refreshWorkspace();
     setStatus(`Installed ${skill.name}`);
   }
@@ -342,8 +344,9 @@ export function App({
     if (!api || !pendingPlan) {
       return;
     }
-    await api.applyInstallPlan(pendingPlan, true);
+    const installed = await api.applyInstallPlan(pendingPlan, true);
     setPendingPlan(null);
+    setInstalledSkillIds((current) => ({ ...current, [installed.skillId]: installed.installationId }));
     await refreshWorkspace();
     setStatus(`Installed ${pendingPlan.skillName}`);
   }
@@ -439,6 +442,8 @@ export function App({
               projectionMode={projectionMode}
               setProjectionMode={setProjectionMode}
               pendingPlan={pendingPlan}
+              importedCandidates={importedCandidates}
+              installedSkillIds={installedSkillIds}
               onPreview={previewSource}
               onImport={importCandidate}
               onInstall={installCandidate}
@@ -520,6 +525,8 @@ function SkillsPage({
   projectionMode,
   setProjectionMode,
   pendingPlan,
+  importedCandidates,
+  installedSkillIds,
   onPreview,
   onImport,
   onInstall,
@@ -539,6 +546,8 @@ function SkillsPage({
   projectionMode: 'copy' | 'symlink';
   setProjectionMode: (value: 'copy' | 'symlink') => void;
   pendingPlan: InstallPlan | null;
+  importedCandidates: Record<string, string>;
+  installedSkillIds: Record<string, string>;
   onPreview: () => void;
   onImport: (skill: DiscoverSkillPreview) => Promise<string | null>;
   onInstall: (skill: DiscoverSkillPreview) => void;
@@ -576,6 +585,8 @@ function SkillsPage({
           projectionMode={projectionMode}
           setProjectionMode={setProjectionMode}
           pendingPlan={pendingPlan}
+          importedCandidates={importedCandidates}
+          installedSkillIds={installedSkillIds}
           onPreview={onPreview}
           onImport={onImport}
           onInstall={onInstall}
@@ -641,6 +652,8 @@ function MarketplaceTab({
   projectionMode,
   setProjectionMode,
   pendingPlan,
+  importedCandidates,
+  installedSkillIds,
   onPreview,
   onImport,
   onInstall,
@@ -656,6 +669,8 @@ function MarketplaceTab({
   projectionMode: 'copy' | 'symlink';
   setProjectionMode: (value: 'copy' | 'symlink') => void;
   pendingPlan: InstallPlan | null;
+  importedCandidates: Record<string, string>;
+  installedSkillIds: Record<string, string>;
   onPreview: () => void;
   onImport: (skill: DiscoverSkillPreview) => Promise<string | null>;
   onInstall: (skill: DiscoverSkillPreview) => void;
@@ -726,21 +741,36 @@ function MarketplaceTab({
         {sources.length === 0 ? <p className="empty">No marketplace sources</p> : null}
         {previewSkills.length === 0 ? <p className="empty">No sources previewed</p> : null}
         <div className="candidate-list">
-          {previewSkills.map((skill) => (
-            <article key={skill.path} className="candidate">
-              <strong>{skill.name}</strong>
-              <span>{skill.path}</span>
-              <p>{skill.description}</p>
-              <div className="candidate-actions">
-                <button type="button" onClick={() => void onImport(skill)}>
-                  Import
-                </button>
-                <button type="button" onClick={() => onInstall(skill)}>
-                  Install
-                </button>
-              </div>
-            </article>
-          ))}
+          {previewSkills.map((skill) => {
+            const importedSkillId = importedCandidates[skill.path];
+            const isInstalled = Boolean(importedSkillId && installedSkillIds[importedSkillId]);
+
+            return (
+              <article key={skill.path} className="candidate">
+                <strong>{skill.name}</strong>
+                <span>{skill.path}</span>
+                <p>{skill.description}</p>
+                <div className="candidate-actions">
+                  {isInstalled ? (
+                    <span className="tag">Installed</span>
+                  ) : (
+                    <>
+                      {importedSkillId ? (
+                        <span className="tag">Imported</span>
+                      ) : (
+                        <button type="button" onClick={() => void onImport(skill)}>
+                          Import
+                        </button>
+                      )}
+                      <button type="button" onClick={() => onInstall(skill)}>
+                        Install
+                      </button>
+                    </>
+                  )}
+                </div>
+              </article>
+            );
+          })}
         </div>
       </section>
     </div>

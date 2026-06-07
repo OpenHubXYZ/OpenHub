@@ -317,6 +317,91 @@ describe('desktop app shell', () => {
     expect(within(skillsPage).queryByText(/trust/i)).not.toBeInTheDocument();
   });
 
+  it('marks marketplace candidates as imported and installed instead of repeating actions', async () => {
+    const plan = {
+      id: 'plan-market',
+      skillId: 'skill-market',
+      skillVersionId: 'version-market',
+      skillName: 'market-helper',
+      skillSlug: 'market-helper',
+      targetRoot: '/tmp/.codex/skills',
+      targetSkillPath: '/tmp/.codex/skills/market-helper',
+      agentCode: 'codex',
+      agentDisplayName: 'Codex',
+      adapterVersion: 'builtin',
+      scope: 'user',
+      rootKind: 'user',
+      projectionMode: 'copy',
+      status: 'ready',
+      writes: [
+        {
+          relativePath: 'SKILL.md',
+          targetPath: '/tmp/.codex/skills/market-helper/SKILL.md',
+          sourceHash: 'hash-market',
+          action: 'copy',
+          status: 'clean'
+        }
+      ]
+    } as const;
+    window.theOpenHub = {
+      getWorkspaceState: vi.fn().mockResolvedValue(createEmptyWorkspaceState()),
+      listAgentRoots: vi.fn().mockResolvedValue([createRoot('/tmp/.codex/skills')]),
+      listDiscoverSources: vi.fn().mockResolvedValue([createSource()]),
+      previewDiscoverSource: vi.fn().mockResolvedValue({
+        source: createSource(),
+        skills: [
+          {
+            name: 'market-helper',
+            description: 'Marketplace helper',
+            tags: ['market'],
+            path: '/tmp/source/market-helper'
+          }
+        ],
+        cachedAt: '2026-06-07T00:00:00.000Z'
+      }),
+      importLocalFolder: vi.fn().mockResolvedValue({
+        skill: {
+          id: 'skill-market',
+          versionId: 'version-market',
+          name: 'market-helper',
+          description: 'Marketplace helper',
+          versionNo: 1
+        },
+        files: []
+      }),
+      createInstallPlan: vi.fn().mockResolvedValue(plan),
+      applyInstallPlan: vi.fn().mockResolvedValue({
+        status: 'installed',
+        installationId: 'installation-market',
+        skillId: 'skill-market',
+        files: plan.writes
+      })
+    } as unknown as NonNullable<typeof window.theOpenHub>;
+
+    render(<App />);
+    fireEvent.click(screen.getByRole('button', { name: 'Skills' }));
+    fireEvent.click(screen.getByRole('tab', { name: 'Marketplace' }));
+    await screen.findByText('Local Source');
+    fireEvent.click(screen.getByRole('button', { name: 'Preview source' }));
+
+    expect(await screen.findByText('market-helper')).toBeInTheDocument();
+    expect(within(marketCandidate()).getByRole('button', { name: 'Import' })).toBeInTheDocument();
+    expect(within(marketCandidate()).getByRole('button', { name: 'Install' })).toBeInTheDocument();
+
+    fireEvent.click(within(marketCandidate()).getByRole('button', { name: 'Import' }));
+    expect(await screen.findByText('Imported market-helper')).toBeInTheDocument();
+    expect(within(marketCandidate()).getByText('Imported')).toBeInTheDocument();
+    expect(within(marketCandidate()).queryByRole('button', { name: 'Import' })).not.toBeInTheDocument();
+    expect(within(marketCandidate()).getByRole('button', { name: 'Install' })).toBeInTheDocument();
+
+    fireEvent.click(within(marketCandidate()).getByRole('button', { name: 'Install' }));
+    expect(await screen.findByText('Installed market-helper')).toBeInTheDocument();
+    expect(within(marketCandidate()).getByText('Installed')).toBeInTheDocument();
+    expect(within(marketCandidate()).queryByRole('button', { name: 'Import' })).not.toBeInTheDocument();
+    expect(within(marketCandidate()).queryByRole('button', { name: 'Install' })).not.toBeInTheDocument();
+    expect(window.theOpenHub?.createInstallPlan).toHaveBeenCalledWith(expect.objectContaining({ skillId: 'skill-market' }));
+  });
+
   it('manages marketplace sources from Settings', async () => {
     const source = {
       id: 'source-local',
@@ -443,6 +528,14 @@ function createSource() {
     cachedAt: null,
     verified: false
   };
+}
+
+function marketCandidate(): HTMLElement {
+  const candidate = screen.getByText('market-helper').closest('article');
+  if (!candidate) {
+    throw new Error('Missing market-helper candidate');
+  }
+  return candidate;
 }
 
 function deferred<T>() {
