@@ -834,6 +834,9 @@ function SkillsPage({
   const favoriteFilteredRows = favoritesOnly ? rows.filter((skill) => skill.favorite) : rows;
   const agentRows = favoriteFilteredRows.filter((skill) => skill.agentCode === activeTab);
   const visibleAgentRows = normalizedSearchQuery ? agentRows.filter((skill) => skillMatchesSearch(skill, normalizedSearchQuery)) : agentRows;
+  const visibleSkillIds = new Set(visibleAgentRows.map((skill) => skill.id));
+  const visibleSelectedSkillDetail =
+    selectedSkillDetail && visibleSkillIds.has(selectedSkillDetail.skill.id) ? selectedSkillDetail : null;
   const rootGroups = groupByRoot(visibleAgentRows);
   const emptyMessage =
     agentRows.length > 0 && normalizedSearchQuery ? `No skills match "${searchQuery.trim()}"` : 'No indexed skills';
@@ -948,7 +951,7 @@ function SkillsPage({
             </section>
           ))}
         </section>
-        <SkillDetailPanel detail={selectedSkillDetail} detailPanelRef={skillDetailPanelRef} />
+        <SkillDetailPanel detail={visibleSelectedSkillDetail} detailPanelRef={skillDetailPanelRef} />
         </>
       )}
     </div>

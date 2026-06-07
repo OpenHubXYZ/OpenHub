@@ -1171,8 +1171,8 @@ describe('desktop app shell', () => {
       listDiscoverSources: vi.fn().mockResolvedValue([]),
       getSkillDetail: vi.fn().mockResolvedValue({
         skill: {
-          id: 'skill-pdf',
-          versionId: 'version-pdf',
+          id: 'skill-pdf-parser',
+          versionId: 'version-pdf-parser',
           slug: 'pdf-parser',
           name: 'PDF Parser',
           description: 'Parse PDFs',
@@ -1183,8 +1183,8 @@ describe('desktop app shell', () => {
         source: { type: 'local', url: '/tmp/pdf-parser' },
         versions: [
           {
-            versionId: 'version-pdf',
-            skillId: 'skill-pdf',
+            versionId: 'version-pdf-parser',
+            skillId: 'skill-pdf-parser',
             versionNo: 2,
             changeSummary: 'Import',
             createdAt: '2026-06-07'
@@ -1203,6 +1203,41 @@ describe('desktop app shell', () => {
     expect(screen.getByText('SKILL.md')).toBeInTheDocument();
     expect(screen.getByText('Version 2')).toBeInTheDocument();
     expect(screen.queryByRole('button', { name: /run test task/i })).not.toBeInTheDocument();
+  });
+
+  it('hides selected skill details when the active filters remove that skill row', async () => {
+    const state = workspaceWithSkills(createEmptyWorkspaceState());
+    window.theOpenHub = {
+      getWorkspaceState: vi.fn().mockResolvedValue(state),
+      listAgentRoots: vi.fn().mockResolvedValue([]),
+      listDiscoverSources: vi.fn().mockResolvedValue([]),
+      getSkillDetail: vi.fn().mockResolvedValue({
+        skill: {
+          id: 'skill-prompt-writer',
+          versionId: 'version-prompt-writer',
+          slug: 'prompt-writer',
+          name: 'Prompt Writer',
+          description: 'Writes prompts',
+          tags: [],
+          versionNo: 1,
+          favorite: false
+        },
+        source: { type: 'local', url: '/tmp/.codex/skills/prompt-writer' },
+        versions: [],
+        files: [{ relativePath: 'SKILL.md', hash: 'hash-prompt-writer', size: 120, kind: 'markdown' }],
+        skillMarkdown: '# Prompt Writer'
+      })
+    } as unknown as NonNullable<typeof window.theOpenHub>;
+
+    render(<App initialState={state} />);
+    fireEvent.click(screen.getByRole('button', { name: 'Skills' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Open Prompt Writer details' }));
+    expect(await screen.findByRole('heading', { name: 'Prompt Writer' })).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('checkbox', { name: 'Favorites only' }));
+
+    expect(screen.queryByRole('heading', { name: 'Prompt Writer' })).not.toBeInTheDocument();
+    expect(screen.getByText('Select a skill to inspect files and versions.')).toBeInTheDocument();
   });
 
   it('scrolls mobile skill details into view after opening from a long indexed list', async () => {
