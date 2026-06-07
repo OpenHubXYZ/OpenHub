@@ -66,6 +66,16 @@ describe('renderer layout containment CSS', () => {
     expect(compactRules).toContain('text-overflow: clip;');
   });
 
+  it('lets desktop settings root and source paths wrap inside split panels', async () => {
+    const css = await readFile(cssPath, 'utf8');
+    const baseCss = css.slice(0, css.indexOf('@media (max-width: 900px)'));
+    const settingsPathBlock = cssBlock(baseCss, '.key-row.three-col strong');
+
+    expect(settingsPathBlock).toContain('white-space: normal;');
+    expect(settingsPathBlock).toContain('overflow-wrap: anywhere;');
+    expect(settingsPathBlock).toContain('text-overflow: clip;');
+  });
+
   it('stacks mobile conflict confirmations so file names stay readable', async () => {
     const css = await readFile(cssPath, 'utf8');
     const compactRules = atRuleBlock(css, '@media (max-width: 900px)');
@@ -181,6 +191,16 @@ describe('renderer layout containment CSS', () => {
     expect(cssBlock(css, '.candidate strong,\n.candidate span')).toContain('max-width: 100%;');
     expect(cssBlock(css, '.skill-card')).toContain('display: grid;');
     expect(cssBlock(css, '.tag-row')).toContain('flex-wrap: wrap;');
+  });
+
+  it('lets desktop marketplace candidate names and source paths wrap for inspection', async () => {
+    const css = await readFile(cssPath, 'utf8');
+    const baseCss = css.slice(0, css.indexOf('@media (max-width: 900px)'));
+    const candidateTextBlock = cssBlock(baseCss, '.candidate strong,\n.candidate > span');
+
+    expect(candidateTextBlock).toContain('white-space: normal;');
+    expect(candidateTextBlock).toContain('overflow-wrap: anywhere;');
+    expect(candidateTextBlock).toContain('text-overflow: clip;');
   });
 
   it('wraps the selected marketplace install target path', async () => {

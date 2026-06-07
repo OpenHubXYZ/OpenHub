@@ -534,6 +534,13 @@ button {
   white-space: nowrap;
 }
 
+.candidate strong,
+.candidate > span {
+  white-space: normal;
+  overflow-wrap: anywhere;
+  text-overflow: clip;
+}
+
 .candidate .tag {
   display: inline-flex;
 }
@@ -685,6 +692,12 @@ button {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+.key-row.three-col strong {
+  white-space: normal;
+  overflow-wrap: anywhere;
+  text-overflow: clip;
 }
 
 .capability-grid {
