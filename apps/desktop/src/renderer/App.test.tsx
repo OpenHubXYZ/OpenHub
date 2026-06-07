@@ -754,6 +754,7 @@ describe('desktop app shell', () => {
     fireEvent.click(within(marketCandidate()).getByRole('button', { name: 'Install' }));
 
     expect(await screen.findByText('1 conflict')).toBeInTheDocument();
+    expect(screen.getByText('SKILL.md')).toBeInTheDocument();
     expect(screen.queryByText('1 conflicts')).not.toBeInTheDocument();
     fireEvent.click(screen.getByRole('button', { name: 'Confirm overwrite' }));
 

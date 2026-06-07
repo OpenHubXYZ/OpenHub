@@ -605,6 +605,32 @@ button {
   background: color-mix(in srgb, var(--oh-warning) 12%, white);
 }
 
+.conflict-summary {
+  min-width: 0;
+  display: grid;
+  gap: 6px;
+}
+
+.conflict-files {
+  min-width: 0;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.conflict-files code,
+.conflict-files span {
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  border-radius: var(--oh-radius);
+  padding: 3px 7px;
+  background: var(--oh-panel);
+  color: var(--oh-text-muted);
+  font-size: 12px;
+}
+
 .candidate span {
   margin-top: 4px;
   color: var(--oh-text-muted);

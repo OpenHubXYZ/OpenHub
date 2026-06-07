@@ -1041,14 +1041,7 @@ function MarketplaceTab({
             <FolderSearch size={16} aria-hidden="true" />
             Preview source
           </button>
-          {pendingPlan ? (
-            <div className="conflict-box">
-              <strong>{formatConflictCount(pendingPlan)}</strong>
-              <button type="button" onClick={onConfirmOverwrite}>
-                Confirm overwrite
-              </button>
-            </div>
-          ) : null}
+          {pendingPlan ? <ConflictBox plan={pendingPlan} onConfirmOverwrite={onConfirmOverwrite} /> : null}
         </div>
       </section>
       <section className="panel">
@@ -1100,6 +1093,29 @@ function MarketplaceTab({
           })}
         </div>
       </section>
+    </div>
+  );
+}
+
+function ConflictBox({ plan, onConfirmOverwrite }: { plan: InstallPlan; onConfirmOverwrite: () => void }) {
+  const conflicts = plan.writes.filter((write) => write.status === 'conflict');
+  const visibleConflicts = conflicts.slice(0, 3);
+  const hiddenConflictCount = conflicts.length - visibleConflicts.length;
+
+  return (
+    <div className="conflict-box">
+      <div className="conflict-summary">
+        <strong>{formatConflictCount(plan)}</strong>
+        <div className="conflict-files" aria-label="Conflicting files">
+          {visibleConflicts.map((write) => (
+            <code key={write.targetPath}>{write.relativePath}</code>
+          ))}
+          {hiddenConflictCount > 0 ? <span>+{hiddenConflictCount} more</span> : null}
+        </div>
+      </div>
+      <button type="button" onClick={onConfirmOverwrite}>
+        Confirm overwrite
+      </button>
     </div>
   );
 }
