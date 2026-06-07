@@ -44,6 +44,29 @@ describe('desktop app shell', () => {
     expect(screen.getByRole('tab', { name: 'Marketplace' })).toHaveAttribute('aria-selected', 'true');
   });
 
+  it('filters indexed skills by path as well as name', () => {
+    render(<App initialState={workspaceWithSkills(createEmptyWorkspaceState())} />);
+
+    fireEvent.click(screen.getByRole('button', { name: 'Skills' }));
+    expect(screen.getByText('Prompt Writer')).toBeInTheDocument();
+    expect(screen.getByText('Palette Helper')).toBeInTheDocument();
+
+    fireEvent.change(screen.getByLabelText('Search skills'), { target: { value: 'visual-assets' } });
+
+    expect(screen.getByText('Palette Helper')).toBeInTheDocument();
+    expect(screen.queryByText('Prompt Writer')).not.toBeInTheDocument();
+  });
+
+  it('shows a search-specific empty state when indexed skills do not match', () => {
+    render(<App initialState={workspaceWithSkills(createEmptyWorkspaceState())} />);
+
+    fireEvent.click(screen.getByRole('button', { name: 'Skills' }));
+    fireEvent.change(screen.getByLabelText('Search skills'), { target: { value: 'no-match' } });
+
+    expect(screen.getByText('No skills match "no-match"')).toBeInTheDocument();
+    expect(screen.queryByText('No indexed skills')).not.toBeInTheDocument();
+  });
+
   it('starts automatic root scanning after initial workspace data is visible', async () => {
     const state = createEmptyWorkspaceState();
     const initialWorkspace = deferred<DesktopWorkspaceState>();
@@ -721,6 +744,56 @@ function workspaceWithSkill(state: DesktopWorkspaceState, name: string): Desktop
         versionId: `version-${name.toLowerCase().replace(/\s+/g, '-')}`,
         name,
         description: `${name} description`,
+        versionNo: 1
+      }
+    ]
+  };
+}
+
+function workspaceWithSkills(state: DesktopWorkspaceState): DesktopWorkspaceState {
+  return {
+    ...state,
+    librarySkills: [
+      {
+        id: 'skill-prompt-writer',
+        name: 'Prompt Writer',
+        sourceAgent: 'Codex',
+        agentCode: 'codex',
+        path: '/tmp/.codex/skills/prompt-writer',
+        visibilityStatus: 'indexed',
+        rootPath: '/tmp/.codex/skills',
+        scope: 'user',
+        rootKind: 'user',
+        writable: true,
+        ownership: 'indexed'
+      },
+      {
+        id: 'skill-palette-helper',
+        name: 'Palette Helper',
+        sourceAgent: 'Codex',
+        agentCode: 'codex',
+        path: '/tmp/.codex/skills/visual-assets/palette-helper',
+        visibilityStatus: 'indexed',
+        rootPath: '/tmp/.codex/skills',
+        scope: 'user',
+        rootKind: 'user',
+        writable: true,
+        ownership: 'indexed'
+      }
+    ],
+    skills: [
+      {
+        id: 'skill-prompt-writer',
+        versionId: 'version-prompt-writer',
+        name: 'Prompt Writer',
+        description: 'Prompt Writer description',
+        versionNo: 1
+      },
+      {
+        id: 'skill-palette-helper',
+        versionId: 'version-palette-helper',
+        name: 'Palette Helper',
+        description: 'Palette Helper description',
         versionNo: 1
       }
     ]

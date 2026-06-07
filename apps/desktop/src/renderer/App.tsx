@@ -90,9 +90,6 @@ export function App({
       }),
     [activePage, agentRoots, previewSkills, state]
   );
-  const skillRows = query.trim()
-    ? state.librarySkills.filter((skill) => skill.name.toLowerCase().includes(query.trim().toLowerCase()))
-    : state.librarySkills;
   const installedCandidateNames = useMemo(
     () =>
       state.librarySkills.reduce<Record<string, string>>((installed, skill) => {
@@ -493,7 +490,8 @@ export function App({
           ) : null}
           {activePage === 'skills' ? (
             <SkillsPage
-              rows={skillRows}
+              rows={state.librarySkills}
+              searchQuery={query}
               activeTab={skillsTab}
               setActiveTab={setSkillsTab}
               agentRoots={agentRoots}
@@ -587,6 +585,7 @@ function HomePage({
 
 function SkillsPage({
   rows,
+  searchQuery,
   activeTab,
   setActiveTab,
   agentRoots,
@@ -609,6 +608,7 @@ function SkillsPage({
   onUninstall
 }: {
   rows: DesktopWorkspaceState['librarySkills'];
+  searchQuery: string;
   activeTab: SkillsTabKey;
   setActiveTab: (value: SkillsTabKey) => void;
   agentRoots: AgentRootTarget[];
@@ -630,8 +630,12 @@ function SkillsPage({
   onConfirmOverwrite: () => void;
   onUninstall: (installationId: string) => void;
 }) {
+  const normalizedSearchQuery = normalizeSearchText(searchQuery);
   const agentRows = rows.filter((skill) => skill.agentCode === activeTab);
-  const rootGroups = groupByRoot(agentRows);
+  const visibleAgentRows = normalizedSearchQuery ? agentRows.filter((skill) => skillMatchesSearch(skill, normalizedSearchQuery)) : agentRows;
+  const rootGroups = groupByRoot(visibleAgentRows);
+  const emptyMessage =
+    agentRows.length > 0 && normalizedSearchQuery ? `No skills match "${searchQuery.trim()}"` : 'No indexed skills';
 
   return (
     <div className="content-grid">
@@ -672,7 +676,7 @@ function SkillsPage({
       ) : (
         <section className="panel">
           <h2>{agentTabs.find((tab) => tab.key === activeTab)?.label} skills</h2>
-          {rootGroups.length === 0 ? <p className="empty">No indexed skills</p> : null}
+          {rootGroups.length === 0 ? <p className="empty">{emptyMessage}</p> : null}
           {rootGroups.map((group) => (
             <section className="root-section" key={group.rootPath}>
               <div className="root-header">
@@ -1002,6 +1006,22 @@ function groupByRoot(rows: DesktopWorkspaceState['librarySkills']) {
     groups.set(rootPath, [...(groups.get(rootPath) ?? []), row]);
   }
   return [...groups.entries()].map(([rootPath, groupedRows]) => ({ rootPath, rows: groupedRows }));
+}
+
+function skillMatchesSearch(skill: DesktopWorkspaceState['librarySkills'][number], normalizedSearchQuery: string): boolean {
+  return [
+    skill.name,
+    skill.path,
+    skill.rootPath,
+    skill.sourceAgent,
+    skill.agentCode,
+    skill.visibilityStatus,
+    skill.ownership
+  ].some((value) => normalizeSearchText(value).includes(normalizedSearchQuery));
+}
+
+function normalizeSearchText(value: string): string {
+  return value.trim().toLowerCase();
 }
 
 function formatScanStatus(scan: LibraryScanResult): string {
