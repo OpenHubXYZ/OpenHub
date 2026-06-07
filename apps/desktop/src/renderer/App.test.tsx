@@ -1406,6 +1406,43 @@ describe('desktop app shell', () => {
     expect(screen.getByLabelText('Log level')).toHaveValue('warn');
   });
 
+  it('creates local sync profiles from Settings without secret prompts', async () => {
+    const createSyncProfile = vi.fn().mockResolvedValue({
+      id: 'sync-profile-1',
+      mode: 'shared-folder',
+      remoteUrl: '/tmp/openhub-shared-sync',
+      authRef: null,
+      enabled: true,
+      lastSyncedAt: null
+    });
+    window.theOpenHub = {
+      getWorkspaceState: vi.fn().mockResolvedValue(createEmptyWorkspaceState()),
+      listAgentRoots: vi.fn().mockResolvedValue([]),
+      listDiscoverSources: vi.fn().mockResolvedValue([]),
+      getSettings: vi.fn().mockResolvedValue(createAppSettings()),
+      createSyncProfile
+    } as unknown as NonNullable<typeof window.theOpenHub>;
+
+    render(<App />);
+    fireEvent.click(screen.getByRole('button', { name: 'Settings' }));
+
+    fireEvent.change(await screen.findByLabelText('Sync remote path'), { target: { value: '/tmp/openhub-shared-sync' } });
+    expect(screen.getByLabelText('Sync mode')).toHaveValue('shared-folder');
+    expect(screen.getByRole('checkbox', { name: 'Enable sync profile' })).toBeChecked();
+    expect(screen.queryByLabelText(/api key|token|secret/i)).not.toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Add sync profile' }));
+
+    await waitFor(() =>
+      expect(createSyncProfile).toHaveBeenCalledWith({
+        mode: 'shared-folder',
+        remoteUrl: '/tmp/openhub-shared-sync',
+        enabled: true
+      })
+    );
+    expect(await screen.findByText('/tmp/openhub-shared-sync')).toBeInTheDocument();
+  });
+
   it('shows retained plugin capabilities only', async () => {
     const state = createEmptyWorkspaceState();
     render(

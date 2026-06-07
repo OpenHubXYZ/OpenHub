@@ -752,8 +752,20 @@ function governanceState(database: SqliteDatabase): DesktopWorkspaceState['gover
 function syncCenterState(database: SqliteDatabase): SyncCenterState {
   return {
     profiles: database
-      .prepare("select mode, case when enabled = 1 then 'enabled' else 'disabled' end as status from sync_profiles order by created_at desc")
-      .all() as Array<{ mode: string; status: string }>,
+      .prepare(
+        `
+          select
+            id,
+            mode,
+            remote_url as remoteUrl,
+            enabled,
+            case when enabled = 1 then 'enabled' else 'disabled' end as status
+          from sync_profiles
+          order by created_at desc
+        `
+      )
+      .all()
+      .map(syncCenterProfileRow),
     outbox: database
       .prepare('select entity_type as entityType, status from sync_outbox order by created_at desc limit 20')
       .all() as Array<{ entityType: string; status: string }>,
@@ -763,6 +775,23 @@ function syncCenterState(database: SqliteDatabase): SyncCenterState {
     conflicts: database
       .prepare('select entity_type as entityType, status from sync_conflicts order by created_at desc limit 20')
       .all() as Array<{ entityType: string; status: string }>
+  };
+}
+
+function syncCenterProfileRow(row: unknown): SyncCenterState['profiles'][number] {
+  const typed = row as {
+    id: string;
+    mode: string;
+    remoteUrl: string;
+    enabled: number;
+    status: string;
+  };
+  return {
+    id: typed.id,
+    mode: typed.mode,
+    remoteUrl: typed.remoteUrl,
+    enabled: typed.enabled === 1,
+    status: typed.status
   };
 }
 

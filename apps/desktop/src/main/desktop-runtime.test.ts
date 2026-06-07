@@ -261,6 +261,18 @@ describe('desktop runtime IPC dispatch', () => {
     ]));
     expect(collection).toMatchObject({ name: 'Runtime Collection' });
     expect(outbox).toMatchObject({ status: 'queued', entityId: imported.skill.id });
+    await expect(runtime.dispatch('workspace.state', {})).resolves.toMatchObject({
+      syncCenter: {
+        profiles: [
+          expect.objectContaining({
+            id: profile.id,
+            remoteUrl: path.join(workspace, 'sync'),
+            enabled: false,
+            status: 'disabled'
+          })
+        ]
+      }
+    });
     await expect(runtime.dispatch('discover.listSources', {})).resolves.toEqual([
       expect.objectContaining({ id: discoverSource.id, name: 'Local Discover' })
     ]);

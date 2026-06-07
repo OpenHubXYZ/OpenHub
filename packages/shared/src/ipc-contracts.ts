@@ -228,7 +228,10 @@ const syncCenterStateSchema = z
     profiles: z.array(
       z
         .object({
+          id: z.string().min(1),
           mode: z.string().min(1),
+          remoteUrl: z.string().min(1),
+          enabled: z.boolean(),
           status: z.string().min(1)
         })
         .strict()

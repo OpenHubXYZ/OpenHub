@@ -12,7 +12,8 @@ import type {
   LibrarySkillSummary,
   LibraryScanResult,
   PluginRegistry,
-  SkillDetail
+  SkillDetail,
+  SyncProfile
 } from '@theopenhub/shared';
 
 import './app.css';
@@ -42,6 +43,7 @@ const agentTabs = [
 
 type SkillsTabKey = (typeof agentTabs)[number]['key'];
 type RootAgentCode = 'codex' | 'claude' | 'gemini' | 'opencode' | 'agents';
+type SyncProfileMode = 'shared-folder' | 'git';
 type AsyncGuard = () => boolean;
 type StatusTone = 'default' | 'error';
 
@@ -75,6 +77,9 @@ export function App({
   const [rootAgentCode, setRootAgentCode] = useState<RootAgentCode>('codex');
   const [rootPath, setRootPath] = useState('');
   const [pluginDirectoryPath, setPluginDirectoryPath] = useState('');
+  const [syncMode, setSyncMode] = useState<SyncProfileMode>('shared-folder');
+  const [syncRemoteUrl, setSyncRemoteUrl] = useState('');
+  const [syncProfileEnabled, setSyncProfileEnabled] = useState(true);
   const [selectedTargetRoot, setSelectedTargetRoot] = useState('');
   const [projectionMode, setProjectionMode] = useState<'copy' | 'symlink'>('copy');
   const [pendingPlan, setPendingPlan] = useState<InstallPlan | null>(null);
@@ -446,6 +451,36 @@ export function App({
     }
   }
 
+  async function addSyncProfile() {
+    const api = window.theOpenHub;
+    const trimmedSyncRemoteUrl = syncRemoteUrl.trim();
+    if (!trimmedSyncRemoteUrl) {
+      setStatusMessage('Enter a sync remote path first', 'error');
+      return;
+    }
+    if (!api?.createSyncProfile) {
+      return;
+    }
+    try {
+      const profile = await api.createSyncProfile({
+        mode: syncMode,
+        remoteUrl: trimmedSyncRemoteUrl,
+        enabled: syncProfileEnabled
+      });
+      setState((current) => ({
+        ...current,
+        syncCenter: {
+          ...current.syncCenter,
+          profiles: upsertSyncCenterProfile(current.syncCenter.profiles, syncProfileToCenterProfile(profile))
+        }
+      }));
+      setSyncRemoteUrl('');
+      setStatusMessage('Sync profile added');
+    } catch (error: unknown) {
+      setStatusMessage(formatError(error), 'error');
+    }
+  }
+
   async function addPluginDirectory() {
     const api = window.theOpenHub;
     const trimmedPluginDirectoryPath = pluginDirectoryPath.trim();
@@ -794,6 +829,12 @@ export function App({
               setRootPath={setRootPath}
               pluginDirectoryPath={pluginDirectoryPath}
               setPluginDirectoryPath={setPluginDirectoryPath}
+              syncMode={syncMode}
+              setSyncMode={setSyncMode}
+              syncRemoteUrl={syncRemoteUrl}
+              setSyncRemoteUrl={setSyncRemoteUrl}
+              syncProfileEnabled={syncProfileEnabled}
+              setSyncProfileEnabled={setSyncProfileEnabled}
               discoverSources={discoverSources}
               onAddRoot={addRoot}
               onRemoveRoot={removeProjectRoot}
@@ -801,6 +842,7 @@ export function App({
               onRemoveSource={removeMarketplaceSource}
               onSetUpdateChecks={setUpdateChecksPreference}
               onSetLogLevel={setLogLevelPreference}
+              onAddSyncProfile={addSyncProfile}
               onAddPluginDirectory={addPluginDirectory}
               onScanPluginDirectory={scanPluginDirectory}
               onRemovePluginDirectory={removePluginDirectory}
@@ -1295,6 +1337,12 @@ function SettingsPage({
   setRootPath,
   pluginDirectoryPath,
   setPluginDirectoryPath,
+  syncMode,
+  setSyncMode,
+  syncRemoteUrl,
+  setSyncRemoteUrl,
+  syncProfileEnabled,
+  setSyncProfileEnabled,
   discoverSources,
   onAddRoot,
   onRemoveRoot,
@@ -1302,6 +1350,7 @@ function SettingsPage({
   onRemoveSource,
   onSetUpdateChecks,
   onSetLogLevel,
+  onAddSyncProfile,
   onAddPluginDirectory,
   onScanPluginDirectory,
   onRemovePluginDirectory
@@ -1320,6 +1369,12 @@ function SettingsPage({
   setRootPath: (value: string) => void;
   pluginDirectoryPath: string;
   setPluginDirectoryPath: (value: string) => void;
+  syncMode: SyncProfileMode;
+  setSyncMode: (value: SyncProfileMode) => void;
+  syncRemoteUrl: string;
+  setSyncRemoteUrl: (value: string) => void;
+  syncProfileEnabled: boolean;
+  setSyncProfileEnabled: (value: boolean) => void;
   discoverSources: DiscoverSource[];
   onAddRoot: () => void;
   onRemoveRoot: (root: AgentRootTarget) => void;
@@ -1327,6 +1382,7 @@ function SettingsPage({
   onRemoveSource: (sourceId: string) => void;
   onSetUpdateChecks: (enabled: boolean) => void;
   onSetLogLevel: (logLevel: AppSettings['logLevel']) => void;
+  onAddSyncProfile: () => void;
   onAddPluginDirectory: () => void;
   onScanPluginDirectory: (directoryId: string) => void;
   onRemovePluginDirectory: (directoryId: string) => void;
@@ -1400,11 +1456,41 @@ function SettingsPage({
             </div>
           ))}
           <h2>Sync</h2>
+          <div className="form-grid compact-form">
+            <label>
+              Sync mode
+              <select
+                aria-label="Sync mode"
+                value={syncMode}
+                onChange={(event) => setSyncMode(event.target.value as SyncProfileMode)}
+              >
+                <option value="shared-folder">shared-folder</option>
+                <option value="git">git</option>
+              </select>
+            </label>
+            <label>
+              Sync remote path
+              <input value={syncRemoteUrl} onChange={(event) => setSyncRemoteUrl(event.target.value)} />
+            </label>
+            <label className="toggle-row">
+              <input
+                type="checkbox"
+                aria-label="Enable sync profile"
+                checked={syncProfileEnabled}
+                onChange={(event) => setSyncProfileEnabled(event.target.checked)}
+              />
+              Enable sync profile
+            </label>
+            <button type="button" onClick={onAddSyncProfile}>
+              Add sync profile
+            </button>
+          </div>
           {state.syncCenter.profiles.length === 0 ? <p className="empty">No sync profiles</p> : null}
           {state.syncCenter.profiles.map((profile) => (
-            <div className="key-row" key={`${profile.mode}:${profile.status}`}>
+            <div className="key-row three-col" key={profile.id}>
               <span>{profile.mode}</span>
-              <strong>{profile.status}</strong>
+              <strong>{profile.remoteUrl}</strong>
+              <span className="tag">{profile.status}</span>
             </div>
           ))}
         </section>
@@ -1575,6 +1661,23 @@ function upsertPluginDirectory(
   directory: DesktopWorkspaceState['plugins']['directories'][number]
 ) {
   return [directory, ...directories.filter((item) => item.id !== directory.id)];
+}
+
+function upsertSyncCenterProfile(
+  profiles: DesktopWorkspaceState['syncCenter']['profiles'],
+  profile: DesktopWorkspaceState['syncCenter']['profiles'][number]
+) {
+  return [profile, ...profiles.filter((item) => item.id !== profile.id)];
+}
+
+function syncProfileToCenterProfile(profile: SyncProfile): DesktopWorkspaceState['syncCenter']['profiles'][number] {
+  return {
+    id: profile.id,
+    mode: profile.mode,
+    remoteUrl: profile.remoteUrl,
+    enabled: profile.enabled,
+    status: profile.enabled ? 'enabled' : 'disabled'
+  };
 }
 
 function replacePluginCatalogForDirectory(
