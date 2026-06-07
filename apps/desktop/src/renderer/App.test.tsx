@@ -4,7 +4,7 @@
 import { act, cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
-import type { DesktopWorkspaceState, LibraryScanResult } from '@theopenhub/shared';
+import type { DesktopWorkspaceState, InstallPlan, LibraryScanResult } from '@theopenhub/shared';
 
 import { App } from './App';
 import { createEmptyWorkspaceState } from './workspace-view-model';
@@ -426,6 +426,96 @@ describe('desktop app shell', () => {
     expect(within(marketCandidate()).queryByRole('button', { name: 'Install' })).not.toBeInTheDocument();
   });
 
+  it('shows singular overwrite confirmation before applying a conflicting marketplace install', async () => {
+    const plan = createMarketInstallPlan('conflict');
+    window.theOpenHub = {
+      getWorkspaceState: vi.fn().mockResolvedValue(createEmptyWorkspaceState()),
+      listAgentRoots: vi.fn().mockResolvedValue([createRoot('/tmp/.codex/skills')]),
+      listDiscoverSources: vi.fn().mockResolvedValue([createSource()]),
+      previewDiscoverSource: vi.fn().mockResolvedValue({
+        source: createSource(),
+        skills: [
+          {
+            name: 'market-helper',
+            description: 'Marketplace helper',
+            tags: ['market'],
+            path: '/tmp/source/market-helper'
+          }
+        ],
+        cachedAt: '2026-06-07T00:00:00.000Z'
+      }),
+      importLocalFolder: vi.fn().mockResolvedValue({
+        skill: {
+          id: 'skill-market',
+          versionId: 'version-market',
+          name: 'market-helper',
+          description: 'Marketplace helper',
+          versionNo: 1
+        },
+        files: []
+      }),
+      createInstallPlan: vi.fn().mockResolvedValue(plan),
+      applyInstallPlan: vi.fn().mockResolvedValue({
+        status: 'installed',
+        installationId: 'installation-market',
+        skillId: 'skill-market',
+        files: plan.writes
+      })
+    } as unknown as NonNullable<typeof window.theOpenHub>;
+
+    render(<App />);
+    fireEvent.click(screen.getByRole('button', { name: 'Skills' }));
+    fireEvent.click(screen.getByRole('tab', { name: 'Marketplace' }));
+    await screen.findByText('Local Source');
+    fireEvent.click(screen.getByRole('button', { name: 'Preview source' }));
+
+    expect(await screen.findByText('market-helper')).toBeInTheDocument();
+    fireEvent.click(within(marketCandidate()).getByRole('button', { name: 'Install' }));
+
+    expect(await screen.findByText('1 conflict')).toBeInTheDocument();
+    expect(screen.queryByText('1 conflicts')).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'Confirm overwrite' }));
+
+    await waitFor(() => expect(window.theOpenHub?.applyInstallPlan).toHaveBeenCalledWith(plan, true));
+    expect(await screen.findByText('Installed market-helper')).toBeInTheDocument();
+  });
+
+  it('reports marketplace import failures during install without continuing the install plan', async () => {
+    window.theOpenHub = {
+      getWorkspaceState: vi.fn().mockResolvedValue(createEmptyWorkspaceState()),
+      listAgentRoots: vi.fn().mockResolvedValue([createRoot('/tmp/.codex/skills')]),
+      listDiscoverSources: vi.fn().mockResolvedValue([createSource()]),
+      previewDiscoverSource: vi.fn().mockResolvedValue({
+        source: createSource(),
+        skills: [
+          {
+            name: 'market-helper',
+            description: 'Marketplace helper',
+            tags: ['market'],
+            path: '/tmp/source/market-helper'
+          }
+        ],
+        cachedAt: '2026-06-07T00:00:00.000Z'
+      }),
+      importLocalFolder: vi.fn().mockRejectedValue(new Error('UNIQUE constraint failed: skills.slug')),
+      createInstallPlan: vi.fn(),
+      applyInstallPlan: vi.fn()
+    } as unknown as NonNullable<typeof window.theOpenHub>;
+
+    render(<App />);
+    fireEvent.click(screen.getByRole('button', { name: 'Skills' }));
+    fireEvent.click(screen.getByRole('tab', { name: 'Marketplace' }));
+    await screen.findByText('Local Source');
+    fireEvent.click(screen.getByRole('button', { name: 'Preview source' }));
+
+    expect(await screen.findByText('market-helper')).toBeInTheDocument();
+    fireEvent.click(within(marketCandidate()).getByRole('button', { name: 'Install' }));
+
+    expect(await screen.findByText('UNIQUE constraint failed: skills.slug')).toHaveClass('status-error');
+    expect(window.theOpenHub?.createInstallPlan).not.toHaveBeenCalled();
+    expect(window.theOpenHub?.applyInstallPlan).not.toHaveBeenCalled();
+  });
+
   it('manages marketplace sources from Settings', async () => {
     const source = {
       id: 'source-local',
@@ -584,6 +674,34 @@ function createSource() {
     status: 'configured',
     cachedAt: null,
     verified: false
+  };
+}
+
+function createMarketInstallPlan(writeStatus: InstallPlan['writes'][number]['status']): InstallPlan {
+  return {
+    id: 'plan-market',
+    skillId: 'skill-market',
+    skillVersionId: 'version-market',
+    skillName: 'market-helper',
+    skillSlug: 'market-helper',
+    targetRoot: '/tmp/.codex/skills',
+    targetSkillPath: '/tmp/.codex/skills/market-helper',
+    agentCode: 'codex',
+    agentDisplayName: 'Codex',
+    adapterVersion: 'builtin',
+    scope: 'user',
+    rootKind: 'user',
+    projectionMode: 'copy',
+    status: writeStatus === 'clean' ? 'ready' : writeStatus,
+    writes: [
+      {
+        relativePath: 'SKILL.md',
+        targetPath: '/tmp/.codex/skills/market-helper/SKILL.md',
+        sourceHash: 'hash-market',
+        action: 'copy',
+        status: writeStatus
+      }
+    ]
   };
 }
 

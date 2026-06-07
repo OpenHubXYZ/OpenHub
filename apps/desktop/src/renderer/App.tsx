@@ -39,6 +39,7 @@ const agentTabs = [
 type SkillsTabKey = (typeof agentTabs)[number]['key'];
 type RootAgentCode = 'codex' | 'claude' | 'gemini' | 'opencode' | 'agents';
 type AsyncGuard = () => boolean;
+type StatusTone = 'default' | 'error';
 
 const defaultPluginRegistry: PluginRegistry = { agentAdapters: [], importers: [], syncDrivers: [] };
 
@@ -74,6 +75,7 @@ export function App({
   const [importedCandidates, setImportedCandidates] = useState<Record<string, string>>({});
   const [installedSkillIds, setInstalledSkillIds] = useState<Record<string, string>>({});
   const [status, setStatus] = useState('Ready');
+  const [statusTone, setStatusTone] = useState<StatusTone>('default');
   const mountedRef = useRef(true);
 
   const viewModel = useMemo(() => createWorkspaceViewModel(state), [state]);
@@ -138,6 +140,10 @@ export function App({
     setSelectedSourceId((current) => current || sources[0]?.id || '');
     setSelectedTargetRoot((current) => current || roots.find((root) => root.writable)?.rootPath || roots[0]?.rootPath || '');
   }, []);
+  const setStatusMessage = useCallback((message: string, tone: StatusTone = 'default') => {
+    setStatus(message);
+    setStatusTone(tone);
+  }, []);
 
   const isInactive = useCallback((isCancelled?: AsyncGuard) => !mountedRef.current || Boolean(isCancelled?.()), []);
 
@@ -180,7 +186,7 @@ export function App({
         return;
       }
       if (!isInactive(isCancelled)) {
-        setStatus('Scanning roots...');
+        setStatusMessage('Scanning roots...');
       }
       try {
         const scan = await api.scanAgentRoots();
@@ -190,15 +196,15 @@ export function App({
         setState((current) => mergeScanIntoWorkspaceState(current, scan));
         await refreshWorkspace(isCancelled).catch(() => undefined);
         if (!isInactive(isCancelled)) {
-          setStatus(formatScanStatus(scan));
+          setStatusMessage(formatScanStatus(scan));
         }
       } catch (error: unknown) {
         if (!isInactive(isCancelled)) {
-          setStatus(formatError(error));
+          setStatusMessage(formatError(error), 'error');
         }
       }
     },
-    [isInactive, refreshWorkspace]
+    [isInactive, refreshWorkspace, setStatusMessage]
   );
 
   useEffect(() => {
@@ -232,14 +238,14 @@ export function App({
       })
       .catch((error: unknown) => {
         if (!cancelled) {
-          setStatus(formatError(error));
+          setStatusMessage(formatError(error), 'error');
         }
       });
 
     return () => {
       cancelled = true;
     };
-  }, [initialPluginRegistry, runRootScan, setRootsAndSources]);
+  }, [initialPluginRegistry, runRootScan, setRootsAndSources, setStatusMessage]);
 
   async function refreshWorkspaceCommand() {
     await refreshWorkspace();
@@ -256,7 +262,7 @@ export function App({
     }
     const preview = await api.previewDiscoverSource(selectedSourceId);
     setPreviewSkills(preview.skills);
-    setStatus(`${preview.skills.length} candidates`);
+    setStatusMessage(`${preview.skills.length} candidates`);
   }
 
   async function addMarketplaceSource() {
@@ -271,7 +277,7 @@ export function App({
     });
     setDiscoverSources((current) => [source, ...current.filter((item) => item.id !== source.id)]);
     setSelectedSourceId(source.id);
-    setStatus(`Source added: ${source.name}`);
+    setStatusMessage(`Source added: ${source.name}`);
   }
 
   async function removeMarketplaceSource(sourceId: string) {
@@ -283,7 +289,7 @@ export function App({
     setDiscoverSources((current) => current.filter((source) => source.id !== sourceId));
     setPreviewSkills([]);
     setSelectedSourceId((current) => (current === sourceId ? '' : current));
-    setStatus('Source removed');
+    setStatusMessage('Source removed');
   }
 
   async function addRoot() {
@@ -297,7 +303,7 @@ export function App({
     });
     setAgentRoots((current) => [root, ...current.filter((item) => item.rootPath !== root.rootPath || item.agentCode !== root.agentCode)]);
     setSelectedTargetRoot(root.rootPath);
-    setStatus(`Root added: ${root.agentDisplayName}`);
+    setStatusMessage(`Root added: ${root.agentDisplayName}`);
   }
 
   async function importCandidate(skill: DiscoverSkillPreview): Promise<string | null> {
@@ -305,48 +311,59 @@ export function App({
     if (!api) {
       return null;
     }
-    const imported = await api.importLocalFolder(skill.path);
-    setImportedCandidates((current) => ({ ...current, [skill.path]: imported.skill.id }));
-    await refreshWorkspace().catch(() => undefined);
-    setStatus(`Imported ${imported.skill.name}`);
-    return imported.skill.id;
+    try {
+      const imported = await api.importLocalFolder(skill.path);
+      setImportedCandidates((current) => ({ ...current, [skill.path]: imported.skill.id }));
+      await refreshWorkspace().catch(() => undefined);
+      setStatusMessage(`Imported ${imported.skill.name}`);
+      return imported.skill.id;
+    } catch (error: unknown) {
+      setStatusMessage(formatError(error), 'error');
+      return null;
+    }
   }
 
   async function installCandidate(skill: DiscoverSkillPreview) {
     const api = window.theOpenHub;
     const root = agentRoots.find((candidate) => candidate.rootPath === selectedTargetRoot) ?? agentRoots.find((candidate) => candidate.writable);
     if (!api || !root) {
-      setStatus('Select a writable root first');
+      setStatusMessage('Select a writable root first', 'error');
       return;
     }
-    const skillId = importedCandidates[skill.path] ?? (await importCandidate(skill));
-    if (!skillId) {
-      return;
-    }
-    const plan = await api.createInstallPlan({
-      skillId,
-      targetRoot: root.rootPath,
-      agentCode: root.agentCode,
-      agentDisplayName: root.agentDisplayName,
-      adapterVersion: root.adapterVersion,
-      scope: root.scope,
-      projectionMode,
-      ...(root.rootKind ? { rootKind: root.rootKind } : {})
-    });
-    if (plan.status === 'conflict') {
-      setPendingPlan(plan);
-      setStatus('Overwrite confirmation required');
-      return;
-    }
-    if (plan.status === 'blocked') {
+    try {
+      const skillId = importedCandidates[skill.path] ?? (await importCandidate(skill));
+      if (!skillId) {
+        return;
+      }
+      const plan = await api.createInstallPlan({
+        skillId,
+        targetRoot: root.rootPath,
+        agentCode: root.agentCode,
+        agentDisplayName: root.agentDisplayName,
+        adapterVersion: root.adapterVersion,
+        scope: root.scope,
+        projectionMode,
+        ...(root.rootKind ? { rootKind: root.rootKind } : {})
+      });
+      if (plan.status === 'conflict') {
+        setPendingPlan(plan);
+        setStatusMessage('Overwrite confirmation required');
+        return;
+      }
+      if (plan.status === 'blocked') {
+        setPendingPlan(null);
+        setStatusMessage('Install plan blocked', 'error');
+        return;
+      }
+      const installed = await api.applyInstallPlan(plan, false);
+      setInstalledSkillIds((current) => ({ ...current, [installed.skillId]: installed.installationId }));
+      await refreshWorkspace();
+      setStatusMessage(`Installed ${skill.name}`);
+    } catch (error: unknown) {
       setPendingPlan(null);
-      setStatus('Install plan blocked');
+      setStatusMessage(formatError(error), 'error');
       return;
     }
-    const installed = await api.applyInstallPlan(plan, false);
-    setInstalledSkillIds((current) => ({ ...current, [installed.skillId]: installed.installationId }));
-    await refreshWorkspace();
-    setStatus(`Installed ${skill.name}`);
   }
 
   async function applyPendingPlan() {
@@ -354,11 +371,15 @@ export function App({
     if (!api || !pendingPlan) {
       return;
     }
-    const installed = await api.applyInstallPlan(pendingPlan, true);
-    setPendingPlan(null);
-    setInstalledSkillIds((current) => ({ ...current, [installed.skillId]: installed.installationId }));
-    await refreshWorkspace();
-    setStatus(`Installed ${pendingPlan.skillName}`);
+    try {
+      const installed = await api.applyInstallPlan(pendingPlan, true);
+      setPendingPlan(null);
+      setInstalledSkillIds((current) => ({ ...current, [installed.skillId]: installed.installationId }));
+      await refreshWorkspace();
+      setStatusMessage(`Installed ${pendingPlan.skillName}`);
+    } catch (error: unknown) {
+      setStatusMessage(formatError(error), 'error');
+    }
   }
 
   async function uninstallSkill(installationId: string) {
@@ -371,7 +392,7 @@ export function App({
       Object.fromEntries(Object.entries(current).filter(([, currentInstallationId]) => currentInstallationId !== installationId))
     );
     await refreshWorkspace();
-    setStatus('Uninstalled');
+    setStatusMessage('Uninstalled');
   }
 
   return (
@@ -434,7 +455,7 @@ export function App({
               <p>{state.appInfo.phase}</p>
               <h1>{titleForPage(activePage)}</h1>
             </div>
-            <span className="status">{status}</span>
+            <span className={statusTone === 'error' ? 'status status-error' : 'status'}>{status}</span>
           </div>
 
           {activePage === 'home' ? (
@@ -747,7 +768,7 @@ function MarketplaceTab({
           </button>
           {pendingPlan ? (
             <div className="conflict-box">
-              <strong>{pendingPlan.writes.filter((write: InstallPlan['writes'][number]) => write.status === 'conflict').length} conflicts</strong>
+              <strong>{formatConflictCount(pendingPlan)}</strong>
               <button type="button" onClick={onConfirmOverwrite}>
                 Confirm overwrite
               </button>
@@ -950,6 +971,11 @@ function formatScanStatus(scan: LibraryScanResult): string {
   }
   const errorLabel = scan.errors.length === 1 ? '1 error' : `${scan.errors.length} errors`;
   return `${scan.indexedSkills.length} indexed, ${errorLabel}`;
+}
+
+function formatConflictCount(plan: InstallPlan): string {
+  const conflictCount = plan.writes.filter((write) => write.status === 'conflict').length;
+  return conflictCount === 1 ? '1 conflict' : `${conflictCount} conflicts`;
 }
 
 function formatError(error: unknown): string {

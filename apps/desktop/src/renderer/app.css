@@ -362,6 +362,11 @@ button {
   font-size: 12px;
 }
 
+.status-error {
+  background: #fdecec;
+  color: #9f1d1d;
+}
+
 .split-two {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
