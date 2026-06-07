@@ -903,7 +903,12 @@ function SkillsPage({
                           Details
                         </button>
                         {skill.ownership === 'app-owned' && skill.installationId ? (
-                          <button type="button" className="inline-action" onClick={() => onUninstall(skill.installationId!)}>
+                          <button
+                            type="button"
+                            className="inline-action"
+                            aria-label={`Uninstall ${skill.name}`}
+                            onClick={() => onUninstall(skill.installationId!)}
+                          >
                             Uninstall
                           </button>
                         ) : (

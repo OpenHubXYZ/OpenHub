@@ -1065,7 +1065,8 @@ describe('desktop app shell', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Skills' }));
     expect(await screen.findByText('market-helper')).toBeInTheDocument();
 
-    fireEvent.click(screen.getByRole('button', { name: 'Uninstall' }));
+    expect(screen.queryByRole('button', { name: 'Uninstall' })).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'Uninstall market-helper' }));
 
     expect(await screen.findByText('Uninstall failed')).toHaveClass('status-error');
     expect(screen.getByText('market-helper')).toBeInTheDocument();

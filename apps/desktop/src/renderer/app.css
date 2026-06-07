@@ -341,8 +341,8 @@ button {
 .skills-table .table-head,
 .skills-table .table-row {
   grid-template-columns:
-    minmax(150px, 1fr) minmax(180px, 1.2fr) minmax(100px, 0.55fr)
-    minmax(90px, 0.45fr) minmax(90px, 0.45fr);
+    minmax(150px, 1fr) minmax(160px, 1fr) minmax(100px, 0.5fr)
+    minmax(110px, 0.5fr) minmax(176px, 0.7fr);
 }
 
 .table-head {
@@ -361,6 +361,11 @@ button {
   display: inline-flex;
   align-items: center;
   gap: 8px;
+}
+
+.skills-table .table-row > span:last-child {
+  overflow: visible;
+  white-space: normal;
 }
 
 .tag,
@@ -555,8 +560,10 @@ button {
   min-width: 0;
   display: inline-flex;
   align-items: center;
+  justify-content: flex-end;
   gap: 8px;
-  overflow: hidden;
+  flex-wrap: wrap;
+  overflow: visible;
 }
 
 .muted {

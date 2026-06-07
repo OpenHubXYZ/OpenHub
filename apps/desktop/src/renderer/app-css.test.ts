@@ -68,6 +68,16 @@ describe('renderer layout containment CSS', () => {
     expect(cssBlock(css, '.tag-row')).toContain('flex-wrap: wrap;');
   });
 
+  it('keeps indexed skill row actions visible without horizontal clipping', async () => {
+    const css = await readFile(cssPath, 'utf8');
+
+    expect(cssBlock(css, '.skills-table .table-head,\n.skills-table .table-row')).toContain('minmax(176px, 0.7fr)');
+    expect(cssBlock(css, '.skills-table .table-row > span:last-child')).toContain('overflow: visible;');
+    expect(cssBlock(css, '.skills-table .table-row > span:last-child')).toContain('white-space: normal;');
+    expect(cssBlock(css, '.row-actions')).toContain('flex-wrap: wrap;');
+    expect(cssBlock(css, '.row-actions')).toContain('justify-content: flex-end;');
+  });
+
   it('collapses split layouts on narrow screens', async () => {
     const css = await readFile(cssPath, 'utf8');
 
