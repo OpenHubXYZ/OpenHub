@@ -176,6 +176,15 @@ describe('renderer layout containment CSS', () => {
     expect(selectedPathBlock).toContain('overflow-wrap: anywhere;');
   });
 
+  it('wraps long skill detail metadata tags instead of truncating source URLs', async () => {
+    const css = await readFile(cssPath, 'utf8');
+    const detailTagBlock = cssBlock(css, '.detail-panel .tag-row .tag');
+
+    expect(detailTagBlock).toContain('white-space: normal;');
+    expect(detailTagBlock).toContain('overflow-wrap: anywhere;');
+    expect(detailTagBlock).toContain('text-overflow: clip;');
+  });
+
   it('keeps indexed skill row actions visible without horizontal clipping', async () => {
     const css = await readFile(cssPath, 'utf8');
 

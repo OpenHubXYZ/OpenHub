@@ -514,6 +514,16 @@ button {
   color: var(--oh-text-muted);
 }
 
+.detail-panel .tag-row .tag {
+  overflow: visible;
+  text-overflow: clip;
+  white-space: normal;
+  overflow-wrap: anywhere;
+  align-items: flex-start;
+  line-height: 1.35;
+  padding-block: 6px;
+}
+
 .candidate strong,
 .candidate span {
   max-width: 100%;
