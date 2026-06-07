@@ -141,12 +141,26 @@ export function App({
     setStatus(message);
     setStatusTone(tone);
   }, []);
-  const navigateHomeStep = useCallback((step: ReturnType<typeof createWorkspaceUxModel>['actionSteps'][number]) => {
-    setActivePage(step.targetPage);
-    if (step.targetSkillsTab) {
-      setSkillsTab(step.targetSkillsTab);
-    }
-  }, []);
+  const openPage = useCallback(
+    (page: PageKey) => {
+      setActivePage(page);
+      if (page === 'skills') {
+        setSkillsTab((current) => firstPopulatedAgentTab(state.librarySkills.map((skill) => skill.agentCode), current));
+      }
+    },
+    [state.librarySkills]
+  );
+  const navigateHomeStep = useCallback(
+    (step: ReturnType<typeof createWorkspaceUxModel>['actionSteps'][number]) => {
+      setActivePage(step.targetPage);
+      if (step.targetSkillsTab) {
+        setSkillsTab(step.targetSkillsTab);
+      } else if (step.targetPage === 'skills') {
+        setSkillsTab((current) => firstPopulatedAgentTab(state.librarySkills.map((skill) => skill.agentCode), current));
+      }
+    },
+    [state.librarySkills]
+  );
 
   const isInactive = useCallback((isCancelled?: AsyncGuard) => !mountedRef.current || Boolean(isCancelled?.()), []);
 
@@ -197,6 +211,7 @@ export function App({
           return;
         }
         setState((current) => mergeScanIntoWorkspaceState(current, scan));
+        setSkillsTab((current) => firstPopulatedAgentTab(scan.indexedSkills.map((skill) => skill.agentCode), current));
         await refreshWorkspace(isCancelled).catch(() => undefined);
         if (!isInactive(isCancelled)) {
           setStatusMessage(formatScanStatus(scan));
@@ -459,7 +474,7 @@ export function App({
                 key={page}
                 type="button"
                 aria-current={activePage === page ? 'page' : undefined}
-                onClick={() => setActivePage(page)}
+                onClick={() => openPage(page)}
               >
                 <Icon size={18} aria-hidden="true" />
                 <span>{item?.label ?? page}</span>
@@ -1035,6 +1050,19 @@ function titleForPage(page: PageKey): string {
     skills: 'Skills',
     settings: 'Settings'
   }[page];
+}
+
+function firstPopulatedAgentTab(agentCodes: string[], current: SkillsTabKey): SkillsTabKey {
+  if (current === 'marketplace') {
+    return current;
+  }
+
+  const populatedAgents = new Set(agentCodes);
+  if (populatedAgents.has(current)) {
+    return current;
+  }
+
+  return agentTabs.find((tab) => tab.key !== 'marketplace' && populatedAgents.has(tab.key))?.key ?? current;
 }
 
 function groupByRoot(rows: DesktopWorkspaceState['librarySkills']) {

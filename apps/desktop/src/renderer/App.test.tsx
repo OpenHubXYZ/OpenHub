@@ -44,6 +44,33 @@ describe('desktop app shell', () => {
     expect(screen.getByRole('tab', { name: 'Marketplace' })).toHaveAttribute('aria-selected', 'true');
   });
 
+  it('opens the first populated agent tab when entering Skills from Home', () => {
+    render(
+      <App
+        initialState={workspaceWithAgentSkill(createEmptyWorkspaceState(), {
+          agentCode: 'claude',
+          agentDisplayName: 'Claude',
+          name: 'Claude Helper',
+          rootPath: '/tmp/claude-project-skills'
+        })}
+        initialAgentRoots={[
+          createAgentRoot({
+            agentCode: 'claude',
+            agentDisplayName: 'Claude',
+            rootPath: '/tmp/claude-project-skills'
+          })
+        ]}
+      />
+    );
+
+    fireEvent.click(screen.getByRole('button', { name: 'Build skills index' }));
+
+    expect(screen.getByRole('heading', { name: 'Skills' })).toBeInTheDocument();
+    expect(screen.getByRole('tab', { name: 'Claude' })).toHaveAttribute('aria-selected', 'true');
+    expect(screen.getByText('Claude Helper')).toBeInTheDocument();
+    expect(screen.queryByText('Codex skills')).not.toBeInTheDocument();
+  });
+
   it('counts home root locations by unique indexed root paths', () => {
     render(<App initialState={workspaceWithSkills(createEmptyWorkspaceState())} initialAgentRoots={[createRoot('/tmp/.codex/skills')]} />);
 
@@ -908,6 +935,40 @@ function workspaceWithSkills(state: DesktopWorkspaceState): DesktopWorkspaceStat
   };
 }
 
+function workspaceWithAgentSkill(
+  state: DesktopWorkspaceState,
+  input: { agentCode: string; agentDisplayName: string; name: string; rootPath: string }
+): DesktopWorkspaceState {
+  const slug = input.name.toLowerCase().replace(/\s+/g, '-');
+  return {
+    ...state,
+    librarySkills: [
+      {
+        id: `skill-${slug}`,
+        name: input.name,
+        sourceAgent: input.agentDisplayName,
+        agentCode: input.agentCode,
+        path: `${input.rootPath}/${slug}`,
+        visibilityStatus: 'indexed',
+        rootPath: input.rootPath,
+        scope: 'project',
+        rootKind: 'project',
+        writable: true,
+        ownership: 'indexed'
+      }
+    ],
+    skills: [
+      {
+        id: `skill-${slug}`,
+        versionId: `version-${slug}`,
+        name: input.name,
+        description: `${input.name} description`,
+        versionNo: 1
+      }
+    ]
+  };
+}
+
 function workspaceWithInstalledSkill(state: DesktopWorkspaceState, name: string): DesktopWorkspaceState {
   const id = `skill-${name}`;
   return {
@@ -956,6 +1017,17 @@ function createRoot(rootPath: string) {
 function createProjectRoot(rootPath: string) {
   return {
     ...createRoot(rootPath),
+    scope: 'project',
+    rootKind: 'project' as const,
+    isDefault: false
+  };
+}
+
+function createAgentRoot(input: { agentCode: 'codex' | 'claude' | 'gemini' | 'opencode' | 'agents'; agentDisplayName: string; rootPath: string }) {
+  return {
+    ...createRoot(input.rootPath),
+    agentCode: input.agentCode,
+    agentDisplayName: input.agentDisplayName,
     scope: 'project',
     rootKind: 'project' as const,
     isDefault: false
