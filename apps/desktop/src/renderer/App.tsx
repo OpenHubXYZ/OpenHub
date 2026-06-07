@@ -146,7 +146,7 @@ export function App({
       if (currentRoot?.writable) {
         return current;
       }
-      return roots.find((root) => root.writable)?.rootPath || '';
+      return '';
     });
   }, []);
   const setStatusMessage = useCallback((message: string, tone: StatusTone = 'default') => {
@@ -455,10 +455,20 @@ export function App({
 
   async function installCandidate(skill: DiscoverSkillPreview) {
     const api = window.theOpenHub;
-    const root =
-      agentRoots.find((candidate) => candidate.rootPath === selectedTargetRoot && candidate.writable) ??
-      agentRoots.find((candidate) => candidate.writable);
-    if (!api || !root) {
+    const writableRoots = agentRoots.filter((candidate) => candidate.writable);
+    if (!api) {
+      return;
+    }
+    if (writableRoots.length === 0) {
+      setStatusMessage('Select a writable root first', 'error');
+      return;
+    }
+    if (!selectedTargetRoot) {
+      setStatusMessage('Select an install target root first', 'error');
+      return;
+    }
+    const root = writableRoots.find((candidate) => candidate.rootPath === selectedTargetRoot);
+    if (!root) {
       setStatusMessage('Select a writable root first', 'error');
       return;
     }

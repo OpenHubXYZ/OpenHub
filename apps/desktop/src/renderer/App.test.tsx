@@ -647,6 +647,7 @@ describe('desktop app shell', () => {
     expect(within(marketCandidate()).queryByRole('button', { name: 'Import' })).not.toBeInTheDocument();
     expect(within(marketCandidate()).getByRole('button', { name: 'Install' })).toBeInTheDocument();
 
+    fireEvent.change(screen.getByLabelText('Install target root'), { target: { value: '/tmp/.codex/skills' } });
     fireEvent.click(within(marketCandidate()).getByRole('button', { name: 'Install' }));
     expect(await screen.findByText('Installed market-helper')).toBeInTheDocument();
     expect(within(marketCandidate()).getByText('Installed')).toBeInTheDocument();
@@ -747,6 +748,7 @@ describe('desktop app shell', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Preview source' }));
 
     expect(await screen.findByText('market-helper')).toBeInTheDocument();
+    fireEvent.change(screen.getByLabelText('Install target root'), { target: { value: '/tmp/.codex/skills' } });
     fireEvent.click(within(marketCandidate()).getByRole('button', { name: 'Install' }));
 
     expect(await screen.findByText('1 conflict')).toBeInTheDocument();
@@ -786,9 +788,60 @@ describe('desktop app shell', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Preview source' }));
 
     expect(await screen.findByText('market-helper')).toBeInTheDocument();
+    fireEvent.change(screen.getByLabelText('Install target root'), { target: { value: '/tmp/.codex/skills' } });
     fireEvent.click(within(marketCandidate()).getByRole('button', { name: 'Install' }));
 
     expect(await screen.findByText('UNIQUE constraint failed: skills.slug')).toHaveClass('status-error');
+    expect(window.theOpenHub?.createInstallPlan).not.toHaveBeenCalled();
+    expect(window.theOpenHub?.applyInstallPlan).not.toHaveBeenCalled();
+  });
+
+  it('requires an explicit marketplace install target before importing candidates', async () => {
+    const plan = createMarketInstallPlan('clean');
+    window.theOpenHub = {
+      getWorkspaceState: vi.fn().mockResolvedValue(createEmptyWorkspaceState()),
+      listAgentRoots: vi.fn().mockResolvedValue([createRoot('/tmp/.codex/skills')]),
+      listDiscoverSources: vi.fn().mockResolvedValue([]),
+      importLocalFolder: vi.fn().mockResolvedValue({
+        skill: {
+          id: 'skill-market',
+          versionId: 'version-market',
+          name: 'market-helper',
+          description: 'Marketplace helper',
+          versionNo: 1
+        },
+        files: []
+      }),
+      createInstallPlan: vi.fn().mockResolvedValue(plan),
+      applyInstallPlan: vi.fn().mockResolvedValue({
+        status: 'installed',
+        installationId: 'installation-market',
+        skillId: 'skill-market',
+        files: plan.writes
+      })
+    } as unknown as NonNullable<typeof window.theOpenHub>;
+
+    render(
+      <App
+        initialAgentRoots={[createRoot('/tmp/.codex/skills')]}
+        initialPreviewSkills={[
+          {
+            name: 'market-helper',
+            description: 'Marketplace helper',
+            tags: ['market'],
+            path: '/tmp/source/market-helper'
+          }
+        ]}
+      />
+    );
+    fireEvent.click(screen.getByRole('button', { name: 'Skills' }));
+    fireEvent.click(screen.getByRole('tab', { name: 'Marketplace' }));
+
+    expect(screen.getByLabelText('Install target root')).toHaveValue('');
+    fireEvent.click(within(marketCandidate()).getByRole('button', { name: 'Install' }));
+
+    expect(await screen.findByText('Select an install target root first')).toHaveClass('status-error');
+    expect(window.theOpenHub?.importLocalFolder).not.toHaveBeenCalled();
     expect(window.theOpenHub?.createInstallPlan).not.toHaveBeenCalled();
     expect(window.theOpenHub?.applyInstallPlan).not.toHaveBeenCalled();
   });
