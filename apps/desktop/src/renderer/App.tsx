@@ -327,10 +327,11 @@ export function App({
       return;
     }
     try {
+      const sourceInput = normalizeDiscoverSourceInput(trimmedSourceUrl);
       const source = await api.addDiscoverSource({
         name: sourceName.trim() || 'Local Source',
-        sourceType: trimmedSourceUrl.includes('://') ? 'git' : 'local',
-        url: trimmedSourceUrl
+        sourceType: sourceInput.sourceType,
+        url: sourceInput.url
       });
       setDiscoverSources((current) => [source, ...current.filter((item) => item.id !== source.id)]);
       setSelectedSourceId(source.id);
@@ -1163,6 +1164,29 @@ function formatScanStatus(scan: LibraryScanResult): string {
   const errorLabel = scan.errors.length === 1 ? '1 error' : `${scan.errors.length} errors`;
   const firstError = scan.errors[0]!;
   return `${scan.indexedSkills.length} indexed, ${errorLabel}: ${firstError.code} at ${firstError.skillPath} - ${firstError.message}`;
+}
+
+function normalizeDiscoverSourceInput(sourceUrl: string): { sourceType: 'local' | 'git'; url: string } {
+  if (sourceUrl.startsWith('file://')) {
+    return { sourceType: 'local', url: fileUrlToLocalPath(sourceUrl) };
+  }
+  return { sourceType: sourceUrl.includes('://') ? 'git' : 'local', url: sourceUrl };
+}
+
+function fileUrlToLocalPath(sourceUrl: string): string {
+  try {
+    const url = new URL(sourceUrl);
+    if (url.protocol !== 'file:') {
+      return sourceUrl;
+    }
+    const localPath = decodeURIComponent(url.pathname);
+    if (url.hostname && url.hostname !== 'localhost') {
+      return `//${url.hostname}${localPath}`;
+    }
+    return /^\/[A-Za-z]:\//.test(localPath) ? localPath.slice(1) : localPath;
+  } catch {
+    return sourceUrl;
+  }
 }
 
 function formatConflictCount(plan: InstallPlan): string {

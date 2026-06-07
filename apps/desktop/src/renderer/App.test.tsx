@@ -817,6 +817,35 @@ describe('desktop app shell', () => {
     await waitFor(() => expect(window.theOpenHub?.removeDiscoverSource).toHaveBeenCalledWith('source-local'));
   });
 
+  it('normalizes file URL marketplace sources as local paths', async () => {
+    const source = {
+      id: 'source-local',
+      name: 'Local Source',
+      sourceType: 'local' as const,
+      url: '/tmp/source dir',
+      status: 'configured',
+      cachedAt: null,
+      verified: false
+    };
+    window.theOpenHub = {
+      getWorkspaceState: vi.fn().mockResolvedValue(createEmptyWorkspaceState()),
+      listAgentRoots: vi.fn().mockResolvedValue([]),
+      listDiscoverSources: vi.fn().mockResolvedValue([]),
+      addDiscoverSource: vi.fn().mockResolvedValue(source)
+    } as unknown as NonNullable<typeof window.theOpenHub>;
+
+    render(<App />);
+    fireEvent.click(screen.getByRole('button', { name: 'Settings' }));
+    fireEvent.change(screen.getByLabelText('Marketplace source URL'), { target: { value: 'file:///tmp/source%20dir' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Add source' }));
+
+    await waitFor(() => expect(window.theOpenHub?.addDiscoverSource).toHaveBeenCalledWith({
+      name: 'Local Source',
+      sourceType: 'local',
+      url: '/tmp/source dir'
+    }));
+  });
+
   it('removes project roots from Settings without offering removal for detected roots', async () => {
     const detectedRoot = createRoot('/tmp/.codex/skills');
     const projectRoot = createProjectRoot('/tmp/project-skills');
