@@ -21,8 +21,8 @@ agent directories for write tests.
 
 Verify:
 
-- The app opens to Home.
-- Navigation contains Home, Skills, and Settings.
+- The app opens to Dashboard.
+- Navigation contains Dashboard, Skills, and Settings.
 - The renderer has no direct Node, filesystem, SQLite, or `ipcRenderer` access.
 - No Deploy, Trust, Security, Usage, or Reviews navigation is present.
 

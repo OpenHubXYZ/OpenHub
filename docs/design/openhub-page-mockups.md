@@ -6,9 +6,12 @@ and PNG artifacts for those removed surfaces have been retired.
 
 ## Current Navigation
 
-- Home
+- Dashboard
 - Skills
 - Settings
+
+Marketplace remains source preview, import, and app-owned install. It must not
+display ratings, source reputation, trending rank, trust levels, or risk scores.
 
 ## Product Vocabulary
 
@@ -52,7 +55,7 @@ Do not use runtime UI vocabulary for removed surfaces:
 
 ## Acceptance
 
-- Renderer tests cover Home, Skills, and Settings.
+- Renderer tests cover Dashboard, Skills, and Settings.
 - No first-screen UI exposes removed Deploy or Trust surfaces.
 - Marketplace source preview stays local/Git candidate inspection, not
   reputation.

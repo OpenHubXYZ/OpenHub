@@ -8,9 +8,16 @@ only and are not current product scope.
 
 Implement and maintain the renderer as a focused local skills workspace:
 
-- Home
+- Dashboard
 - Skills
 - Settings
+
+The Stitch Skill Library Manager artifacts under
+`docs/design/stitch_skill_library_manager/` are now the visual reference for this
+workspace. Their Dashboard, Marketplace, Skill Detail, and Settings patterns are
+in scope when backed by current local runtime data. Their Analytics and
+Reviews/Ratings concepts require a separate accepted spec before runtime UI
+appears.
 
 The UI must use live `workspace.state` data, typed preload APIs, and local
 runtime evidence. It must not expose trust levels, source reputation, risk
@@ -40,7 +47,7 @@ Out of scope:
 
 ## Acceptance
 
-- Renderer tests cover Home, Skills, Settings, navigation, empty states, search,
+- Renderer tests cover Dashboard, Skills, Settings, navigation, empty states, search,
   source preview, root/source management actions, install confirmation, and
   plugin registry state.
 - Runtime tests prove `workspace.state`, root scan, local/Git/ZIP import,

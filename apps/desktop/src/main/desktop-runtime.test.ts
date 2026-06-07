@@ -100,6 +100,34 @@ describe('desktop runtime IPC dispatch', () => {
     ]);
   });
 
+  it('opens detail markdown for indexed agent-root skills', async () => {
+    const workspace = await tempDir();
+    const homeDirectory = path.join(workspace, 'home');
+    await createSkillFixture(
+      path.join(homeDirectory, '.codex/skills/detail-helper'),
+      'detail-helper',
+      '# Detail Helper\n\nIndexed markdown'
+    );
+    const runtime = createDesktopRuntime({
+      dataDirectory: path.join(workspace, 'app-data'),
+      homeDirectory,
+      secretStore: createInMemorySecretStore()
+    });
+
+    await runtime.dispatch('library.scan', {});
+    const state = (await runtime.dispatch('workspace.state', {})) as {
+      librarySkills: Array<{ id: string; name: string }>;
+    };
+    const indexedSkill = state.librarySkills.find((skill) => skill.name === 'detail-helper');
+
+    expect(indexedSkill).toBeDefined();
+    await expect(runtime.dispatch('library.detail', { skillId: indexedSkill!.id })).resolves.toMatchObject({
+      skill: expect.objectContaining({ name: 'detail-helper' }),
+      files: expect.arrayContaining([expect.objectContaining({ relativePath: 'SKILL.md' })]),
+      skillMarkdown: expect.stringContaining('Indexed markdown')
+    });
+  });
+
   it('scans added project roots into the library', async () => {
     const workspace = await tempDir();
     const projectRoot = path.join(workspace, 'project-skills');

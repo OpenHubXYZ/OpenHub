@@ -1,0 +1,20 @@
+# Skill Manager PRD (Simplified)
+
+## Project Overview
+A desktop application to manage local "Skills", allowing users to discover/download from external sources (like skills.sh), track usage metrics, and provide feedback/ratings.
+
+## Core Features
+1. **Skill Discovery (Store)**: Browse and download skills from online repositories.
+2. **Local Management**: List, search, and organize installed skills.
+3. **Usage Statistics**: Detailed logs and visual charts showing how/when skills are used.
+4. **Community Feedback**: Rate skills and write reviews.
+
+## Screen List
+1. **Dashboard**: Overview of active skills, recent usage stats, and quick actions.
+2. **Skill Marketplace**: Browsing interface for discovering new skills (Simulated skills.sh integration).
+3. **Skill Details**: Individual skill page with description, usage history, and review section.
+4. **Usage Analytics**: Dedicated page for deep-dive statistics and reports.
+5. **Settings**: Local configuration for skills.sh API, storage paths, and display preferences.
+
+## Non-Functional Requirement
+The application is a design prototype; execution of skills is not required.

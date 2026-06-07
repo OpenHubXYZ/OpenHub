@@ -19,8 +19,8 @@ describe('desktop app shell', () => {
     render(<App />);
 
     expect(screen.getByRole('navigation', { name: 'Primary pages' })).toBeInTheDocument();
-    expect(screen.getByRole('heading', { name: 'Home' })).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: 'Home' })).toHaveAttribute('aria-current', 'page');
+    expect(screen.getByRole('heading', { name: 'Dashboard' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Dashboard' })).toHaveAttribute('aria-current', 'page');
     expect(screen.getByRole('button', { name: 'Skills' })).toBeInTheDocument();
     expect(screen.queryByRole('button', { name: 'Inventory' })).not.toBeInTheDocument();
     expect(screen.queryByRole('button', { name: 'Sources' })).not.toBeInTheDocument();
@@ -29,6 +29,7 @@ describe('desktop app shell', () => {
     expect(screen.queryByRole('button', { name: 'Trust' })).not.toBeInTheDocument();
     expect(screen.queryByText(/security center/i)).not.toBeInTheDocument();
     expect(screen.queryByText(/install plan/i)).not.toBeInTheDocument();
+    expect(screen.queryByText(/ratings|reputation|risk score/i)).not.toBeInTheDocument();
   });
 
   it('keeps home action buttons accessible by their primary labels', () => {
@@ -514,6 +515,31 @@ describe('desktop app shell', () => {
     expect(screen.queryByText('market-helper')).not.toBeInTheDocument();
   });
 
+  it('renders marketplace candidates as preview cards without rating or reputation copy', async () => {
+    render(
+      <App
+        initialAgentRoots={[createRoot('/tmp/.codex/skills')]}
+        initialPreviewSkills={[
+          {
+            name: 'Preview Helper',
+            description: 'Preview only',
+            tags: ['automation', 'codex'],
+            path: '/tmp/source/preview-helper'
+          }
+        ]}
+      />
+    );
+
+    fireEvent.click(screen.getByRole('button', { name: 'Skills' }));
+    fireEvent.click(screen.getByRole('tab', { name: 'Marketplace' }));
+
+    const candidate = screen.getByRole('article', { name: 'Preview Helper' });
+    expect(within(candidate).getByText('automation')).toBeInTheDocument();
+    expect(within(candidate).getByText('codex')).toBeInTheDocument();
+    expect(within(candidate).getByText('/tmp/source/preview-helper')).toBeInTheDocument();
+    expect(within(candidate).queryByText(/rating|reviews|installs|reputation|trending/i)).not.toBeInTheDocument();
+  });
+
   it('shows a marketplace search empty state when preview candidates do not match', async () => {
     window.theOpenHub = {
       getWorkspaceState: vi.fn().mockResolvedValue(createEmptyWorkspaceState()),
@@ -991,6 +1017,104 @@ describe('desktop app shell', () => {
     expect(await screen.findByText('Uninstall failed')).toHaveClass('status-error');
     expect(screen.getByText('market-helper')).toBeInTheDocument();
     expect(window.theOpenHub.uninstallSkill).toHaveBeenCalledWith('installation-market-helper');
+  });
+
+  it('opens a live skill detail view from an indexed skill row', async () => {
+    const state = workspaceWithAgentSkill(createEmptyWorkspaceState(), {
+      agentCode: 'codex',
+      agentDisplayName: 'Codex',
+      name: 'PDF Parser',
+      rootPath: '/tmp/.codex/skills'
+    });
+    window.theOpenHub = {
+      getWorkspaceState: vi.fn().mockResolvedValue(state),
+      listAgentRoots: vi.fn().mockResolvedValue([]),
+      listDiscoverSources: vi.fn().mockResolvedValue([]),
+      getSkillDetail: vi.fn().mockResolvedValue({
+        skill: {
+          id: 'skill-pdf',
+          versionId: 'version-pdf',
+          slug: 'pdf-parser',
+          name: 'PDF Parser',
+          description: 'Parse PDFs',
+          tags: ['documents'],
+          versionNo: 2,
+          favorite: false
+        },
+        source: { type: 'local', url: '/tmp/pdf-parser' },
+        versions: [
+          {
+            versionId: 'version-pdf',
+            skillId: 'skill-pdf',
+            versionNo: 2,
+            changeSummary: 'Import',
+            createdAt: '2026-06-07'
+          }
+        ],
+        files: [{ relativePath: 'SKILL.md', hash: 'hash-pdf', size: 120, kind: 'markdown' }],
+        skillMarkdown: '# PDF Parser'
+      })
+    } as unknown as NonNullable<typeof window.theOpenHub>;
+
+    render(<App initialState={state} />);
+    fireEvent.click(screen.getByRole('button', { name: 'Skills' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Open PDF Parser details' }));
+
+    expect(await screen.findByRole('heading', { name: 'PDF Parser' })).toBeInTheDocument();
+    expect(screen.getByText('SKILL.md')).toBeInTheDocument();
+    expect(screen.getByText('Version 2')).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /run test task/i })).not.toBeInTheDocument();
+  });
+
+  it('toggles a skill favorite through typed preload IPC', async () => {
+    const state = workspaceWithSkills(createEmptyWorkspaceState());
+    const setFavorite = vi.fn().mockResolvedValue({
+      id: 'skill-prompt-writer',
+      versionId: 'version-prompt-writer',
+      name: 'Prompt Writer',
+      description: 'Writes prompts',
+      versionNo: 1,
+      favorite: true
+    });
+    window.theOpenHub = {
+      getWorkspaceState: vi.fn().mockResolvedValue(state),
+      listAgentRoots: vi.fn().mockResolvedValue([]),
+      listDiscoverSources: vi.fn().mockResolvedValue([]),
+      setFavorite
+    } as unknown as NonNullable<typeof window.theOpenHub>;
+
+    render(<App initialState={state} />);
+    fireEvent.click(screen.getByRole('button', { name: 'Skills' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Favorite Prompt Writer' }));
+
+    await waitFor(() => expect(setFavorite).toHaveBeenCalledWith('skill-prompt-writer', true));
+    expect(await screen.findByText('Favorited Prompt Writer')).toBeInTheDocument();
+  });
+
+  it('filters indexed skills to favorites only from local state', () => {
+    const state = workspaceWithSkills(createEmptyWorkspaceState());
+    state.librarySkills = state.librarySkills.map((skill) =>
+      skill.id === 'skill-prompt-writer' ? { ...skill, favorite: true } : skill
+    );
+    render(<App initialState={state} />);
+
+    fireEvent.click(screen.getByRole('button', { name: 'Skills' }));
+    fireEvent.click(screen.getByRole('checkbox', { name: 'Favorites only' }));
+
+    expect(screen.getByText('Prompt Writer')).toBeInTheDocument();
+    expect(screen.queryByText('Palette Helper')).not.toBeInTheDocument();
+  });
+
+  it('renders Settings without telemetry sharing or API key prompts', () => {
+    render(<App />);
+    fireEvent.click(screen.getByRole('button', { name: 'Settings' }));
+
+    expect(screen.getByRole('heading', { name: 'Local roots' })).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: 'Marketplace sources' })).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: 'Sync' })).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: 'Plugins' })).toBeInTheDocument();
+    expect(screen.queryByLabelText(/api key/i)).not.toBeInTheDocument();
+    expect(screen.queryByText(/share usage analytics|telemetry|crash reports/i)).not.toBeInTheDocument();
   });
 
   it('shows retained plugin capabilities only', async () => {

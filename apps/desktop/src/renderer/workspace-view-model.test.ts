@@ -24,7 +24,7 @@ describe('workspace view model fixture boundaries', () => {
     expect(renderedState).not.toContain('1482');
   });
 
-  it('collapses primary navigation to retained product sections', () => {
+  it('labels the primary workbench page as Dashboard while preserving local state metrics', () => {
     const state = createEmptyWorkspaceState();
     const viewModel = createWorkspaceViewModel(state);
     const uxModel = createWorkspaceUxModel({
@@ -36,9 +36,14 @@ describe('workspace view model fixture boundaries', () => {
     });
 
     expect(viewModel.navItems.map((item) => item.label)).toEqual([
-      'Home',
+      'Dashboard',
       'Skills',
       'Settings'
+    ]);
+    expect(viewModel.dashboard.metrics.map((metric) => metric.label)).toEqual([
+      'Library skills',
+      'Root locations',
+      'App-owned installs'
     ]);
     expect(JSON.stringify(viewModel.navItems)).not.toMatch(/Deploy|Trust|Usage|Reviews|Security|Installs|Discover|Library|Inventory|Sources/);
     expect(uxModel.workflowOwners).toEqual({

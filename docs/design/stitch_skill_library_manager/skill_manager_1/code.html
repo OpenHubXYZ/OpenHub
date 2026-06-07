@@ -1,0 +1,275 @@
+<!DOCTYPE html>
+
+<html class="light" lang="en"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>Dashboard - SkillManager</title>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&amp;family=Geist:wght@500;600&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<script id="tailwind-config">
+        tailwind.config = {
+            darkMode: "class",
+            theme: {
+                extend: {
+                    colors: {
+                        "secondary": "#0058be",
+                        "on-error-container": "#93000a",
+                        "on-secondary-fixed-variant": "#004395",
+                        "on-primary-fixed": "#131b2e",
+                        "error-container": "#ffdad6",
+                        "surface-bright": "#f7f9fb",
+                        "on-surface-variant": "#45464d",
+                        "on-background": "#191c1e",
+                        "error": "#ba1a1a",
+                        "surface-container-highest": "#e0e3e5",
+                        "surface-dim": "#d8dadc",
+                        "on-tertiary": "#ffffff",
+                        "on-primary-container": "#7c839b",
+                        "primary-fixed": "#dae2fd",
+                        "primary-container": "#131b2e",
+                        "surface-container-lowest": "#ffffff",
+                        "on-error": "#ffffff",
+                        "tertiary-fixed": "#6ffbbe",
+                        "surface-container": "#eceef0",
+                        "tertiary-fixed-dim": "#4edea3",
+                        "tertiary": "#000000",
+                        "surface-container-high": "#e6e8ea",
+                        "on-tertiary-fixed-variant": "#005236",
+                        "on-secondary-container": "#fefcff",
+                        "on-primary": "#ffffff",
+                        "primary-fixed-dim": "#bec6e0",
+                        "outline-variant": "#c6c6cd",
+                        "tertiary-container": "#002113",
+                        "surface-variant": "#e0e3e5",
+                        "secondary-container": "#2170e4",
+                        "surface-container-low": "#f2f4f6",
+                        "on-tertiary-container": "#009668",
+                        "on-tertiary-fixed": "#002113",
+                        "inverse-on-surface": "#eff1f3",
+                        "outline": "#76777d",
+                        "on-surface": "#191c1e",
+                        "on-primary-fixed-variant": "#3f465c",
+                        "on-secondary-fixed": "#001a42",
+                        "on-secondary": "#ffffff",
+                        "inverse-surface": "#2d3133",
+                        "surface-tint": "#565e74",
+                        "surface": "#f7f9fb",
+                        "inverse-primary": "#bec6e0",
+                        "secondary-fixed-dim": "#adc6ff",
+                        "secondary-fixed": "#d8e2ff",
+                        "background": "#f7f9fb",
+                        "primary": "#000000"
+                    },
+                    borderRadius: {
+                        "DEFAULT": "0.25rem",
+                        "lg": "0.5rem",
+                        "xl": "0.75rem",
+                        "full": "9999px"
+                    },
+                    spacing: {
+                        "sidebar-width": "260px",
+                        "stack-lg": "24px",
+                        "stack-md": "16px",
+                        "container-max": "1440px",
+                        "stack-sm": "8px",
+                        "margin-page": "32px",
+                        "gutter": "24px"
+                    },
+                    fontFamily: {
+                        "body-md": ["Inter"],
+                        "headline-md": ["Inter"],
+                        "headline-sm": ["Inter"],
+                        "display-sm": ["Inter"],
+                        "label-md": ["Geist"],
+                        "body-lg": ["Inter"],
+                        "body-sm": ["Inter"],
+                        "label-sm": ["Geist"]
+                    },
+                    fontSize: {
+                        "body-md": ["14px", { lineHeight: "20px", fontWeight: "400" }],
+                        "headline-md": ["24px", { lineHeight: "32px", letterSpacing: "-0.01em", fontWeight: "600" }],
+                        "headline-sm": ["20px", { lineHeight: "28px", fontWeight: "600" }],
+                        "display-sm": ["30px", { lineHeight: "38px", letterSpacing: "-0.02em", fontWeight: "700" }],
+                        "label-md": ["13px", { lineHeight: "16px", letterSpacing: "0.02em", fontWeight: "500" }],
+                        "body-lg": ["16px", { lineHeight: "24px", fontWeight: "400" }],
+                        "body-sm": ["12px", { lineHeight: "18px", fontWeight: "400" }],
+                        "label-sm": ["11px", { lineHeight: "14px", letterSpacing: "0.05em", fontWeight: "600" }]
+                    }
+                }
+            }
+        }
+    </script>
+<style>
+        body { background-color: #F8FAFC; color: #191c1e; }
+        .card-shadow { box-shadow: 0px 4px 6px -1px rgba(15, 23, 42, 0.05); }
+        .card-hover:hover { box-shadow: 0px 10px 15px -3px rgba(15, 23, 42, 0.1); }
+    </style>
+</head>
+<body class="bg-background text-on-surface font-body-md antialiased overflow-hidden flex h-screen w-screen">
+<!-- SideNavBar -->
+<nav class="bg-primary-container dark:bg-surface-container-lowest fixed left-0 top-0 h-full w-[260px] border-r border-outline-variant dark:border-outline flex flex-col p-4 space-y-2 z-50 transition-all duration-300 md:translate-x-0 -translate-x-full" id="mobile-sidebar">
+<div class="mb-8 px-2 flex items-center justify-between">
+<div>
+<h1 class="font-headline-sm text-headline-sm font-bold text-on-primary-fixed dark:text-on-secondary-fixed tracking-tight">SkillManager</h1>
+<p class="font-label-sm text-label-sm text-on-primary-container mt-1">Systematic Control</p>
+</div>
+<button class="md:hidden text-on-primary-container" id="close-sidebar">
+<span class="material-symbols-outlined">close</span>
+</button>
+</div>
+<div class="flex-1 space-y-1">
+<a class="bg-secondary text-on-secondary rounded-lg font-bold flex items-center gap-3 px-3 py-2.5 duration-200 ease-in-out" href="#">
+<span class="material-symbols-outlined" data-icon="dashboard">dashboard</span>
+<span class="font-body-md text-body-md">Dashboard</span>
+</a>
+<a class="text-on-primary-container dark:text-on-surface-variant hover:bg-surface-variant hover:bg-secondary-container hover:text-on-secondary-container transition-colors rounded-lg flex items-center gap-3 px-3 py-2.5 duration-200 ease-in-out" href="#">
+<span class="material-symbols-outlined" data-icon="storefront">storefront</span>
+<span class="font-body-md text-body-md">Marketplace</span>
+</a>
+<a class="text-on-primary-container dark:text-on-surface-variant hover:bg-surface-variant hover:bg-secondary-container hover:text-on-secondary-container transition-colors rounded-lg flex items-center gap-3 px-3 py-2.5 duration-200 ease-in-out" href="#">
+<span class="material-symbols-outlined" data-icon="psychology">psychology</span>
+<span class="font-body-md text-body-md">My Skills</span>
+</a>
+<a class="text-on-primary-container dark:text-on-surface-variant hover:bg-surface-variant hover:bg-secondary-container hover:text-on-secondary-container transition-colors rounded-lg flex items-center gap-3 px-3 py-2.5 duration-200 ease-in-out" href="#">
+<span class="material-symbols-outlined" data-icon="leaderboard">leaderboard</span>
+<span class="font-body-md text-body-md">Analytics</span>
+</a>
+<a class="text-on-primary-container dark:text-on-surface-variant hover:bg-surface-variant hover:bg-secondary-container hover:text-on-secondary-container transition-colors rounded-lg flex items-center gap-3 px-3 py-2.5 duration-200 ease-in-out" href="#">
+<span class="material-symbols-outlined" data-icon="settings">settings</span>
+<span class="font-body-md text-body-md">Settings</span>
+</a>
+</div>
+<div class="mt-auto pt-4 border-t border-outline-variant/20 px-2 flex items-center gap-3 cursor-pointer hover:bg-secondary-container hover:text-on-secondary-container p-2 rounded-lg transition-colors text-on-primary-container">
+<img alt="User Profile Avatar" class="w-8 h-8 rounded-full border border-outline-variant" data-alt="A professional headshot of a person, minimalist corporate style, bright lighting, light background." src="https://lh3.googleusercontent.com/aida-public/AB6AXuAGdGaEpTuqZUPPo09OwtpN_2o2rlpwx22GQvKiSaav6SljlWvUVsxiTBMqhfbPbiXWMKU7JNR-JCglLbTtkoP-yg28X_9QZq1ia9iWqWITB4Cv6ZVdgNRwCDIs2Emco-CkwYTNOMrLa0aLcVenddryYSPDG01S2ehAPAuWUWYwR0p8BpJUhIWW9p-gWFUEnuFQJsRoyvVikyhfYvvmXMBxPUCUFQOiEuiwQh9UOYXE4vKF5b_zB9b_KOsDnQ_tflF6YQYZTUwu1TB2"/>
+<div class="flex-1 overflow-hidden">
+<p class="font-label-md text-label-md truncate">Admin User</p>
+<p class="font-body-sm text-body-sm truncate opacity-70">admin@skillmanager.sys</p>
+</div>
+<span class="material-symbols-outlined text-[18px]">more_vert</span>
+</div>
+</nav>
+<!-- Main Content Area Wrapper -->
+<div class="flex-1 flex flex-col md:ml-[260px] h-full overflow-hidden bg-background">
+<!-- TopAppBar -->
+<header class="bg-surface dark:bg-surface-dim fixed top-0 right-0 w-full md:w-[calc(100%-260px)] h-16 border-b border-outline-variant dark:border-outline flex justify-between items-center px-margin-page z-40">
+<div class="flex items-center gap-4 w-full max-w-container-max mx-auto">
+<button class="md:hidden text-primary" id="open-sidebar">
+<span class="material-symbols-outlined">menu</span>
+</button>
+<h2 class="font-headline-sm text-headline-sm font-bold text-primary dark:text-primary-fixed-dim hidden">SkillManager</h2>
+<!-- Search Bar -->
+<div class="relative flex-1 max-w-md hidden md:block">
+<span class="material-symbols-outlined absolute left-3 top-1/2 -translate-y-1/2 text-on-surface-variant text-[20px]">search</span>
+<input class="w-full h-10 pl-10 pr-4 bg-surface-container-lowest border border-outline-variant rounded-lg font-body-sm text-body-sm focus:outline-none focus:border-[#3B82F6] focus:ring-1 focus:ring-[#3B82F6] transition-all" placeholder="Search skills, analytics, or settings..." type="text"/>
+</div>
+<div class="flex-1"></div> <!-- Spacer -->
+<div class="flex items-center gap-stack-md">
+<button class="text-on-surface-variant hover:text-secondary transition-colors scale-95 active:scale-90 relative">
+<span class="material-symbols-outlined" data-icon="notifications">notifications</span>
+<span class="absolute top-0 right-0 w-2 h-2 bg-[#ba1a1a] rounded-full"></span>
+</button>
+<button class="text-on-surface-variant hover:text-secondary transition-colors scale-95 active:scale-90 hidden sm:block">
+<span class="material-symbols-outlined" data-icon="help_outline">help_outline</span>
+</button>
+<div class="h-6 w-px bg-outline-variant hidden sm:block"></div>
+<button class="bg-[#3B82F6] text-white font-label-md text-label-md px-4 py-2 rounded-lg hover:bg-[#2563EB] transition-colors shadow-sm hidden sm:block">
+                        Check for Updates
+                    </button>
+<img alt="User Profile" class="w-8 h-8 rounded-full border border-outline-variant cursor-pointer md:hidden" data-alt="A professional headshot of a person, minimalist corporate style, bright lighting, light background." src="https://lh3.googleusercontent.com/aida-public/AB6AXuDbOkEjEI3NVeETvVAAJAZR-h2I6WfroMTZTsMQ_3c2ndfsZgteA5C7ShlG7rIQir6drqk5Y6wJVGnW8kYu5ggUL5eqmaqkyDsB34_0nUZnDgCENf6E-k9tY6knuiW4LMlCvBZI6Z-7eGllR_7uO7sjhVZGQ4QToJdd8fIFj-gCj5dfd7vuS4PyqfE_dDkslcBl_algJhS5-61IW-AqRMpbWFwSVBaQgfW_HERMpi1DXwE1NXSZqGYokM8HGtOmBA47NKEIMWZx0KI8"/>
+</div>
+</div>
+</header>
+<!-- Scrollable Content Canvas -->
+<main class="flex-1 overflow-y-auto pt-20 pb-margin-page px-margin-page">
+<div class="max-w-container-max mx-auto space-y-stack-lg">
+<!-- Page Header -->
+<div class="flex flex-col sm:flex-row sm:items-end justify-between gap-4">
+<div>
+<h2 class="font-display-sm text-display-sm text-primary">Dashboard Overview</h2>
+<p class="font-body-md text-body-md text-on-surface-variant mt-1">System status and key metrics for current billing period.</p>
+</div>
+<div class="flex gap-2">
+<button class="px-4 py-2 bg-surface-container-lowest border border-outline-variant rounded-lg font-label-md text-label-md text-primary flex items-center gap-2 hover:bg-surface-variant transition-colors">
+<span class="material-symbols-outlined text-[18px]">download</span> Export
+                        </button>
+<button class="px-4 py-2 bg-[#3B82F6] text-white rounded-lg font-label-md text-label-md flex items-center gap-2 shadow-sm hover:bg-[#2563EB] transition-colors">
+<span class="material-symbols-outlined text-[18px]">add</span> Add Skill
+                        </button>
+</div>
+</div>
+<!-- High-Level Stats Cards (Bento Grid Style) -->
+<div class="grid grid-cols-1 md:grid-cols-3 gap-stack-md">
+<!-- Stat Card 1 -->
+<div class="bg-surface-container-lowest border border-outline-variant rounded-lg p-stack-md card-shadow flex flex-col justify-between min-h-[140px]">
+<div class="flex justify-between items-start">
+<div>
+<p class="font-label-md text-label-md text-on-surface-variant uppercase tracking-wider">Total Active Skills</p>
+<h3 class="font-display-sm text-display-sm mt-1">1,248</h3>
+</div>
+<div class="w-10 h-10 rounded-full bg-secondary-fixed flex items-center justify-center text-secondary">
+<span class="material-symbols-outlined">extension</span>
+</div>
+</div>
+<div class="flex items-center gap-2 mt-4">
+<span class="flex items-center text-[#10B981] font-label-sm text-label-sm bg-[#10B981]/10 px-2 py-0.5 rounded">
+<span class="material-symbols-outlined text-[14px] mr-1">arrow_upward</span> 12%
+                            </span>
+<span class="font-body-sm text-body-sm text-on-surface-variant">vs last month</span>
+</div>
+</div>
+<!-- Stat Card 2 -->
+<div class="bg-surface-container-lowest border border-outline-variant rounded-lg p-stack-md card-shadow flex flex-col justify-between min-h-[140px]">
+<div class="flex justify-between items-start">
+<div>
+<p class="font-label-md text-label-md text-on-surface-variant uppercase tracking-wider">Est. Hours Saved</p>
+<h3 class="font-display-sm text-display-sm mt-1">342h</h3>
+</div>
+<div class="w-10 h-10 rounded-full bg-primary-fixed flex items-center justify-center text-primary">
+<span class="material-symbols-outlined">timer</span>
+</div>
+</div>
+<div class="flex items-center gap-2 mt-4">
+<span class="flex items-center text-[#10B981] font-label-sm text-label-sm bg-[#10B981]/10 px-2 py-0.5 rounded">
+<span class="material-symbols-outlined text-[14px] mr-1">arrow_upward</span> 4.3%
+                            </span>
+<span class="font-body-sm text-body-sm text-on-surface-variant">vs last month</span>
+</div>
+</div>
+<!-- Stat Card 3 -->
+<div class="bg-surface-container-lowest border border-outline-variant rounded-lg p-stack-md card-shadow flex flex-col justify-between min-h-[140px]">
+<div class="flex justify-between items-start">
+<div>
+<p class="font-label-md text-label-md text-on-surface-variant uppercase tracking-wider">Avg. Weekly Usage</p>
+<h3 class="font-display-sm text-display-sm mt-1">89%</h3>
+</div>
+<div class="w-10 h-10 rounded-full bg-error-container flex items-center justify-center text-[#93000a]">
+<span class="material-symbols-outlined">trending_up</span>
+</div>
+</div>
+<div class="w-full h-1.5 bg-surface-variant rounded-full mt-4 overflow-hidden">
+<div class="h-full bg-[#3B82F6] rounded-full w-[89%]"></div>
+</div>
+<p class="font-body-sm text-body-sm text-on-surface-variant mt-2 text-right">Target: 85%</p>
+</div>
+</div>
+</div>
+</main>
+</div>
+<script>
+        // Simple sidebar toggle for mobile
+        const mobileSidebar = document.getElementById('mobile-sidebar');
+        const openSidebarBtn = document.getElementById('open-sidebar');
+        const closeSidebarBtn = document.getElementById('close-sidebar');
+
+        if(openSidebarBtn && closeSidebarBtn && mobileSidebar) {
+            openSidebarBtn.addEventListener('click', () => {
+                mobileSidebar.classList.remove('-translate-x-full');
+            });
+            closeSidebarBtn.addEventListener('click', () => {
+                mobileSidebar.classList.add('-translate-x-full');
+            });
+        }
+    </script>
+</body></html>

@@ -1,5 +1,6 @@
 import { createHash } from 'node:crypto';
 import { mkdirSync } from 'node:fs';
+import { readFile } from 'node:fs/promises';
 import path from 'node:path';
 
 import { createBuiltInAgentAdapters, type AgentAdapter } from '@theopenhub/adapters';
@@ -786,7 +787,7 @@ async function skillDetail(
     .get(skillId) as { type: string; url: string | null } | undefined;
   const files = latestSkillFiles(database, skillId);
   const manifest = files.find((file) => file.relativePath === 'SKILL.md');
-  const skillMarkdown = manifest ? (await contentStore.readBlob(manifest.hash)).toString('utf8') : '';
+  const skillMarkdown = manifest ? await readSkillMarkdown(contentStore, manifest, source) : '';
 
   return {
     skill,
@@ -795,6 +796,53 @@ async function skillDetail(
     files,
     skillMarkdown
   };
+}
+
+async function readSkillMarkdown(
+  contentStore: ContentStore,
+  manifest: SkillDetail['files'][number],
+  source: { type: string; url: string | null } | undefined
+): Promise<string> {
+  try {
+    return (await contentStore.readBlob(manifest.hash)).toString('utf8');
+  } catch (error) {
+    if (!isFileNotFoundError(error)) {
+      throw error;
+    }
+    const sourceMarkdown = await readSourceMarkdown(source, manifest.relativePath);
+    if (sourceMarkdown !== null) {
+      return sourceMarkdown;
+    }
+    throw error;
+  }
+}
+
+async function readSourceMarkdown(
+  source: { type: string; url: string | null } | undefined,
+  relativePath: string
+): Promise<string | null> {
+  if (!source?.url || !['agent-root', 'local'].includes(source.type)) {
+    return null;
+  }
+
+  const sourceRoot = path.resolve(source.url);
+  const sourceFile = path.resolve(sourceRoot, relativePath);
+  if (sourceFile !== sourceRoot && !sourceFile.startsWith(`${sourceRoot}${path.sep}`)) {
+    return null;
+  }
+
+  try {
+    return await readFile(sourceFile, 'utf8');
+  } catch (error) {
+    if (isFileNotFoundError(error)) {
+      return null;
+    }
+    throw error;
+  }
+}
+
+function isFileNotFoundError(error: unknown): boolean {
+  return typeof error === 'object' && error !== null && 'code' in error && (error as { code?: unknown }).code === 'ENOENT';
 }
 
 function latestSkillFiles(database: SqliteDatabase, skillId: string): SkillDetail['files'] {

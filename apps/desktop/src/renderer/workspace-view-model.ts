@@ -160,7 +160,7 @@ export function createWorkspaceViewModel(state: DesktopWorkspaceState): Workspac
     appInfo: state.appInfo,
     librarySkills: state.librarySkills,
     navItems: [
-      { key: 'home', label: 'Home' },
+      { key: 'home', label: 'Dashboard' },
       { key: 'skills', label: 'Skills' },
       { key: 'settings', label: 'Settings' }
     ],
@@ -169,7 +169,7 @@ export function createWorkspaceViewModel(state: DesktopWorkspaceState): Workspac
         {
           label: 'Library skills',
           value: String(state.skills.length || state.librarySkills.length),
-          detail: `${state.librarySkills.length} root locations`
+          detail: 'SQLite library'
         },
         {
           label: 'Root locations',

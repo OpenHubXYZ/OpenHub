@@ -7,8 +7,10 @@ import type {
   DiscoverSkillPreview,
   DiscoverSource,
   InstallPlan,
+  LibrarySkillSummary,
   LibraryScanResult,
-  PluginRegistry
+  PluginRegistry,
+  SkillDetail
 } from '@theopenhub/shared';
 
 import './app.css';
@@ -72,6 +74,8 @@ export function App({
   const [selectedTargetRoot, setSelectedTargetRoot] = useState('');
   const [projectionMode, setProjectionMode] = useState<'copy' | 'symlink'>('copy');
   const [pendingPlan, setPendingPlan] = useState<InstallPlan | null>(null);
+  const [selectedSkillDetail, setSelectedSkillDetail] = useState<SkillDetail | null>(null);
+  const [favoritesOnly, setFavoritesOnly] = useState(false);
   const [importedCandidates, setImportedCandidates] = useState<Record<string, string>>({});
   const [installedSkillIds, setInstalledSkillIds] = useState<Record<string, string>>({});
   const [status, setStatus] = useState('Ready');
@@ -84,11 +88,11 @@ export function App({
       createWorkspaceUxModel({
         state,
         activePage,
-        selectedSkillDetail: null,
+        selectedSkillDetail,
         discoverPreviewSkills: previewSkills,
         agentRootTargets: agentRoots
       }),
-    [activePage, agentRoots, previewSkills, state]
+    [activePage, agentRoots, previewSkills, selectedSkillDetail, state]
   );
   const installedCandidateSourcePaths = useMemo(
     () =>
@@ -495,6 +499,42 @@ export function App({
     }
   }
 
+  async function openSkillDetail(skillId: string) {
+    const api = window.theOpenHub;
+    if (!api?.getSkillDetail) {
+      return;
+    }
+    try {
+      const detail = await api.getSkillDetail(skillId);
+      setSelectedSkillDetail(detail);
+      setStatusMessage(`Opened ${detail.skill.name}`);
+    } catch (error: unknown) {
+      setStatusMessage(formatError(error), 'error');
+    }
+  }
+
+  async function toggleFavorite(skill: LibrarySkillSummary) {
+    const api = window.theOpenHub;
+    if (!api?.setFavorite) {
+      return;
+    }
+    try {
+      const updated = await api.setFavorite(skill.id, !skill.favorite);
+      const favorite = Boolean(updated.favorite);
+      setState((current) => ({
+        ...current,
+        librarySkills: current.librarySkills.map((item) => (item.id === skill.id ? { ...item, favorite } : item)),
+        skills: current.skills.map((item) => (item.id === skill.id ? { ...item, favorite } : item))
+      }));
+      setSelectedSkillDetail((current) =>
+        current?.skill.id === skill.id ? { ...current, skill: { ...current.skill, favorite } } : current
+      );
+      setStatusMessage(favorite ? `Favorited ${updated.name}` : `Unfavorited ${updated.name}`);
+    } catch (error: unknown) {
+      setStatusMessage(formatError(error), 'error');
+    }
+  }
+
   return (
     <main className="screen">
       <aside className="sidebar">
@@ -577,6 +617,9 @@ export function App({
               projectionMode={projectionMode}
               setProjectionMode={setProjectionMode}
               pendingPlan={pendingPlan}
+              selectedSkillDetail={selectedSkillDetail}
+              favoritesOnly={favoritesOnly}
+              setFavoritesOnly={setFavoritesOnly}
               importedCandidates={importedCandidates}
               installedSkillIds={installedSkillIds}
               installedCandidateSourcePaths={installedCandidateSourcePaths}
@@ -585,6 +628,8 @@ export function App({
               onInstall={installCandidate}
               onConfirmOverwrite={applyPendingPlan}
               onUninstall={uninstallSkill}
+              onOpenDetail={openSkillDetail}
+              onToggleFavorite={toggleFavorite}
             />
           ) : null}
           {activePage === 'settings' ? (
@@ -672,6 +717,9 @@ function SkillsPage({
   projectionMode,
   setProjectionMode,
   pendingPlan,
+  selectedSkillDetail,
+  favoritesOnly,
+  setFavoritesOnly,
   importedCandidates,
   installedSkillIds,
   installedCandidateSourcePaths,
@@ -679,7 +727,9 @@ function SkillsPage({
   onImport,
   onInstall,
   onConfirmOverwrite,
-  onUninstall
+  onUninstall,
+  onOpenDetail,
+  onToggleFavorite
 }: {
   rows: DesktopWorkspaceState['librarySkills'];
   searchQuery: string;
@@ -695,6 +745,9 @@ function SkillsPage({
   projectionMode: 'copy' | 'symlink';
   setProjectionMode: (value: 'copy' | 'symlink') => void;
   pendingPlan: InstallPlan | null;
+  selectedSkillDetail: SkillDetail | null;
+  favoritesOnly: boolean;
+  setFavoritesOnly: (value: boolean) => void;
   importedCandidates: Record<string, string>;
   installedSkillIds: Record<string, string>;
   installedCandidateSourcePaths: Record<string, string>;
@@ -703,9 +756,12 @@ function SkillsPage({
   onInstall: (skill: DiscoverSkillPreview) => void;
   onConfirmOverwrite: () => void;
   onUninstall: (installationId: string) => void;
+  onOpenDetail: (skillId: string) => void;
+  onToggleFavorite: (skill: LibrarySkillSummary) => void;
 }) {
   const normalizedSearchQuery = normalizeSearchText(searchQuery);
-  const agentRows = rows.filter((skill) => skill.agentCode === activeTab);
+  const favoriteFilteredRows = favoritesOnly ? rows.filter((skill) => skill.favorite) : rows;
+  const agentRows = favoriteFilteredRows.filter((skill) => skill.agentCode === activeTab);
   const visibleAgentRows = normalizedSearchQuery ? agentRows.filter((skill) => skillMatchesSearch(skill, normalizedSearchQuery)) : agentRows;
   const rootGroups = groupByRoot(visibleAgentRows);
   const emptyMessage =
@@ -749,8 +805,19 @@ function SkillsPage({
           onConfirmOverwrite={onConfirmOverwrite}
         />
       ) : (
+        <>
         <section className="panel">
           <h2>{agentTabs.find((tab) => tab.key === activeTab)?.label} skills</h2>
+          <div className="skill-toolbar">
+            <label className="toggle-row">
+              <input
+                type="checkbox"
+                checked={favoritesOnly}
+                onChange={(event) => setFavoritesOnly(event.target.checked)}
+              />
+              Favorites only
+            </label>
+          </div>
           {rootGroups.length === 0 ? <p className="empty">{emptyMessage}</p> : null}
           {rootGroups.map((group) => (
             <section className="root-section" key={group.rootPath}>
@@ -769,8 +836,16 @@ function SkillsPage({
                 {group.rows.map((skill) => (
                   <div className="table-row" role="row" key={`${skill.id}:${skill.path}`}>
                     <span role="cell">
-                      <Star size={15} aria-hidden="true" />
-                      {skill.name}
+                      <button
+                        type="button"
+                        className="icon-action"
+                        aria-label={`${skill.favorite ? 'Unfavorite' : 'Favorite'} ${skill.name}`}
+                        aria-pressed={Boolean(skill.favorite)}
+                        onClick={() => void onToggleFavorite(skill)}
+                      >
+                        <Star size={15} aria-hidden="true" />
+                      </button>
+                      <span className="skill-name">{skill.name}</span>
                     </span>
                     <span role="cell">{skill.path}</span>
                     <span role="cell">
@@ -778,13 +853,18 @@ function SkillsPage({
                     </span>
                     <span role="cell">{skill.ownership}</span>
                     <span role="cell">
-                      {skill.ownership === 'app-owned' && skill.installationId ? (
-                        <button type="button" className="inline-action" onClick={() => onUninstall(skill.installationId!)}>
-                          Uninstall
+                      <span className="row-actions">
+                        <button type="button" className="inline-action" aria-label={`Open ${skill.name} details`} onClick={() => onOpenDetail(skill.id)}>
+                          Details
                         </button>
-                      ) : (
-                        <span className="muted">Indexed</span>
-                      )}
+                        {skill.ownership === 'app-owned' && skill.installationId ? (
+                          <button type="button" className="inline-action" onClick={() => onUninstall(skill.installationId!)}>
+                            Uninstall
+                          </button>
+                        ) : (
+                          <span className="muted">Indexed</span>
+                        )}
+                      </span>
                     </span>
                   </div>
                 ))}
@@ -792,6 +872,8 @@ function SkillsPage({
             </section>
           ))}
         </section>
+        <SkillDetailPanel detail={selectedSkillDetail} />
+        </>
       )}
     </div>
   );
@@ -917,10 +999,20 @@ function MarketplaceTab({
             );
 
             return (
-              <article key={skill.path} className="candidate">
-                <strong>{skill.name}</strong>
+              <article key={skill.path} className="candidate skill-card" aria-label={skill.name}>
+                <div className="candidate-heading">
+                  <strong>{skill.name}</strong>
+                  <span className="tag">preview</span>
+                </div>
                 <span>{skill.path}</span>
                 <p>{skill.description}</p>
+                <div className="tag-row" aria-label={`${skill.name} tags`}>
+                  {skill.tags.map((tag) => (
+                    <span className="tag tag-neutral" key={tag}>
+                      {tag}
+                    </span>
+                  ))}
+                </div>
                 <div className="candidate-actions">
                   {isInstalled ? (
                     <span className="tag">Installed</span>
@@ -945,6 +1037,61 @@ function MarketplaceTab({
         </div>
       </section>
     </div>
+  );
+}
+
+function SkillDetailPanel({ detail }: { detail: SkillDetail | null }) {
+  if (!detail) {
+    return (
+      <section className="panel detail-panel" aria-label="Skill detail">
+        <p className="empty">Select a skill to inspect files and versions.</p>
+      </section>
+    );
+  }
+
+  return (
+    <section className="panel detail-panel" aria-label={`${detail.skill.name} details`}>
+      <div className="detail-heading">
+        <div>
+          <h2>{detail.skill.name}</h2>
+          <p>{detail.skill.description}</p>
+        </div>
+        <span className="tag">Version {detail.skill.versionNo}</span>
+      </div>
+      <div className="tag-row">
+        <span className="tag tag-neutral">{detail.source.url ?? detail.source.type}</span>
+        {detail.skill.favorite ? <span className="tag tag-neutral">favorite</span> : null}
+        {detail.skill.tags.map((tag) => (
+          <span className="tag tag-neutral" key={tag}>
+            {tag}
+          </span>
+        ))}
+      </div>
+      <div className="split-two detail-grid">
+        <section>
+          <h3>Files</h3>
+          {detail.files.length === 0 ? <p className="empty">No files recorded</p> : null}
+          {detail.files.map((file) => (
+            <div className="key-row" key={file.relativePath}>
+              <span>{file.kind}</span>
+              <strong>{file.relativePath}</strong>
+            </div>
+          ))}
+        </section>
+        <section>
+          <h3>Versions</h3>
+          {detail.versions.length === 0 ? <p className="empty">No version history</p> : null}
+          {detail.versions.map((version) => (
+            <div className="key-row" key={version.versionId}>
+              <span>v{version.versionNo}</span>
+              <strong>{version.changeSummary || version.createdAt}</strong>
+            </div>
+          ))}
+        </section>
+      </div>
+      <h3>Skill markdown</h3>
+      <pre className="markdown-preview">{detail.skillMarkdown}</pre>
+    </section>
   );
 }
 
@@ -1088,7 +1235,7 @@ function SettingsPage({
 
 function titleForPage(page: PageKey): string {
   return {
-    home: 'Home',
+    home: 'Dashboard',
     skills: 'Skills',
     settings: 'Settings'
   }[page];

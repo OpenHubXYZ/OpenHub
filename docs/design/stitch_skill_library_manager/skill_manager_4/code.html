@@ -1,0 +1,357 @@
+<!DOCTYPE html>
+
+<html class="light" lang="en"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>Analytics - SkillManager</title>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&amp;family=Geist:wght@500;600&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<script id="tailwind-config">
+        tailwind.config = {
+          darkMode: "class",
+          theme: {
+            extend: {
+              "colors": {
+                      "secondary": "#0058be",
+                      "on-error-container": "#93000a",
+                      "on-secondary-fixed-variant": "#004395",
+                      "on-primary-fixed": "#131b2e",
+                      "error-container": "#ffdad6",
+                      "surface-bright": "#f7f9fb",
+                      "on-surface-variant": "#45464d",
+                      "on-background": "#191c1e",
+                      "error": "#ba1a1a",
+                      "surface-container-highest": "#e0e3e5",
+                      "surface-dim": "#d8dadc",
+                      "on-tertiary": "#ffffff",
+                      "on-primary-container": "#7c839b",
+                      "primary-fixed": "#dae2fd",
+                      "primary-container": "#131b2e",
+                      "surface-container-lowest": "#ffffff",
+                      "on-error": "#ffffff",
+                      "tertiary-fixed": "#6ffbbe",
+                      "surface-container": "#eceef0",
+                      "tertiary-fixed-dim": "#4edea3",
+                      "tertiary": "#000000",
+                      "surface-container-high": "#e6e8ea",
+                      "on-tertiary-fixed-variant": "#005236",
+                      "on-secondary-container": "#fefcff",
+                      "on-primary": "#ffffff",
+                      "primary-fixed-dim": "#bec6e0",
+                      "outline-variant": "#c6c6cd",
+                      "tertiary-container": "#002113",
+                      "surface-variant": "#e0e3e5",
+                      "secondary-container": "#2170e4",
+                      "surface-container-low": "#f2f4f6",
+                      "on-tertiary-container": "#009668",
+                      "on-tertiary-fixed": "#002113",
+                      "inverse-on-surface": "#eff1f3",
+                      "outline": "#76777d",
+                      "on-surface": "#191c1e",
+                      "on-primary-fixed-variant": "#3f465c",
+                      "on-secondary-fixed": "#001a42",
+                      "on-secondary": "#ffffff",
+                      "inverse-surface": "#2d3133",
+                      "surface-tint": "#565e74",
+                      "surface": "#f7f9fb",
+                      "inverse-primary": "#bec6e0",
+                      "secondary-fixed-dim": "#adc6ff",
+                      "secondary-fixed": "#d8e2ff",
+                      "background": "#f7f9fb",
+                      "primary": "#000000"
+              },
+              "borderRadius": {
+                      "DEFAULT": "0.25rem",
+                      "lg": "0.5rem",
+                      "xl": "0.75rem",
+                      "full": "9999px"
+              },
+              "spacing": {
+                      "sidebar-width": "260px",
+                      "stack-lg": "24px",
+                      "stack-md": "16px",
+                      "container-max": "1440px",
+                      "stack-sm": "8px",
+                      "margin-page": "32px",
+                      "gutter": "24px"
+              },
+              "fontFamily": {
+                      "body-md": ["Inter"],
+                      "headline-md": ["Inter"],
+                      "headline-sm": ["Inter"],
+                      "display-sm": ["Inter"],
+                      "label-md": ["Geist"],
+                      "body-lg": ["Inter"],
+                      "body-sm": ["Inter"],
+                      "label-sm": ["Geist"]
+              },
+              "fontSize": {
+                      "body-md": ["14px", {"lineHeight": "20px", "fontWeight": "400"}],
+                      "headline-md": ["24px", {"lineHeight": "32px", "letterSpacing": "-0.01em", "fontWeight": "600"}],
+                      "headline-sm": ["20px", {"lineHeight": "28px", "fontWeight": "600"}],
+                      "display-sm": ["30px", {"lineHeight": "38px", "letterSpacing": "-0.02em", "fontWeight": "700"}],
+                      "label-md": ["13px", {"lineHeight": "16px", "letterSpacing": "0.02em", "fontWeight": "500"}],
+                      "body-lg": ["16px", {"lineHeight": "24px", "fontWeight": "400"}],
+                      "body-sm": ["12px", {"lineHeight": "18px", "fontWeight": "400"}],
+                      "label-sm": ["11px", {"lineHeight": "14px", "letterSpacing": "0.05em", "fontWeight": "600"}]
+              }
+            }
+          }
+        }
+    </script>
+<style>
+        .chart-grid { stroke: #E2E8F0; stroke-width: 1; }
+        .chart-line { stroke: #3B82F6; stroke-width: 2; fill: none; }
+        .chart-area { fill: url(#blue-gradient); opacity: 0.2; }
+    </style>
+</head>
+<body class="bg-background text-on-background font-body-md min-h-screen flex">
+<!-- SideNavBar -->
+<nav class="hidden md:flex bg-primary-container dark:bg-surface-container-lowest text-secondary dark:text-secondary-fixed font-body-md text-body-md fixed left-0 top-0 h-full w-[260px] border-r border-outline-variant dark:border-outline flex-col p-4 space-y-2 z-50">
+<div class="mb-8 px-4 flex items-center space-x-3">
+<div class="w-8 h-8 rounded-full bg-secondary flex items-center justify-center text-on-secondary">
+<span class="material-symbols-outlined" data-icon="hub">hub</span>
+</div>
+<div>
+<h1 class="font-headline-sm text-headline-sm font-bold text-on-primary-fixed dark:text-on-secondary-fixed">SkillManager</h1>
+<p class="font-label-sm text-label-sm text-on-primary-container">Systematic Control</p>
+</div>
+</div>
+<a class="flex items-center space-x-3 px-4 py-3 rounded-lg text-on-primary-container dark:text-on-surface-variant hover:bg-surface-variant hover:text-on-secondary-container transition-colors duration-200 ease-in-out" href="#">
+<span class="material-symbols-outlined" data-icon="dashboard">dashboard</span>
+<span>Dashboard</span>
+</a>
+<a class="flex items-center space-x-3 px-4 py-3 rounded-lg text-on-primary-container dark:text-on-surface-variant hover:bg-surface-variant hover:text-on-secondary-container transition-colors duration-200 ease-in-out" href="#">
+<span class="material-symbols-outlined" data-icon="storefront">storefront</span>
+<span>Marketplace</span>
+</a>
+<a class="flex items-center space-x-3 px-4 py-3 rounded-lg text-on-primary-container dark:text-on-surface-variant hover:bg-surface-variant hover:text-on-secondary-container transition-colors duration-200 ease-in-out" href="#">
+<span class="material-symbols-outlined" data-icon="psychology">psychology</span>
+<span>My Skills</span>
+</a>
+<a class="flex items-center space-x-3 px-4 py-3 rounded-lg bg-secondary text-on-secondary font-bold duration-200 ease-in-out" href="#">
+<span class="material-symbols-outlined" data-icon="leaderboard" data-weight="fill" style="font-variation-settings: 'FILL' 1;">leaderboard</span>
+<span>Analytics</span>
+</a>
+<a class="flex items-center space-x-3 px-4 py-3 rounded-lg text-on-primary-container dark:text-on-surface-variant hover:bg-surface-variant hover:text-on-secondary-container transition-colors duration-200 ease-in-out" href="#">
+<span class="material-symbols-outlined" data-icon="settings">settings</span>
+<span>Settings</span>
+</a>
+<div class="mt-auto pt-4 flex items-center space-x-3 px-4">
+<img alt="User Profile Avatar" class="w-8 h-8 rounded-full border border-outline-variant" data-alt="A small, circular profile picture of a professional individual against a clean background, typical of a corporate software application avatar." src="https://lh3.googleusercontent.com/aida-public/AB6AXuAhZLPdoY_QW1cyntJ9JRMRUjkIVFYuLHwUXpKYqEr8RFRsG2Hp4e0p2R8Kz-ZgfQnDfeYT60uS0hYvUXNboPhgoI5GhuIQE_VwN25juJWc6GBeHC4f416H5HiUPU3npi9rnoV1HN5B6FUrp4ZYAUQ2rF1lX0uhMg6W5zW-0Uj1PuC-ctZjumHcMMnfQteEI5eGGMNBaEWNQQmlWYnY_FdYvaZQZyPLYULlHV4l23ZOvTPRriVCTvPLAUyB1Jeu0D4Tiyc2zja9jgQi"/>
+<span class="font-label-md text-label-md text-on-primary-container">Admin User</span>
+</div>
+</nav>
+<!-- TopAppBar -->
+<header class="hidden md:flex bg-surface dark:bg-surface-dim text-primary dark:text-primary-fixed-dim font-label-md text-label-md fixed top-0 right-0 w-[calc(100%-260px)] h-16 border-b border-outline-variant dark:border-outline justify-between items-center px-margin-page max-w-container-max z-40">
+<div class="flex-1 max-w-md">
+<div class="relative flex items-center">
+<span class="material-symbols-outlined absolute left-3 text-outline" data-icon="search">search</span>
+<input class="w-full pl-10 pr-4 py-2 bg-surface-container-lowest border border-outline-variant rounded-lg focus:outline-none focus:border-secondary focus:ring-1 focus:ring-secondary text-on-surface text-body-md placeholder-outline transition-colors" placeholder="Search analytics..." type="text"/>
+</div>
+</div>
+<div class="flex items-center space-x-stack-md ml-auto">
+<button class="px-4 py-2 text-primary hover:text-secondary transition-colors scale-95 active:scale-90 font-label-md">Check for Updates</button>
+<div class="flex items-center space-x-2 text-on-surface-variant">
+<button class="p-2 hover:text-secondary transition-colors hover:bg-surface-variant rounded-full">
+<span class="material-symbols-outlined" data-icon="notifications">notifications</span>
+</button>
+<button class="p-2 hover:text-secondary transition-colors hover:bg-surface-variant rounded-full">
+<span class="material-symbols-outlined" data-icon="help_outline">help_outline</span>
+</button>
+</div>
+</div>
+</header>
+<!-- Main Content -->
+<main class="flex-1 md:ml-[260px] pt-16 min-h-screen bg-background">
+<div class="max-w-container-max mx-auto px-margin-page py-8 space-y-stack-lg">
+<!-- Page Header & Filters -->
+<div class="flex flex-col sm:flex-row justify-between items-start sm:items-end gap-4 border-b border-outline-variant pb-6">
+<div>
+<h2 class="font-display-sm text-display-sm text-on-background">Usage Analytics</h2>
+<p class="font-body-md text-body-md text-on-surface-variant mt-1">Deep dive into execution patterns and performance metrics.</p>
+</div>
+<div class="flex items-center space-x-stack-sm bg-surface-container-lowest p-1 rounded-lg border border-outline-variant">
+<button class="px-4 py-1.5 font-label-md text-label-md rounded text-on-surface-variant hover:bg-surface-variant transition-colors">7D</button>
+<button class="px-4 py-1.5 font-label-md text-label-md rounded bg-secondary text-on-secondary shadow-sm">30D</button>
+<button class="px-4 py-1.5 font-label-md text-label-md rounded text-on-surface-variant hover:bg-surface-variant transition-colors">3M</button>
+<button class="px-4 py-1.5 font-label-md text-label-md rounded text-on-surface-variant hover:bg-surface-variant transition-colors">1Y</button>
+<div class="w-px h-6 bg-outline-variant mx-2"></div>
+<button class="px-3 py-1.5 flex items-center space-x-2 text-on-surface-variant hover:text-secondary transition-colors">
+<span class="material-symbols-outlined text-[18px]" data-icon="calendar_today">calendar_today</span>
+<span class="font-label-md text-label-md">Custom</span>
+</button>
+</div>
+</div>
+<!-- Bento Grid Layout -->
+<div class="grid grid-cols-1 lg:grid-cols-3 gap-stack-md">
+<!-- Main Line Chart (Spans 2 columns on lg) -->
+<div class="lg:col-span-2 bg-surface-container-lowest rounded-lg border border-outline-variant p-6 flex flex-col hover:shadow-[0px_4px_6px_-1px_rgba(15,23,42,0.05)] transition-shadow">
+<div class="flex justify-between items-start mb-6">
+<div>
+<h3 class="font-headline-sm text-headline-sm text-on-background">Total Skill Executions</h3>
+<p class="font-body-sm text-body-sm text-on-surface-variant">Volume over the last 30 days</p>
+</div>
+<div class="text-right">
+<span class="block font-headline-md text-headline-md text-secondary">124,592</span>
+<span class="flex items-center text-tertiary-fixed-dim font-label-md text-label-md mt-1">
+<span class="material-symbols-outlined text-[16px] mr-1" data-icon="trending_up">trending_up</span>
+                                +14.2% vs prev
+                            </span>
+</div>
+</div>
+<div class="flex-1 w-full relative min-h-[240px]">
+<svg class="absolute inset-0 w-full h-full" preserveaspectratio="none" viewbox="0 0 800 240">
+<defs>
+<lineargradient id="blue-gradient" x1="0" x2="0" y1="0" y2="1">
+<stop offset="0%" stop-color="#3B82F6" stop-opacity="0.4"></stop>
+<stop offset="100%" stop-color="#3B82F6" stop-opacity="0"></stop>
+</lineargradient>
+</defs>
+<!-- Grid Lines -->
+<line class="chart-grid" x1="0" x2="800" y1="0" y2="0"></line>
+<line class="chart-grid" x1="0" x2="800" y1="60" y2="60"></line>
+<line class="chart-grid" x1="0" x2="800" y1="120" y2="120"></line>
+<line class="chart-grid" x1="0" x2="800" y1="180" y2="180"></line>
+<line class="chart-grid" x1="0" x2="800" y1="240" y2="240"></line>
+<!-- Area & Line -->
+<path class="chart-area" d="M0,240 L0,180 L100,150 L200,190 L300,120 L400,140 L500,80 L600,110 L700,40 L800,60 L800,240 Z"></path>
+<path class="chart-line" d="M0,180 L100,150 L200,190 L300,120 L400,140 L500,80 L600,110 L700,40 L800,60"></path>
+</svg>
+</div>
+</div>
+<!-- Category Pie Chart -->
+<div class="bg-surface-container-lowest rounded-lg border border-outline-variant p-6 flex flex-col hover:shadow-[0px_4px_6px_-1px_rgba(15,23,42,0.05)] transition-shadow">
+<h3 class="font-headline-sm text-headline-sm text-on-background mb-1">Usage by Category</h3>
+<p class="font-body-sm text-body-sm text-on-surface-variant mb-6">Distribution across domains</p>
+<div class="flex-1 flex flex-col justify-center items-center">
+<!-- Simulated Donut Chart using SVG -->
+<div class="relative w-48 h-48 mb-6">
+<svg class="w-full h-full -rotate-90" viewbox="0 0 100 100">
+<circle cx="50" cy="50" fill="none" r="40" stroke="#E2E8F0" stroke-width="20"></circle>
+<circle class="transition-all duration-1000" cx="50" cy="50" fill="none" r="40" stroke="#3B82F6" stroke-dasharray="251.2" stroke-dashoffset="60" stroke-width="20"></circle>
+<circle class="transition-all duration-1000" cx="50" cy="50" fill="none" r="40" stroke="#131b2e" stroke-dasharray="251.2" stroke-dashoffset="200" stroke-width="20"></circle>
+<circle class="transition-all duration-1000" cx="50" cy="50" fill="none" r="40" stroke="#4edea3" stroke-dasharray="251.2" stroke-dashoffset="230" stroke-width="20"></circle>
+</svg>
+<div class="absolute inset-0 flex items-center justify-center flex-col">
+<span class="font-headline-md text-headline-md text-on-background">3</span>
+<span class="font-label-sm text-label-sm text-on-surface-variant">Active Cats</span>
+</div>
+</div>
+<div class="w-full space-y-3">
+<div class="flex items-center justify-between">
+<div class="flex items-center space-x-2">
+<div class="w-3 h-3 rounded-full bg-[#3B82F6]"></div>
+<span class="font-body-sm text-body-sm text-on-background">Data Processing</span>
+</div>
+<span class="font-label-md text-label-md text-on-surface-variant">55%</span>
+</div>
+<div class="flex items-center justify-between">
+<div class="flex items-center space-x-2">
+<div class="w-3 h-3 rounded-full bg-primary-container"></div>
+<span class="font-body-sm text-body-sm text-on-background">API Integration</span>
+</div>
+<span class="font-label-md text-label-md text-on-surface-variant">30%</span>
+</div>
+<div class="flex items-center justify-between">
+<div class="flex items-center space-x-2">
+<div class="w-3 h-3 rounded-full bg-tertiary-fixed-dim"></div>
+<span class="font-body-sm text-body-sm text-on-background">Automation</span>
+</div>
+<span class="font-label-md text-label-md text-on-surface-variant">15%</span>
+</div>
+</div>
+</div>
+</div>
+</div>
+<!-- Detailed Event Table -->
+<div class="bg-surface-container-lowest rounded-lg border border-outline-variant overflow-hidden">
+<div class="p-6 border-b border-outline-variant flex justify-between items-center bg-surface-bright">
+<h3 class="font-headline-sm text-headline-sm text-on-background">Recent Execution Events</h3>
+<button class="flex items-center space-x-2 px-3 py-1.5 border border-outline-variant rounded bg-surface text-on-surface-variant hover:border-secondary hover:text-secondary transition-colors font-label-md text-label-md">
+<span class="material-symbols-outlined text-[18px]" data-icon="download">download</span>
+<span>Export CSV</span>
+</button>
+</div>
+<div class="overflow-x-auto">
+<table class="w-full text-left border-collapse">
+<thead>
+<tr class="bg-surface-container-low border-b border-outline-variant font-label-md text-label-md text-on-surface-variant">
+<th class="p-4 font-medium">Timestamp</th>
+<th class="p-4 font-medium">Skill Triggered</th>
+<th class="p-4 font-medium">Category</th>
+<th class="p-4 font-medium">Status</th>
+<th class="p-4 font-medium text-right">Processing Time</th>
+</tr>
+</thead>
+<tbody class="font-body-sm text-body-sm text-on-background divide-y divide-outline-variant">
+<tr class="hover:bg-surface-container-low transition-colors">
+<td class="p-4 text-on-surface-variant">2023-10-27 14:32:01</td>
+<td class="p-4 font-medium">Normalize Customer Data</td>
+<td class="p-4">Data Processing</td>
+<td class="p-4">
+<span class="inline-flex items-center px-2 py-1 rounded bg-tertiary-fixed/20 text-on-tertiary-container font-label-sm">Success</span>
+</td>
+<td class="p-4 text-right">1.2s</td>
+</tr>
+<tr class="hover:bg-surface-container-low transition-colors">
+<td class="p-4 text-on-surface-variant">2023-10-27 14:30:45</td>
+<td class="p-4 font-medium">Sync Salesforce Contacts</td>
+<td class="p-4">API Integration</td>
+<td class="p-4">
+<span class="inline-flex items-center px-2 py-1 rounded bg-tertiary-fixed/20 text-on-tertiary-container font-label-sm">Success</span>
+</td>
+<td class="p-4 text-right">3.8s</td>
+</tr>
+<tr class="hover:bg-surface-container-low transition-colors">
+<td class="p-4 text-on-surface-variant">2023-10-27 14:28:12</td>
+<td class="p-4 font-medium">Generate Weekly Report</td>
+<td class="p-4">Automation</td>
+<td class="p-4">
+<span class="inline-flex items-center px-2 py-1 rounded bg-error-container text-on-error-container font-label-sm">Failed</span>
+</td>
+<td class="p-4 text-right">0.4s</td>
+</tr>
+<tr class="hover:bg-surface-container-low transition-colors">
+<td class="p-4 text-on-surface-variant">2023-10-27 14:15:00</td>
+<td class="p-4 font-medium">Extract Invoice Text</td>
+<td class="p-4">Data Processing</td>
+<td class="p-4">
+<span class="inline-flex items-center px-2 py-1 rounded bg-tertiary-fixed/20 text-on-tertiary-container font-label-sm">Success</span>
+</td>
+<td class="p-4 text-right">2.1s</td>
+</tr>
+<tr class="hover:bg-surface-container-low transition-colors">
+<td class="p-4 text-on-surface-variant">2023-10-27 14:02:33</td>
+<td class="p-4 font-medium">Update Inventory DB</td>
+<td class="p-4">API Integration</td>
+<td class="p-4">
+<span class="inline-flex items-center px-2 py-1 rounded bg-tertiary-fixed/20 text-on-tertiary-container font-label-sm">Success</span>
+</td>
+<td class="p-4 text-right">1.5s</td>
+</tr>
+</tbody>
+</table>
+</div>
+<!-- Pagination -->
+<div class="p-4 border-t border-outline-variant flex items-center justify-between bg-surface-bright">
+<span class="font-body-sm text-body-sm text-on-surface-variant">Showing 1 to 5 of 124,592 entries</span>
+<div class="flex space-x-1">
+<button class="p-1 rounded text-outline hover:bg-surface-variant transition-colors disabled:opacity-50" disabled="">
+<span class="material-symbols-outlined" data-icon="chevron_left">chevron_left</span>
+</button>
+<button class="px-3 py-1 rounded font-label-md text-label-md bg-secondary text-on-secondary">1</button>
+<button class="px-3 py-1 rounded font-label-md text-label-md text-on-surface-variant hover:bg-surface-variant transition-colors">2</button>
+<button class="px-3 py-1 rounded font-label-md text-label-md text-on-surface-variant hover:bg-surface-variant transition-colors">3</button>
+<span class="px-2 py-1 text-on-surface-variant">...</span>
+<button class="p-1 rounded text-on-surface-variant hover:bg-surface-variant transition-colors">
+<span class="material-symbols-outlined" data-icon="chevron_right">chevron_right</span>
+</button>
+</div>
+</div>
+</div>
+</div>
+</main>
+</body></html>

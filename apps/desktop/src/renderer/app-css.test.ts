@@ -6,12 +6,22 @@ import { describe, expect, it } from 'vitest';
 const cssPath = path.resolve(__dirname, 'app.css');
 
 describe('renderer layout containment CSS', () => {
+  it('defines Stitch-derived OpenHub design tokens', async () => {
+    const css = await readFile(cssPath, 'utf8');
+
+    expect(cssBlock(css, ':root')).toContain('--oh-surface: #f7f9fb;');
+    expect(cssBlock(css, ':root')).toContain('--oh-sidebar: #131b2e;');
+    expect(cssBlock(css, ':root')).toContain('--oh-action: #0058be;');
+    expect(cssBlock(css, ':root')).toContain('--oh-border: #c6c6cd;');
+    expect(cssBlock(css, ':root')).toContain('--oh-radius: 8px;');
+  });
+
   it('keeps the desktop shell inside the viewport without document scrollbars', async () => {
     const css = await readFile(cssPath, 'utf8');
 
     expect(cssBlock(css, 'html,\nbody,\n#root')).toContain('overflow: hidden;');
     expect(cssBlock(css, '.screen')).toContain('height: 100%;');
-    expect(cssBlock(css, '.screen')).toContain('grid-template-columns: 248px minmax(0, 1fr);');
+    expect(cssBlock(css, '.screen')).toContain('grid-template-columns: var(--oh-sidebar-width) minmax(0, 1fr);');
     expect(css).not.toContain('100vw');
   });
 
@@ -54,6 +64,8 @@ describe('renderer layout containment CSS', () => {
     expect(cssBlock(css, '.candidate')).toContain('min-width: 0;');
     expect(cssBlock(css, '.candidate')).toContain('max-width: 100%;');
     expect(cssBlock(css, '.candidate strong,\n.candidate span')).toContain('max-width: 100%;');
+    expect(cssBlock(css, '.skill-card')).toContain('display: grid;');
+    expect(cssBlock(css, '.tag-row')).toContain('flex-wrap: wrap;');
   });
 
   it('collapses split layouts on narrow screens', async () => {

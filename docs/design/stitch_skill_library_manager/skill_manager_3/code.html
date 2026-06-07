@@ -1,0 +1,408 @@
+<!DOCTYPE html>
+
+<html class="light" lang="en"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>SkillManager - PDF Parser Details</title>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&amp;family=Geist:wght@500;600&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<script id="tailwind-config">
+        tailwind.config = {
+            darkMode: "class",
+            theme: {
+                extend: {
+                    "colors": {
+                        "secondary": "#0058be",
+                        "on-error-container": "#93000a",
+                        "on-secondary-fixed-variant": "#004395",
+                        "on-primary-fixed": "#131b2e",
+                        "error-container": "#ffdad6",
+                        "surface-bright": "#f7f9fb",
+                        "on-surface-variant": "#45464d",
+                        "on-background": "#191c1e",
+                        "error": "#ba1a1a",
+                        "surface-container-highest": "#e0e3e5",
+                        "surface-dim": "#d8dadc",
+                        "on-tertiary": "#ffffff",
+                        "on-primary-container": "#7c839b",
+                        "primary-fixed": "#dae2fd",
+                        "primary-container": "#131b2e",
+                        "surface-container-lowest": "#ffffff",
+                        "on-error": "#ffffff",
+                        "tertiary-fixed": "#6ffbbe",
+                        "surface-container": "#eceef0",
+                        "tertiary-fixed-dim": "#4edea3",
+                        "tertiary": "#000000",
+                        "surface-container-high": "#e6e8ea",
+                        "on-tertiary-fixed-variant": "#005236",
+                        "on-secondary-container": "#fefcff",
+                        "on-primary": "#ffffff",
+                        "primary-fixed-dim": "#bec6e0",
+                        "outline-variant": "#c6c6cd",
+                        "tertiary-container": "#002113",
+                        "surface-variant": "#e0e3e5",
+                        "secondary-container": "#2170e4",
+                        "surface-container-low": "#f2f4f6",
+                        "on-tertiary-container": "#009668",
+                        "on-tertiary-fixed": "#002113",
+                        "inverse-on-surface": "#eff1f3",
+                        "outline": "#76777d",
+                        "on-surface": "#191c1e",
+                        "on-primary-fixed-variant": "#3f465c",
+                        "on-secondary-fixed": "#001a42",
+                        "on-secondary": "#ffffff",
+                        "inverse-surface": "#2d3133",
+                        "surface-tint": "#565e74",
+                        "surface": "#f7f9fb",
+                        "inverse-primary": "#bec6e0",
+                        "secondary-fixed-dim": "#adc6ff",
+                        "secondary-fixed": "#d8e2ff",
+                        "background": "#f7f9fb",
+                        "primary": "#000000"
+                    },
+                    "borderRadius": {
+                        "DEFAULT": "0.25rem",
+                        "lg": "0.5rem",
+                        "xl": "0.75rem",
+                        "full": "9999px"
+                    },
+                    "spacing": {
+                        "sidebar-width": "260px",
+                        "stack-lg": "24px",
+                        "stack-md": "16px",
+                        "container-max": "1440px",
+                        "stack-sm": "8px",
+                        "margin-page": "32px",
+                        "gutter": "24px"
+                    },
+                    "fontFamily": {
+                        "body-md": ["Inter"],
+                        "headline-md": ["Inter"],
+                        "headline-sm": ["Inter"],
+                        "display-sm": ["Inter"],
+                        "label-md": ["Geist"],
+                        "body-lg": ["Inter"],
+                        "body-sm": ["Inter"],
+                        "label-sm": ["Geist"]
+                    },
+                    "fontSize": {
+                        "body-md": ["14px", { "lineHeight": "20px", "fontWeight": "400" }],
+                        "headline-md": ["24px", { "lineHeight": "32px", "letterSpacing": "-0.01em", "fontWeight": "600" }],
+                        "headline-sm": ["20px", { "lineHeight": "28px", "fontWeight": "600" }],
+                        "display-sm": ["30px", { "lineHeight": "38px", "letterSpacing": "-0.02em", "fontWeight": "700" }],
+                        "label-md": ["13px", { "lineHeight": "16px", "letterSpacing": "0.02em", "fontWeight": "500" }],
+                        "body-lg": ["16px", { "lineHeight": "24px", "fontWeight": "400" }],
+                        "body-sm": ["12px", { "lineHeight": "18px", "fontWeight": "400" }],
+                        "label-sm": ["11px", { "lineHeight": "14px", "letterSpacing": "0.05em", "fontWeight": "600" }]
+                    }
+                }
+            }
+        }
+    </script>
+<style>
+        .material-symbols-outlined {
+            font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24;
+        }
+        .material-symbols-outlined[style*="'FILL' 1"] {
+            font-variation-settings: 'FILL' 1, 'wght' 400, 'GRAD' 0, 'opsz' 24;
+        }
+
+        /* Sub-tab active indicator animation */
+        .tab-indicator {
+            transition: transform 0.3s ease, width 0.3s ease;
+        }
+    </style>
+</head>
+<body class="bg-background text-on-background font-body-md min-h-screen overflow-x-hidden antialiased">
+<!-- JSON: TopAppBar -->
+<header class="fixed top-0 right-0 w-[calc(100%-260px)] h-16 bg-surface dark:bg-surface-dim text-primary dark:text-primary-fixed-dim font-label-md text-label-md border-b border-outline-variant dark:border-outline flex justify-between items-center px-margin-page w-full max-w-container-max z-40">
+<!-- Search Area -->
+<div class="flex items-center flex-1 max-w-md relative group">
+<span class="material-symbols-outlined absolute left-3 text-on-surface-variant group-focus-within:text-secondary transition-colors" data-icon="search">search</span>
+<input class="w-full pl-10 pr-4 py-2 bg-surface-container-lowest border border-outline-variant rounded-lg text-body-md focus:outline-none focus:border-secondary focus:ring-2 focus:ring-secondary/20 transition-all placeholder:text-on-surface-variant" placeholder="Search skills, users, or settings..." type="text"/>
+</div>
+<!-- Trailing Actions -->
+<div class="flex items-center gap-stack-md ml-auto">
+<button class="px-4 py-2 bg-secondary text-on-secondary rounded-lg font-label-md hover:bg-secondary-container hover:text-on-secondary-container transition-colors duration-200 ease-in-out">
+                Check for Updates
+            </button>
+<div class="flex items-center gap-2">
+<button class="p-2 rounded-full text-on-surface-variant hover:bg-surface-variant hover:text-secondary transition-colors duration-200 ease-in-out flex items-center justify-center relative">
+<span class="material-symbols-outlined" data-icon="notifications">notifications</span>
+<span class="absolute top-1.5 right-1.5 w-2 h-2 bg-error rounded-full"></span>
+</button>
+<button class="p-2 rounded-full text-on-surface-variant hover:bg-surface-variant hover:text-secondary transition-colors duration-200 ease-in-out flex items-center justify-center">
+<span class="material-symbols-outlined" data-icon="help_outline">help_outline</span>
+</button>
+</div>
+<div class="h-8 w-px bg-outline-variant mx-2"></div>
+<div class="w-8 h-8 rounded-full bg-surface-container-highest overflow-hidden border border-outline-variant cursor-pointer hover:border-secondary transition-colors flex-shrink-0">
+<img alt="User Profile" class="w-full h-full object-cover" data-alt="A close up portrait of a professional corporate user with neat attire, lit softly in a modern white studio setting, representing a realistic and trustworthy avatar for an enterprise web application. The lighting is bright and clean, reinforcing a crisp light-mode aesthetic." src="https://lh3.googleusercontent.com/aida-public/AB6AXuBIPnwugIrlY3oWdquDQzeeHn4ADSFPHyroyAmV2xDnUXdByl-5JDmqSFXEBr0HjPBysYhZUm2Q4nO4bQkkyRUnojCPUB4nWJb_Uzb4TiJkeR_rd_dVJtESVZWEulyPhjzL0b2NFbn7d6gCWYvIhF0AnSVwZdUQXK72vxImNZeNLlgguU3YG5oR7lK8Shp9zuPAV9yJVlFW4U6tbabsQhcI_m0HCWEiYGmHwloU9YEC3Lm-6aRjEYuCpPfjlr3v6ttkyiDBWax4R9uV"/>
+</div>
+</div>
+</header>
+<!-- JSON: SideNavBar -->
+<nav class="fixed left-0 top-0 h-full w-[260px] bg-primary-container dark:bg-surface-container-lowest border-r border-outline-variant dark:border-outline flex flex-col p-4 space-y-2 z-50">
+<!-- Brand -->
+<div class="flex items-center gap-3 px-3 py-4 mb-4">
+<div class="w-8 h-8 bg-secondary rounded flex items-center justify-center text-on-secondary shadow-sm">
+<span class="material-symbols-outlined text-[20px]" data-icon="hub">hub</span>
+</div>
+<div>
+<h1 class="font-headline-sm text-headline-sm font-bold text-on-primary-fixed dark:text-on-secondary-fixed tracking-tight">SkillManager</h1>
+<p class="font-label-sm text-label-sm text-on-primary-container opacity-80 uppercase tracking-wider">Systematic Control</p>
+</div>
+</div>
+<!-- Navigation Links -->
+<div class="flex-1 space-y-1">
+<a class="flex items-center gap-3 px-4 py-3 rounded-lg text-on-primary-container dark:text-on-surface-variant hover:bg-surface-variant hover:text-on-secondary-container transition-colors duration-200 ease-in-out group" href="#">
+<span class="material-symbols-outlined group-hover:text-secondary transition-colors" data-icon="dashboard">dashboard</span>
+<span class="font-label-md text-label-md">Dashboard</span>
+</a>
+<a class="flex items-center gap-3 px-4 py-3 rounded-lg text-on-primary-container dark:text-on-surface-variant hover:bg-surface-variant hover:text-on-secondary-container transition-colors duration-200 ease-in-out group" href="#">
+<span class="material-symbols-outlined group-hover:text-secondary transition-colors" data-icon="storefront">storefront</span>
+<span class="font-label-md text-label-md">Marketplace</span>
+</a>
+<!-- Active State Semantically matched to "Marketplace" or "My Skills" since we are viewing a specific skill details. Let's assume Marketplace for discovering a skill, or My Skills if they own it. The prompt says "Skill Details screen". Let's map it to "Marketplace" as if exploring it. Actually, "My Skills" is a better fit for detailed management. Let's use My Skills. -->
+<a class="flex items-center gap-3 px-4 py-3 bg-secondary text-on-secondary rounded-lg font-bold shadow-[0px_4px_6px_-1px_rgba(15,23,42,0.05)] transition-all duration-200 ease-in-out" href="#">
+<span class="material-symbols-outlined" data-icon="psychology">psychology</span>
+<span class="font-label-md text-label-md">My Skills</span>
+</a>
+<a class="flex items-center gap-3 px-4 py-3 rounded-lg text-on-primary-container dark:text-on-surface-variant hover:bg-surface-variant hover:text-on-secondary-container transition-colors duration-200 ease-in-out group" href="#">
+<span class="material-symbols-outlined group-hover:text-secondary transition-colors" data-icon="leaderboard">leaderboard</span>
+<span class="font-label-md text-label-md">Analytics</span>
+</a>
+<a class="flex items-center gap-3 px-4 py-3 rounded-lg text-on-primary-container dark:text-on-surface-variant hover:bg-surface-variant hover:text-on-secondary-container transition-colors duration-200 ease-in-out group" href="#">
+<span class="material-symbols-outlined group-hover:text-secondary transition-colors" data-icon="settings">settings</span>
+<span class="font-label-md text-label-md">Settings</span>
+</a>
+</div>
+<!-- Bottom Sidebar Status -->
+<div class="mt-auto pt-4 border-t border-outline-variant/50">
+<div class="flex items-center gap-3 px-3 py-2 text-on-primary-container opacity-80">
+<span class="material-symbols-outlined text-[16px]" data-icon="cloud_done">cloud_done</span>
+<span class="font-body-sm text-body-sm">All systems operational</span>
+</div>
+</div>
+</nav>
+<!-- Main Content Canvas -->
+<main class="ml-[260px] mt-16 p-margin-page max-w-container-max">
+<!-- Breadcrumb & Back -->
+<div class="flex items-center gap-2 text-on-surface-variant mb-stack-lg">
+<button class="flex items-center hover:text-secondary transition-colors group">
+<span class="material-symbols-outlined text-[20px]" data-icon="arrow_back">arrow_back</span>
+<span class="font-label-md text-label-md ml-1">Back to Library</span>
+</button>
+<span class="text-outline mx-2">/</span>
+<span class="font-label-md text-label-md">Data Processing</span>
+<span class="text-outline mx-2">/</span>
+<span class="font-label-md text-label-md text-on-background font-semibold">PDF Parser</span>
+</div>
+<div class="flex flex-col lg:flex-row gap-gutter">
+<!-- Left Column: Primary Details & Tabs -->
+<div class="flex-1 flex flex-col gap-stack-lg">
+<!-- Hero Skill Header Card -->
+<div class="bg-surface-container-lowest border border-outline-variant rounded-xl p-8 relative overflow-hidden shadow-sm">
+<!-- Subtle background decoration -->
+<div class="absolute -right-20 -top-20 w-64 h-64 bg-secondary/5 rounded-full blur-3xl pointer-events-none"></div>
+<div class="flex items-start gap-6 relative z-10">
+<!-- Skill Icon -->
+<div class="w-24 h-24 bg-surface rounded-xl border border-outline-variant shadow-[0px_4px_6px_-1px_rgba(15,23,42,0.05)] flex items-center justify-center flex-shrink-0 relative overflow-hidden group">
+<!-- Abstract texture background instead of generated image to keep clean UI -->
+<div class="absolute inset-0 bg-gradient-to-br from-surface to-surface-variant opacity-50"></div>
+<span class="material-symbols-outlined text-[48px] text-secondary relative z-10" data-icon="picture_as_pdf" style="font-variation-settings: 'FILL' 1;">picture_as_pdf</span>
+</div>
+<!-- Header Text Info -->
+<div class="flex-1">
+<div class="flex items-start justify-between">
+<div>
+<div class="flex items-center gap-3 mb-2">
+<h2 class="font-display-sm text-display-sm text-on-background">PDF Parser</h2>
+<span class="px-2.5 py-1 bg-surface-container-high text-on-surface-variant rounded font-label-sm text-label-sm border border-outline-variant/50">v2.4.1</span>
+</div>
+<p class="font-body-lg text-body-lg text-on-surface-variant max-w-2xl">
+                                        Advanced OCR and text extraction tool for unstructured PDF documents. Automatically identifies tables, structured lists, and key-value pairs with 99.4% accuracy.
+                                    </p>
+</div>
+<!-- Primary Action -->
+<button class="px-6 py-2.5 bg-secondary text-on-secondary rounded-lg font-label-md hover:bg-secondary-container transition-colors shadow-sm whitespace-nowrap flex items-center gap-2">
+<span class="material-symbols-outlined text-[18px]" data-icon="play_arrow" style="font-variation-settings: 'FILL' 1;">play_arrow</span>
+                                    Run Test Task
+                                </button>
+</div>
+<!-- Developer Info & Quick Stats -->
+<div class="flex items-center gap-6 mt-6 pt-6 border-t border-outline-variant/30">
+<div class="flex items-center gap-2">
+<div class="w-6 h-6 rounded bg-surface-container-highest border border-outline-variant flex items-center justify-center">
+<span class="material-symbols-outlined text-[14px] text-on-surface-variant" data-icon="code">code</span>
+</div>
+<span class="font-label-md text-label-md text-on-surface-variant">Acme Data Solutions</span>
+</div>
+<div class="w-1 h-1 rounded-full bg-outline-variant"></div>
+<div class="flex items-center gap-1.5 text-on-surface-variant">
+<span class="material-symbols-outlined text-[16px] text-secondary" data-icon="star" style="font-variation-settings: 'FILL' 1;">star</span>
+<span class="font-label-md text-label-md text-on-background font-semibold">4.8</span>
+<span class="font-body-sm text-body-sm">(124 reviews)</span>
+</div>
+<div class="w-1 h-1 rounded-full bg-outline-variant"></div>
+<div class="flex items-center gap-1.5 text-on-surface-variant">
+<span class="material-symbols-outlined text-[16px]" data-icon="download">download</span>
+<span class="font-label-md text-label-md text-on-background">12.4k installs</span>
+</div>
+</div>
+</div>
+</div>
+</div>
+<!-- Sub-Navigation Tabs -->
+<div class="border-b border-outline-variant mt-2 sticky top-16 z-30 bg-background/90 backdrop-blur-sm pt-2">
+<div class="flex gap-8 px-2 relative" id="tab-container">
+<button class="pb-3 font-label-md text-label-md text-primary border-b-2 border-primary transition-colors" data-tab="overview">Overview</button>
+<button class="pb-3 font-label-md text-label-md text-on-surface-variant hover:text-secondary transition-colors" data-tab="usage">Usage Statistics</button>
+<button class="pb-3 font-label-md text-label-md text-on-surface-variant hover:text-secondary transition-colors" data-tab="reviews">Reviews &amp; Ratings</button>
+<button class="pb-3 font-label-md text-label-md text-on-surface-variant hover:text-secondary transition-colors" data-tab="logs">Execution Logs</button>
+</div>
+</div>
+<!-- Tab Content: Overview (Active by default, placeholder for rest) -->
+<div class="bg-surface-container-lowest border border-outline-variant rounded-xl p-6 shadow-sm min-h-[400px]">
+<h3 class="font-headline-sm text-headline-sm mb-4">Skill Configuration</h3>
+<div class="grid grid-cols-2 gap-stack-md">
+<!-- Form Inputs Example -->
+<div class="space-y-1">
+<label class="font-label-md text-label-md text-on-surface-variant">API Endpoint</label>
+<input class="w-full px-3 py-2 bg-surface-container-low border border-outline-variant rounded bg-opacity-50 text-body-md text-on-surface-variant cursor-default" readonly="" type="text" value="https://api.acme.io/v2/parse"/>
+</div>
+<div class="space-y-1">
+<label class="font-label-md text-label-md text-on-surface-variant">Timeout Limit (ms)</label>
+<input class="w-full px-3 py-2 bg-surface-container-lowest border border-outline-variant rounded text-body-md focus:outline-none focus:border-secondary focus:ring-2 focus:ring-secondary/20 transition-all" type="number" value="30000"/>
+</div>
+</div>
+<!-- Progress Indicator Example inside content -->
+<div class="mt-8">
+<div class="flex justify-between items-end mb-2">
+<h4 class="font-label-md text-label-md">Model Cache Status</h4>
+<span class="font-body-sm text-body-sm text-on-surface-variant">100% Synced</span>
+</div>
+<div class="w-full bg-surface-variant rounded-full h-1 overflow-hidden">
+<div class="bg-[#10B981] h-1 rounded-full w-full"></div>
+</div>
+</div>
+<!-- Usage Chart Placeholder (Bento Grid style) -->
+<div class="mt-8 pt-8 border-t border-outline-variant/50">
+<h3 class="font-headline-sm text-headline-sm mb-4">Performance Insights</h3>
+<div class="grid grid-cols-3 gap-4">
+<div class="col-span-2 bg-surface rounded-lg border border-outline-variant p-4 flex flex-col items-center justify-center min-h-[200px] relative overflow-hidden">
+<!-- Chart structural mockup following guidelines -->
+<div class="absolute inset-0 p-4 flex flex-col justify-between opacity-20 pointer-events-none">
+<div class="w-full h-px bg-outline"></div>
+<div class="w-full h-px bg-outline"></div>
+<div class="w-full h-px bg-outline"></div>
+<div class="w-full h-px bg-outline"></div>
+<div class="w-full h-px bg-outline"></div>
+</div>
+<span class="material-symbols-outlined text-outline-variant text-[48px] mb-2" data-icon="monitoring">monitoring</span>
+<span class="font-label-md text-label-md text-on-surface-variant">Execution Latency Chart (Switch to Usage tab for full view)</span>
+</div>
+<div class="col-span-1 flex flex-col gap-4">
+<div class="bg-surface rounded-lg border border-outline-variant p-4 flex-1 flex flex-col justify-center">
+<span class="font-label-sm text-label-sm text-on-surface-variant uppercase tracking-widest mb-1">Success Rate</span>
+<span class="font-display-sm text-display-sm text-[#10B981]">99.4%</span>
+</div>
+<div class="bg-surface rounded-lg border border-outline-variant p-4 flex-1 flex flex-col justify-center">
+<span class="font-label-sm text-label-sm text-on-surface-variant uppercase tracking-widest mb-1">Avg Latency</span>
+<span class="font-display-sm text-display-sm text-on-background">1.2s</span>
+</div>
+</div>
+</div>
+</div>
+</div>
+</div>
+<!-- Right Column: Sidebar Meta Info -->
+<aside class="w-full lg:w-80 flex flex-col gap-stack-md">
+<!-- Meta Info Card -->
+<div class="bg-surface-container-lowest border border-outline-variant rounded-xl p-5 shadow-sm">
+<h4 class="font-label-md text-label-md uppercase tracking-wider text-on-surface-variant mb-4 pb-2 border-b border-outline-variant/50">Skill Metadata</h4>
+<ul class="space-y-4">
+<li class="flex flex-col">
+<span class="font-label-sm text-label-sm text-on-surface-variant mb-1">Category</span>
+<div class="flex items-center gap-2">
+<span class="material-symbols-outlined text-[16px] text-secondary" data-icon="data_object">data_object</span>
+<span class="font-body-md text-body-md font-medium text-on-background">Data Processing</span>
+</div>
+</li>
+<li class="flex flex-col">
+<span class="font-label-sm text-label-sm text-on-surface-variant mb-1">License</span>
+<span class="font-body-md text-body-md text-on-background">Commercial - Tier 2</span>
+</li>
+<li class="flex flex-col">
+<span class="font-label-sm text-label-sm text-on-surface-variant mb-1">Last Updated</span>
+<span class="font-body-md text-body-md text-on-background">Oct 12, 2023 (14 days ago)</span>
+</li>
+<li class="flex flex-col">
+<span class="font-label-sm text-label-sm text-on-surface-variant mb-1">Last Used By You</span>
+<span class="font-body-md text-body-md text-on-background">Today, 09:41 AM</span>
+</li>
+<li class="flex flex-col">
+<span class="font-label-sm text-label-sm text-on-surface-variant mb-1">Capabilities</span>
+<div class="flex flex-wrap gap-2 mt-1">
+<span class="px-2 py-1 bg-surface rounded text-body-sm font-label-md border border-outline-variant">OCR</span>
+<span class="px-2 py-1 bg-surface rounded text-body-sm font-label-md border border-outline-variant">Tables</span>
+<span class="px-2 py-1 bg-surface rounded text-body-sm font-label-md border border-outline-variant">Signatures</span>
+</div>
+</li>
+</ul>
+<div class="mt-6 pt-4 border-t border-outline-variant/50">
+<button class="w-full py-2 bg-surface text-secondary border border-outline-variant rounded font-label-md hover:bg-secondary/5 transition-colors flex items-center justify-center gap-2">
+<span class="material-symbols-outlined text-[18px]" data-icon="file_download">file_download</span>
+                            Download Documentation
+                        </button>
+</div>
+</div>
+<!-- Active Dependencies Card -->
+<div class="bg-surface-container-lowest border border-outline-variant rounded-xl p-5 shadow-sm">
+<h4 class="font-label-md text-label-md uppercase tracking-wider text-on-surface-variant mb-4 pb-2 border-b border-outline-variant/50">Required Dependencies</h4>
+<div class="space-y-3">
+<div class="flex items-center justify-between">
+<div class="flex items-center gap-2">
+<span class="material-symbols-outlined text-[16px] text-outline" data-icon="memory">memory</span>
+<span class="font-body-md text-body-md">Core Vision ML</span>
+</div>
+<span class="font-label-sm text-label-sm text-[#10B981] bg-[#10B981]/10 px-2 py-0.5 rounded">Active</span>
+</div>
+<div class="flex items-center justify-between">
+<div class="flex items-center gap-2">
+<span class="material-symbols-outlined text-[16px] text-outline" data-icon="database">database</span>
+<span class="font-body-md text-body-md">Vector Storage</span>
+</div>
+<span class="font-label-sm text-label-sm text-[#10B981] bg-[#10B981]/10 px-2 py-0.5 rounded">Active</span>
+</div>
+</div>
+</div>
+</aside>
+</div>
+</main>
+<script>
+        // Simple JS for tab interaction visual feedback (mocking functionality)
+        document.addEventListener('DOMContentLoaded', () => {
+            const tabs = document.querySelectorAll('#tab-container button');
+
+            tabs.forEach(tab => {
+                tab.addEventListener('click', (e) => {
+                    // Reset all tabs
+                    tabs.forEach(t => {
+                        t.classList.remove('text-primary', 'border-b-2', 'border-primary');
+                        t.classList.add('text-on-surface-variant');
+                    });
+
+                    // Set active tab
+                    const target = e.target;
+                    target.classList.remove('text-on-surface-variant');
+                    target.classList.add('text-primary', 'border-b-2', 'border-primary');
+
+                    // In a real app, this would hide/show content sections based on data-tab
+                });
+            });
+        });
+    </script>
+</body></html>
