@@ -18,8 +18,15 @@ export const librarySkillSummarySchema = z
     id: z.string().min(1),
     name: z.string().min(1),
     sourceAgent: z.string().min(1),
+    agentCode: z.string().min(1),
     path: z.string().min(1),
     visibilityStatus: z.string().min(1),
+    rootPath: z.string().min(1),
+    scope: z.string().min(1),
+    rootKind: z.enum(['user', 'project']),
+    writable: z.boolean(),
+    installationId: z.string().min(1).optional(),
+    ownership: z.enum(['indexed', 'app-owned']),
     favorite: z.boolean().optional()
   })
   .strict();
@@ -120,6 +127,54 @@ export const importedSkillResultSchema = z
   .strict();
 
 export type ImportedSkillResult = z.infer<typeof importedSkillResultSchema>;
+
+const projectionModeSchema = z.enum(['copy', 'symlink']);
+const rootKindSchema = z.enum(['user', 'project']);
+
+const installPlanWriteSchema = z
+  .object({
+    relativePath: z.string().min(1),
+    targetPath: z.string().min(1),
+    sourceHash: z.string().min(1),
+    action: projectionModeSchema,
+    status: z.enum(['clean', 'conflict', 'blocked']),
+    reason: z.string().min(1).optional()
+  })
+  .strict();
+
+export const installPlanSchema = z
+  .object({
+    id: z.string().min(1),
+    skillId: z.string().min(1),
+    skillVersionId: z.string().min(1),
+    skillName: z.string().min(1),
+    skillSlug: z.string().min(1),
+    targetRoot: z.string().min(1),
+    targetSkillPath: z.string().min(1),
+    agentCode: z.string().min(1),
+    agentDisplayName: z.string().min(1),
+    adapterVersion: z.string().min(1),
+    scope: z.string().min(1),
+    rootKind: rootKindSchema.optional(),
+    projectionMode: projectionModeSchema,
+    status: z.enum(['ready', 'conflict', 'blocked']),
+    writes: z.array(installPlanWriteSchema)
+  })
+  .strict();
+
+export type InstallPlan = z.infer<typeof installPlanSchema>;
+
+export const installResultSchema = z
+  .object({
+    status: z.literal('installed'),
+    installationId: z.string().min(1),
+    skillId: z.string().min(1),
+    targetSkillPath: z.string().min(1),
+    files: z.array(installPlanWriteSchema)
+  })
+  .strict();
+
+export type InstallResult = z.infer<typeof installResultSchema>;
 
 const managementFlowStateSchema = z
   .object({
@@ -698,6 +753,32 @@ export const desktopShellContract = {
     request: skillIdRequestSchema,
     response: skillDetailSchema
   },
+  installCreatePlan: {
+    channel: 'install.createPlan',
+    request: z
+      .object({
+        skillId: z.string().min(1),
+        targetRoot: z.string().min(1),
+        agentCode: z.string().min(1),
+        agentDisplayName: z.string().min(1),
+        adapterVersion: z.string().min(1),
+        scope: z.string().min(1),
+        rootKind: rootKindSchema.optional(),
+        projectionMode: projectionModeSchema
+      })
+      .strict(),
+    response: installPlanSchema
+  },
+  installApplyPlan: {
+    channel: 'install.applyPlan',
+    request: z.object({ plan: installPlanSchema, confirmOverwrite: z.boolean() }).strict(),
+    response: installResultSchema
+  },
+  installUninstall: {
+    channel: 'install.uninstall',
+    request: z.object({ installationId: z.string().min(1) }).strict(),
+    response: z.object({ status: z.literal('uninstalled'), installationId: z.string().min(1) }).strict()
+  },
   versionList: {
     channel: 'version.list',
     request: skillIdRequestSchema,
@@ -866,6 +947,11 @@ export const desktopShellContract = {
     request: z.object({ directoryId: z.string().min(1) }).strict(),
     response: statusOnlyResultSchema
   },
+  discoverListSources: {
+    channel: 'discover.listSources',
+    request: emptyRequestSchema,
+    response: z.array(discoverSourceSchema)
+  },
   discoverAddSource: {
     channel: 'discover.addSource',
     request: z.object({ name: z.string().min(1), sourceType: z.enum(['local', 'git']), url: z.string().min(1) }).strict(),
@@ -875,6 +961,11 @@ export const desktopShellContract = {
     channel: 'discover.previewSource',
     request: z.object({ sourceId: z.string().min(1) }).strict(),
     response: discoverPreviewResultSchema
+  },
+  discoverRemoveSource: {
+    channel: 'discover.removeSource',
+    request: z.object({ sourceId: z.string().min(1) }).strict(),
+    response: statusOnlyResultSchema
   }
 } as const;
 

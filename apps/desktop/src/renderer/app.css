@@ -15,7 +15,8 @@ body,
 }
 
 button,
-input {
+input,
+select {
   font: inherit;
 }
 
@@ -284,6 +285,28 @@ button {
   color: #637083;
 }
 
+.tab-list {
+  min-width: 0;
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.tab-list button {
+  min-height: 36px;
+  border: 1px solid #c9d3dd;
+  border-radius: 8px;
+  padding: 0 12px;
+  color: #1d2b3a;
+  background: #ffffff;
+}
+
+.tab-list button[aria-selected="true"] {
+  color: #ffffff;
+  border-color: #246bfe;
+  background: #246bfe;
+}
+
 .table {
   display: grid;
 }
@@ -296,6 +319,13 @@ button {
   align-items: center;
   border-bottom: 1px solid #e8eef4;
   min-height: 46px;
+}
+
+.skills-table .table-head,
+.skills-table .table-row {
+  grid-template-columns:
+    minmax(150px, 1fr) minmax(180px, 1.2fr) minmax(100px, 0.55fr)
+    minmax(90px, 0.45fr) minmax(90px, 0.45fr);
 }
 
 .table-head {
@@ -359,12 +389,29 @@ button {
   color: #172033;
 }
 
+.form-grid select {
+  min-width: 0;
+  min-height: 38px;
+  border: 1px solid #c9d3dd;
+  border-radius: 8px;
+  padding: 0 10px;
+  color: #172033;
+  background: #ffffff;
+}
+
+.compact-form {
+  margin-bottom: 12px;
+}
+
 .candidate-list {
+  min-width: 0;
   display: grid;
   gap: 10px;
 }
 
 .candidate {
+  min-width: 0;
+  max-width: 100%;
   border: 1px solid #e8eef4;
   border-radius: 8px;
   padding: 12px;
@@ -373,11 +420,74 @@ button {
 
 .candidate strong,
 .candidate span {
+  max-width: 100%;
   display: block;
   min-width: 0;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+.candidate-actions {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+  margin-top: 10px;
+}
+
+.candidate-actions button,
+.inline-action,
+.conflict-box button {
+  min-height: 32px;
+  border: 0;
+  border-radius: 8px;
+  padding: 0 10px;
+  color: #ffffff;
+  background: #246bfe;
+}
+
+.inline-action {
+  color: #1d2b3a;
+  background: #e8eef4;
+}
+
+.muted {
+  color: #637083;
+  font-size: 13px;
+}
+
+.root-section {
+  display: grid;
+  gap: 8px;
+  margin-top: 12px;
+}
+
+.root-header {
+  min-width: 0;
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  color: #637083;
+  font-size: 13px;
+}
+
+.root-header strong,
+.root-header span {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.conflict-box {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  border: 1px solid #f5c26b;
+  border-radius: 8px;
+  padding: 10px;
+  background: #fff8e6;
 }
 
 .candidate span {
@@ -395,6 +505,10 @@ button {
   gap: 12px;
   align-items: center;
   border-bottom: 1px solid #e8eef4;
+}
+
+.key-row.three-col {
+  grid-template-columns: minmax(80px, 0.35fr) minmax(0, 1fr) minmax(80px, auto);
 }
 
 .key-row strong,

@@ -17,7 +17,7 @@ describe('collection service', () => {
     await Promise.all(tempDirectories.splice(0).map((directory) => rm(directory, { recursive: true })));
   });
 
-  it('creates local inventory collections without export package APIs', async () => {
+  it('creates local skill collections without export package APIs', async () => {
     const workspace = await tempDir();
     const sourceA = await createSkillFixture(path.join(workspace, 'source-a'), 'collection-a');
     const sourceB = await createSkillFixture(path.join(workspace, 'source-b'), 'collection-b');

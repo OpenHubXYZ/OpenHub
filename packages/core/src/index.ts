@@ -1,12 +1,13 @@
 export const corePackage = {
   name: '@theopenhub/core',
-  phase: 'Phase 10 inventory operations'
+  phase: 'Phase 10 skills workspace operations'
 } as const;
 
 export { createCollectionService } from './collection-service';
 export { createContentStore } from './content-store';
 export { createDiscoverService } from './discover-service';
 export { createImportService } from './import-service';
+export { InstallServiceError, createInstallService } from './install-service';
 export { scanAgentLibraries } from './library-scanner';
 export { PathSafetyError, assertZipEntryPathSafe, ensurePathInsideRoot } from './path-safety';
 export { PluginHostError, PluginManifestError, createPluginService } from './plugin-service';
@@ -45,6 +46,18 @@ export type {
   ImportService,
   ImportSourceType
 } from './import-service';
+export type {
+  ApplyInstallPlanInput,
+  CreateInstallPlanInput,
+  InstallErrorCode,
+  InstallPlan,
+  InstallPlanStatus,
+  InstallPlanWrite,
+  InstallResult,
+  InstallService,
+  InstallWriteStatus,
+  ProjectionMode
+} from './install-service';
 export type {
   IndexedSkillResult,
   ScanAgentLibrariesInput,

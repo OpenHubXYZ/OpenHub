@@ -376,6 +376,46 @@ const migrations: Migration[] = [
           on plugin_catalog_entries(plugin_id);
       `);
     }
+  },
+  {
+    version: 10,
+    name: '010_skill_installations',
+    up(database) {
+      database.exec(`
+        create table installations (
+          id text primary key,
+          skill_id text not null references skills(id) on delete cascade,
+          skill_version_id text not null references skill_versions(id) on delete cascade,
+          agent_root_id text not null references agent_roots(id) on delete cascade,
+          target_root_path text not null,
+          skill_path text not null,
+          projection_mode text not null check(projection_mode in ('copy', 'symlink')),
+          read_only_locked integer not null default 0,
+          status text not null default 'installed',
+          installed_at text not null default current_timestamp,
+          uninstalled_at text
+        );
+
+        create table installation_files (
+          id text primary key,
+          installation_id text not null references installations(id) on delete cascade,
+          relative_path text not null,
+          target_path text not null,
+          source_hash text not null,
+          projection_mode text not null check(projection_mode in ('copy', 'symlink')),
+          removed_at text,
+          unique(installation_id, target_path)
+        );
+
+        alter table indexed_skill_locations add column installation_id text;
+        alter table indexed_skill_locations add column ownership text not null default 'indexed';
+
+        create index idx_installations_skill on installations(skill_id, status);
+        create index idx_installations_root on installations(agent_root_id, status);
+        create index idx_installation_files_install on installation_files(installation_id);
+        create index idx_indexed_skill_locations_install on indexed_skill_locations(installation_id);
+      `);
+    }
   }
 ];
 

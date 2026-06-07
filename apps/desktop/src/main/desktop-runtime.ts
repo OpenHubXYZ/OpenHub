@@ -10,6 +10,7 @@ import {
   createDiscoverService,
   createGitSyncDriver,
   createImportService,
+  createInstallService,
   createMockRestSyncDriver,
   createOsKeychainSecretStore,
   createPluginService,
@@ -84,6 +85,7 @@ export function createDesktopRuntime(input: CreateDesktopRuntimeInput): DesktopR
     contentStore,
     stagingDirectory: path.join(input.dataDirectory, 'staging')
   });
+  const install = createInstallService({ database, contentStore });
   const collections = createCollectionService({ database, contentStore });
   const versions = createVersionService({ database, contentStore });
   const settings = createSettingsService({ database });
@@ -228,6 +230,24 @@ export function createDesktopRuntime(input: CreateDesktopRuntimeInput): DesktopR
       if (channel === desktopShellContract.libraryDetail.channel) {
         const { skillId } = request as { skillId: string };
         return parseIpcResponse(channel, await skillDetail(database, contentStore, skillId));
+      }
+
+      if (channel === desktopShellContract.installCreatePlan.channel) {
+        return parseIpcResponse(
+          channel,
+          await install.createPlan(request as Parameters<typeof install.createPlan>[0])
+        );
+      }
+
+      if (channel === desktopShellContract.installApplyPlan.channel) {
+        return parseIpcResponse(
+          channel,
+          await install.applyPlan(request as Parameters<typeof install.applyPlan>[0])
+        );
+      }
+
+      if (channel === desktopShellContract.installUninstall.channel) {
+        return parseIpcResponse(channel, await install.uninstall(request as { installationId: string }));
       }
 
       if (channel === desktopShellContract.versionList.channel) {
@@ -416,6 +436,10 @@ export function createDesktopRuntime(input: CreateDesktopRuntimeInput): DesktopR
         return parseIpcResponse(channel, plugins.removePluginDirectory(request as { directoryId: string }));
       }
 
+      if (channel === desktopShellContract.discoverListSources.channel) {
+        return parseIpcResponse(channel, discover.listSources());
+      }
+
       if (channel === desktopShellContract.discoverAddSource.channel) {
         return parseIpcResponse(
           channel,
@@ -425,6 +449,10 @@ export function createDesktopRuntime(input: CreateDesktopRuntimeInput): DesktopR
 
       if (channel === desktopShellContract.discoverPreviewSource.channel) {
         return parseIpcResponse(channel, await discover.previewSource(request as { sourceId: string }));
+      }
+
+      if (channel === desktopShellContract.discoverRemoveSource.channel) {
+        return parseIpcResponse(channel, discover.removeSource(request as { sourceId: string }));
       }
 
       throw new Error(`Unhandled IPC channel: ${String(channel)}`);

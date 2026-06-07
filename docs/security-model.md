@@ -1,9 +1,9 @@
 # Security Model
 
-OpenHub is a local-first skills inventory. Its security model protects local
-data, renderer privileges, import staging, optional sync, and plugin execution.
-It does not include a Trust Center, source reputation score, security scan
-queue, or deploy-time blocking workflow.
+OpenHub is a local-first skills library. Its security model protects local
+data, renderer privileges, import staging, explicit app-owned root installs,
+optional sync, and plugin execution. It does not include a Trust Center, source
+reputation score, security scan queue, or deploy-time blocking workflow.
 
 ## Boundaries
 
@@ -13,7 +13,9 @@ queue, or deploy-time blocking workflow.
 - Imports are staged before parsing.
 - Paths are canonicalized before root-boundary decisions.
 - ZIP slip, path traversal, and symlink escape attempts are rejected.
-- Agent directories are read-only inventory inputs in the current runtime.
+- Agent directories are read-only for scanning by default. Root writes require
+  an explicit copy/symlink install plan, and uninstall may remove only
+  app-owned paths recorded in SQLite.
 - Sync and plugins are disabled by default.
 - Plugins register capabilities through a restricted host API and require
   explicit permission authorization before enabling.
@@ -27,7 +29,7 @@ Only canonical paths inside the staged root can be imported.
 
 The content-addressed store records imported file bytes by hash, and SQLite
 stores skill metadata, versions, file records, indexed locations, source
-previews, sync state, and plugin state.
+previews, installation files, sync state, and plugin state.
 
 ## Plugin Limits
 
@@ -40,5 +42,5 @@ complete JavaScript sandbox.
 
 OpenHub does not decide whether a skill is safe to run inside an external agent.
 Users and maintainers should inspect skill content directly before relying on
-it. Any future scanner, source reputation system, or deploy workflow requires a
-new accepted spec and tests before implementation.
+it. Any future scanner, source reputation system, or broad deploy workflow
+requires a new accepted spec and tests before implementation.

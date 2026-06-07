@@ -35,6 +35,15 @@ describe('renderer layout containment CSS', () => {
     expect(tagBlock).toContain('text-overflow: ellipsis;');
   });
 
+  it('contains long marketplace candidate paths inside the split panel', async () => {
+    const css = await readFile(cssPath, 'utf8');
+
+    expect(cssBlock(css, '.candidate-list')).toContain('min-width: 0;');
+    expect(cssBlock(css, '.candidate')).toContain('min-width: 0;');
+    expect(cssBlock(css, '.candidate')).toContain('max-width: 100%;');
+    expect(cssBlock(css, '.candidate strong,\n.candidate span')).toContain('max-width: 100%;');
+  });
+
   it('collapses split layouts on narrow screens', async () => {
     const css = await readFile(cssPath, 'utf8');
 

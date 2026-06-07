@@ -1,10 +1,13 @@
 import { FolderSearch, Home, Library, Plug, RefreshCw, Search, Settings, Star } from 'lucide-react';
-import { useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 
 import type {
   AgentRootTarget,
   DesktopWorkspaceState,
   DiscoverSkillPreview,
+  DiscoverSource,
+  InstallPlan,
+  LibraryScanResult,
   PluginRegistry
 } from '@theopenhub/shared';
 
@@ -20,10 +23,24 @@ import {
 
 const pageIcons = {
   home: Home,
-  inventory: Library,
-  sources: FolderSearch,
+  skills: Library,
   settings: Settings
 } as const;
+
+const agentTabs = [
+  { key: 'codex', label: 'Codex' },
+  { key: 'claude', label: 'Claude' },
+  { key: 'gemini', label: 'Gemini' },
+  { key: 'opencode', label: 'OpenCode' },
+  { key: 'agents', label: 'Agents' },
+  { key: 'marketplace', label: 'Marketplace' }
+] as const;
+
+type SkillsTabKey = (typeof agentTabs)[number]['key'];
+type RootAgentCode = 'codex' | 'claude' | 'gemini' | 'opencode' | 'agents';
+type AsyncGuard = () => boolean;
+
+const defaultPluginRegistry: PluginRegistry = { agentAdapters: [], importers: [], syncDrivers: [] };
 
 export interface AppProps {
   initialState?: DesktopWorkspaceState;
@@ -36,46 +53,27 @@ export function App({
   initialState,
   initialAgentRoots = [],
   initialPreviewSkills = [],
-  initialPluginRegistry = { agentAdapters: [], importers: [], syncDrivers: [] }
+  initialPluginRegistry = defaultPluginRegistry
 }: AppProps) {
   const [activePage, setActivePage] = useState<PageKey>('home');
   const [state, setState] = useState<DesktopWorkspaceState>(initialState ?? createEmptyWorkspaceState());
   const [agentRoots, setAgentRoots] = useState<AgentRootTarget[]>(initialAgentRoots);
   const [previewSkills, setPreviewSkills] = useState<DiscoverSkillPreview[]>(initialPreviewSkills);
+  const [discoverSources, setDiscoverSources] = useState<DiscoverSource[]>([]);
   const [pluginRegistry, setPluginRegistry] = useState<PluginRegistry>(initialPluginRegistry);
   const [query, setQuery] = useState('');
+  const [skillsTab, setSkillsTab] = useState<SkillsTabKey>('codex');
   const [sourceName, setSourceName] = useState('Local Source');
   const [sourceUrl, setSourceUrl] = useState('');
+  const [selectedSourceId, setSelectedSourceId] = useState('');
+  const [rootAgentCode, setRootAgentCode] = useState<RootAgentCode>('codex');
+  const [rootPath, setRootPath] = useState('');
+  const [selectedTargetRoot, setSelectedTargetRoot] = useState('');
+  const [projectionMode, setProjectionMode] = useState<'copy' | 'symlink'>('copy');
+  const [pendingPlan, setPendingPlan] = useState<InstallPlan | null>(null);
+  const [importedCandidates, setImportedCandidates] = useState<Record<string, string>>({});
   const [status, setStatus] = useState('Ready');
-
-  useEffect(() => {
-    let cancelled = false;
-    const api = window.theOpenHub;
-    if (!api) {
-      return;
-    }
-
-    Promise.all([
-      api.getWorkspaceState(),
-      api.listAgentRoots(),
-      api.getPluginRegistry?.() ?? Promise.resolve(initialPluginRegistry)
-    ])
-      .then(([workspace, roots, registry]) => {
-        if (cancelled) {
-          return;
-        }
-        setState(workspace);
-        setAgentRoots(roots);
-        setPluginRegistry(registry);
-      })
-      .catch((error: unknown) => {
-        setStatus(error instanceof Error ? error.message : String(error));
-      });
-
-    return () => {
-      cancelled = true;
-    };
-  }, [initialPluginRegistry]);
+  const mountedRef = useRef(true);
 
   const viewModel = useMemo(() => createWorkspaceViewModel(state), [state]);
   const uxModel = useMemo(
@@ -89,28 +87,168 @@ export function App({
       }),
     [activePage, agentRoots, previewSkills, state]
   );
-  const inventoryRows = query.trim()
+  const skillRows = query.trim()
     ? state.librarySkills.filter((skill) => skill.name.toLowerCase().includes(query.trim().toLowerCase()))
     : state.librarySkills;
+  const homeMetrics = useMemo(
+    () => [
+      {
+        label: 'Library skills',
+        value: String(state.skills.length || state.librarySkills.length),
+        detail: 'SQLite library'
+      },
+      {
+        label: 'Root locations',
+        value: String(state.librarySkills.length),
+        detail: 'Indexed rows'
+      },
+      {
+        label: 'Local roots',
+        value: String(agentRoots.length),
+        detail: 'Settings roots'
+      },
+      {
+        label: 'Marketplace sources',
+        value: String(discoverSources.length),
+        detail: 'Configured sources'
+      },
+      {
+        label: 'App-owned installs',
+        value: String(state.librarySkills.filter((skill) => skill.ownership === 'app-owned').length),
+        detail: 'Managed files'
+      }
+    ],
+    [agentRoots.length, discoverSources.length, state.librarySkills, state.skills.length]
+  );
 
-  async function refreshWorkspace() {
-    const workspace = await window.theOpenHub?.getWorkspaceState();
-    if (workspace) {
-      setState(workspace);
+  const setRootsAndSources = useCallback((roots: AgentRootTarget[], sources: DiscoverSource[]) => {
+    setAgentRoots(roots);
+    setDiscoverSources(sources);
+    setSelectedSourceId((current) => current || sources[0]?.id || '');
+    setSelectedTargetRoot((current) => current || roots.find((root) => root.writable)?.rootPath || roots[0]?.rootPath || '');
+  }, []);
+
+  const isInactive = useCallback((isCancelled?: AsyncGuard) => !mountedRef.current || Boolean(isCancelled?.()), []);
+
+  const refreshRootsAndSources = useCallback(
+    async (isCancelled?: AsyncGuard) => {
+      const api = window.theOpenHub;
+      if (!api) {
+        return;
+      }
+      const [roots, sources] = await Promise.all([
+        api.listAgentRoots(),
+        api.listDiscoverSources?.() ?? Promise.resolve([])
+      ]);
+      if (isInactive(isCancelled)) {
+        return;
+      }
+      setRootsAndSources(roots, sources);
+    },
+    [isInactive, setRootsAndSources]
+  );
+
+  const refreshWorkspace = useCallback(
+    async (isCancelled?: AsyncGuard) => {
+      const workspace = await window.theOpenHub?.getWorkspaceState();
+      if (isInactive(isCancelled)) {
+        return;
+      }
+      if (workspace) {
+        setState(workspace);
+      }
+      await refreshRootsAndSources(isCancelled).catch(() => undefined);
+    },
+    [isInactive, refreshRootsAndSources]
+  );
+
+  const runRootScan = useCallback(
+    async (isCancelled?: AsyncGuard) => {
+      const api = window.theOpenHub;
+      if (!api?.scanAgentRoots) {
+        return;
+      }
+      if (!isInactive(isCancelled)) {
+        setStatus('Scanning roots...');
+      }
+      try {
+        const scan = await api.scanAgentRoots();
+        if (!scan || isInactive(isCancelled)) {
+          return;
+        }
+        setState((current) => mergeScanIntoWorkspaceState(current, scan));
+        await refreshWorkspace(isCancelled).catch(() => undefined);
+        if (!isInactive(isCancelled)) {
+          setStatus(formatScanStatus(scan));
+        }
+      } catch (error: unknown) {
+        if (!isInactive(isCancelled)) {
+          setStatus(formatError(error));
+        }
+      }
+    },
+    [isInactive, refreshWorkspace]
+  );
+
+  useEffect(() => {
+    mountedRef.current = true;
+    return () => {
+      mountedRef.current = false;
+    };
+  }, []);
+
+  useEffect(() => {
+    let cancelled = false;
+    const api = window.theOpenHub;
+    if (!api) {
+      return;
     }
+
+    Promise.all([
+      api.getWorkspaceState(),
+      api.listAgentRoots(),
+      api.listDiscoverSources?.() ?? Promise.resolve([]),
+      api.getPluginRegistry?.() ?? Promise.resolve(initialPluginRegistry)
+    ])
+      .then(([workspace, roots, sources, registry]) => {
+        if (cancelled) {
+          return;
+        }
+        setState(workspace);
+        setRootsAndSources(roots, sources);
+        setPluginRegistry(registry);
+        void runRootScan(() => cancelled);
+      })
+      .catch((error: unknown) => {
+        if (!cancelled) {
+          setStatus(formatError(error));
+        }
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [initialPluginRegistry, runRootScan, setRootsAndSources]);
+
+  async function refreshWorkspaceCommand() {
+    await refreshWorkspace();
   }
 
   async function scanRoots() {
-    const scan = await window.theOpenHub?.scanAgentRoots();
-    if (!scan) {
-      return;
-    }
-    setState((current) => mergeScanIntoWorkspaceState(current, scan));
-    await refreshWorkspace().catch(() => undefined);
-    setStatus(`${scan.indexedSkills.length} indexed`);
+    await runRootScan();
   }
 
   async function previewSource() {
+    const api = window.theOpenHub;
+    if (!api || !selectedSourceId) {
+      return;
+    }
+    const preview = await api.previewDiscoverSource(selectedSourceId);
+    setPreviewSkills(preview.skills);
+    setStatus(`${preview.skills.length} candidates`);
+  }
+
+  async function addMarketplaceSource() {
     const api = window.theOpenHub;
     if (!api || !sourceUrl.trim()) {
       return;
@@ -120,9 +258,104 @@ export function App({
       sourceType: sourceUrl.includes('://') ? 'git' : 'local',
       url: sourceUrl.trim()
     });
-    const preview = await api.previewDiscoverSource(source.id);
-    setPreviewSkills(preview.skills);
-    setStatus(`${preview.skills.length} candidates`);
+    setDiscoverSources((current) => [source, ...current.filter((item) => item.id !== source.id)]);
+    setSelectedSourceId(source.id);
+    setStatus(`Source added: ${source.name}`);
+  }
+
+  async function removeMarketplaceSource(sourceId: string) {
+    const api = window.theOpenHub;
+    if (!api) {
+      return;
+    }
+    await api.removeDiscoverSource?.(sourceId);
+    setDiscoverSources((current) => current.filter((source) => source.id !== sourceId));
+    setPreviewSkills([]);
+    setSelectedSourceId((current) => (current === sourceId ? '' : current));
+    setStatus('Source removed');
+  }
+
+  async function addRoot() {
+    const api = window.theOpenHub;
+    if (!api || !rootPath.trim()) {
+      return;
+    }
+    const root = await api.addProjectRoot({
+      agentCode: rootAgentCode,
+      rootPath: rootPath.trim()
+    });
+    setAgentRoots((current) => [root, ...current.filter((item) => item.rootPath !== root.rootPath || item.agentCode !== root.agentCode)]);
+    setSelectedTargetRoot(root.rootPath);
+    setStatus(`Root added: ${root.agentDisplayName}`);
+  }
+
+  async function importCandidate(skill: DiscoverSkillPreview): Promise<string | null> {
+    const api = window.theOpenHub;
+    if (!api) {
+      return null;
+    }
+    const imported = await api.importLocalFolder(skill.path);
+    setImportedCandidates((current) => ({ ...current, [skill.path]: imported.skill.id }));
+    await refreshWorkspace().catch(() => undefined);
+    setStatus(`Imported ${imported.skill.name}`);
+    return imported.skill.id;
+  }
+
+  async function installCandidate(skill: DiscoverSkillPreview) {
+    const api = window.theOpenHub;
+    const root = agentRoots.find((candidate) => candidate.rootPath === selectedTargetRoot) ?? agentRoots.find((candidate) => candidate.writable);
+    if (!api || !root) {
+      setStatus('Select a writable root first');
+      return;
+    }
+    const skillId = importedCandidates[skill.path] ?? (await importCandidate(skill));
+    if (!skillId) {
+      return;
+    }
+    const plan = await api.createInstallPlan({
+      skillId,
+      targetRoot: root.rootPath,
+      agentCode: root.agentCode,
+      agentDisplayName: root.agentDisplayName,
+      adapterVersion: root.adapterVersion,
+      scope: root.scope,
+      projectionMode,
+      ...(root.rootKind ? { rootKind: root.rootKind } : {})
+    });
+    if (plan.status === 'conflict') {
+      setPendingPlan(plan);
+      setStatus('Overwrite confirmation required');
+      return;
+    }
+    if (plan.status === 'blocked') {
+      setPendingPlan(null);
+      setStatus('Install plan blocked');
+      return;
+    }
+    await api.applyInstallPlan(plan, false);
+    await refreshWorkspace();
+    setStatus(`Installed ${skill.name}`);
+  }
+
+  async function applyPendingPlan() {
+    const api = window.theOpenHub;
+    if (!api || !pendingPlan) {
+      return;
+    }
+    await api.applyInstallPlan(pendingPlan, true);
+    setPendingPlan(null);
+    await refreshWorkspace();
+    setStatus(`Installed ${pendingPlan.skillName}`);
+  }
+
+  async function uninstallSkill(installationId: string) {
+    const api = window.theOpenHub;
+    if (!api) {
+      return;
+    }
+    await api.uninstallSkill(installationId);
+    await refreshWorkspace();
+    setStatus('Uninstalled');
   }
 
   return (
@@ -132,7 +365,7 @@ export function App({
           <div className="brand-mark">OH</div>
           <div>
             <strong>OpenHub</strong>
-            <span>Local inventory</span>
+            <span>Local skills</span>
           </div>
         </div>
         <nav aria-label="Primary pages" className="nav-list">
@@ -158,11 +391,11 @@ export function App({
         <header className="topbar">
           <label className="search-box">
             <Search size={17} aria-hidden="true" />
-            <span className="sr-only">Search inventory</span>
+            <span className="sr-only">Search skills</span>
             <input
               type="search"
-              aria-label="Search inventory"
-              placeholder="Search inventory"
+              aria-label="Search skills"
+              placeholder="Search skills"
               value={query}
               onChange={(event) => setQuery(event.target.value)}
             />
@@ -172,7 +405,7 @@ export function App({
               <RefreshCw size={16} aria-hidden="true" />
               Scan roots
             </button>
-            <button type="button" onClick={refreshWorkspace}>
+            <button type="button" onClick={refreshWorkspaceCommand}>
               <RefreshCw size={16} aria-hidden="true" />
               Refresh
             </button>
@@ -189,21 +422,48 @@ export function App({
           </div>
 
           {activePage === 'home' ? (
-            <HomePage metrics={viewModel.dashboard.metrics} steps={uxModel.actionSteps} onNavigate={setActivePage} />
+            <HomePage metrics={homeMetrics} steps={uxModel.actionSteps} onNavigate={setActivePage} />
           ) : null}
-          {activePage === 'inventory' ? <InventoryPage rows={inventoryRows} /> : null}
-          {activePage === 'sources' ? (
-            <SourcesPage
-              sourceName={sourceName}
-              sourceUrl={sourceUrl}
+          {activePage === 'skills' ? (
+            <SkillsPage
+              rows={skillRows}
+              activeTab={skillsTab}
+              setActiveTab={setSkillsTab}
+              agentRoots={agentRoots}
+              discoverSources={discoverSources}
+              selectedSourceId={selectedSourceId}
+              setSelectedSourceId={setSelectedSourceId}
               previewSkills={previewSkills}
-              setSourceName={setSourceName}
-              setSourceUrl={setSourceUrl}
+              selectedTargetRoot={selectedTargetRoot}
+              setSelectedTargetRoot={setSelectedTargetRoot}
+              projectionMode={projectionMode}
+              setProjectionMode={setProjectionMode}
+              pendingPlan={pendingPlan}
               onPreview={previewSource}
+              onImport={importCandidate}
+              onInstall={installCandidate}
+              onConfirmOverwrite={applyPendingPlan}
+              onUninstall={uninstallSkill}
             />
           ) : null}
           {activePage === 'settings' ? (
-            <SettingsPage roots={agentRoots} state={state} pluginRegistry={pluginRegistry} />
+            <SettingsPage
+              roots={agentRoots}
+              state={state}
+              pluginRegistry={pluginRegistry}
+              sourceName={sourceName}
+              sourceUrl={sourceUrl}
+              setSourceName={setSourceName}
+              setSourceUrl={setSourceUrl}
+              rootAgentCode={rootAgentCode}
+              setRootAgentCode={setRootAgentCode}
+              rootPath={rootPath}
+              setRootPath={setRootPath}
+              discoverSources={discoverSources}
+              onAddRoot={addRoot}
+              onAddSource={addMarketplaceSource}
+              onRemoveSource={removeMarketplaceSource}
+            />
           ) : null}
         </section>
       </section>
@@ -246,70 +506,224 @@ function HomePage({
   );
 }
 
-function InventoryPage({ rows }: { rows: DesktopWorkspaceState['librarySkills'] }) {
+function SkillsPage({
+  rows,
+  activeTab,
+  setActiveTab,
+  agentRoots,
+  discoverSources,
+  selectedSourceId,
+  setSelectedSourceId,
+  previewSkills,
+  selectedTargetRoot,
+  setSelectedTargetRoot,
+  projectionMode,
+  setProjectionMode,
+  pendingPlan,
+  onPreview,
+  onImport,
+  onInstall,
+  onConfirmOverwrite,
+  onUninstall
+}: {
+  rows: DesktopWorkspaceState['librarySkills'];
+  activeTab: SkillsTabKey;
+  setActiveTab: (value: SkillsTabKey) => void;
+  agentRoots: AgentRootTarget[];
+  discoverSources: DiscoverSource[];
+  selectedSourceId: string;
+  setSelectedSourceId: (value: string) => void;
+  previewSkills: DiscoverSkillPreview[];
+  selectedTargetRoot: string;
+  setSelectedTargetRoot: (value: string) => void;
+  projectionMode: 'copy' | 'symlink';
+  setProjectionMode: (value: 'copy' | 'symlink') => void;
+  pendingPlan: InstallPlan | null;
+  onPreview: () => void;
+  onImport: (skill: DiscoverSkillPreview) => Promise<string | null>;
+  onInstall: (skill: DiscoverSkillPreview) => void;
+  onConfirmOverwrite: () => void;
+  onUninstall: (installationId: string) => void;
+}) {
+  const agentRows = rows.filter((skill) => skill.agentCode === activeTab);
+  const rootGroups = groupByRoot(agentRows);
+
   return (
-    <section className="panel">
-      <h2>Indexed skills</h2>
-      <div className="table" role="table" aria-label="Inventory skills">
-        <div className="table-head" role="row">
-          <span role="columnheader">Name</span>
-          <span role="columnheader">Agent</span>
-          <span role="columnheader">State</span>
-        </div>
-        {rows.length === 0 ? <p className="empty">No indexed skills</p> : null}
-        {rows.map((skill) => (
-          <div className="table-row" role="row" key={skill.id}>
-            <span role="cell">
-              <Star size={15} aria-hidden="true" />
-              {skill.name}
-            </span>
-            <span role="cell">{skill.sourceAgent}</span>
-            <span role="cell">
-              <span className="tag">{skill.visibilityStatus}</span>
-            </span>
-          </div>
+    <div className="content-grid">
+      <div className="tab-list" role="tablist" aria-label="Skill views">
+        {agentTabs.map((tab) => (
+          <button
+            key={tab.key}
+            type="button"
+            role="tab"
+            aria-selected={activeTab === tab.key}
+            onClick={() => setActiveTab(tab.key)}
+          >
+            {tab.label}
+          </button>
         ))}
       </div>
-    </section>
+
+      {activeTab === 'marketplace' ? (
+        <MarketplaceTab
+          roots={agentRoots}
+          sources={discoverSources}
+          selectedSourceId={selectedSourceId}
+          setSelectedSourceId={setSelectedSourceId}
+          previewSkills={previewSkills}
+          selectedTargetRoot={selectedTargetRoot}
+          setSelectedTargetRoot={setSelectedTargetRoot}
+          projectionMode={projectionMode}
+          setProjectionMode={setProjectionMode}
+          pendingPlan={pendingPlan}
+          onPreview={onPreview}
+          onImport={onImport}
+          onInstall={onInstall}
+          onConfirmOverwrite={onConfirmOverwrite}
+        />
+      ) : (
+        <section className="panel">
+          <h2>{agentTabs.find((tab) => tab.key === activeTab)?.label} skills</h2>
+          {rootGroups.length === 0 ? <p className="empty">No indexed skills</p> : null}
+          {rootGroups.map((group) => (
+            <section className="root-section" key={group.rootPath}>
+              <div className="root-header">
+                <strong>{group.rootPath}</strong>
+                <span>{group.rows.length} skills</span>
+              </div>
+              <div className="table skills-table" role="table" aria-label={`${group.rootPath} skills`}>
+                <div className="table-head" role="row">
+                  <span role="columnheader">Name</span>
+                  <span role="columnheader">Path</span>
+                  <span role="columnheader">State</span>
+                  <span role="columnheader">Owner</span>
+                  <span role="columnheader">Action</span>
+                </div>
+                {group.rows.map((skill) => (
+                  <div className="table-row" role="row" key={`${skill.id}:${skill.path}`}>
+                    <span role="cell">
+                      <Star size={15} aria-hidden="true" />
+                      {skill.name}
+                    </span>
+                    <span role="cell">{skill.path}</span>
+                    <span role="cell">
+                      <span className="tag">{skill.visibilityStatus}</span>
+                    </span>
+                    <span role="cell">{skill.ownership}</span>
+                    <span role="cell">
+                      {skill.ownership === 'app-owned' && skill.installationId ? (
+                        <button type="button" className="inline-action" onClick={() => onUninstall(skill.installationId!)}>
+                          Uninstall
+                        </button>
+                      ) : (
+                        <span className="muted">Indexed</span>
+                      )}
+                    </span>
+                  </div>
+                ))}
+              </div>
+            </section>
+          ))}
+        </section>
+      )}
+    </div>
   );
 }
 
-function SourcesPage({
-  sourceName,
-  sourceUrl,
+function MarketplaceTab({
+  roots,
+  sources,
+  selectedSourceId,
+  setSelectedSourceId,
   previewSkills,
-  setSourceName,
-  setSourceUrl,
-  onPreview
+  selectedTargetRoot,
+  setSelectedTargetRoot,
+  projectionMode,
+  setProjectionMode,
+  pendingPlan,
+  onPreview,
+  onImport,
+  onInstall,
+  onConfirmOverwrite
 }: {
-  sourceName: string;
-  sourceUrl: string;
+  roots: AgentRootTarget[];
+  sources: DiscoverSource[];
+  selectedSourceId: string;
+  setSelectedSourceId: (value: string) => void;
   previewSkills: DiscoverSkillPreview[];
-  setSourceName: (value: string) => void;
-  setSourceUrl: (value: string) => void;
+  selectedTargetRoot: string;
+  setSelectedTargetRoot: (value: string) => void;
+  projectionMode: 'copy' | 'symlink';
+  setProjectionMode: (value: 'copy' | 'symlink') => void;
+  pendingPlan: InstallPlan | null;
   onPreview: () => void;
+  onImport: (skill: DiscoverSkillPreview) => Promise<string | null>;
+  onInstall: (skill: DiscoverSkillPreview) => void;
+  onConfirmOverwrite: () => void;
 }) {
   return (
     <div className="split-two">
       <section className="panel">
-        <h2>Source preview</h2>
+        <h2>Marketplace</h2>
         <div className="form-grid">
           <label>
-            Source name
-            <input value={sourceName} onChange={(event) => setSourceName(event.target.value)} />
+            Source
+            <select
+              aria-label="Marketplace source"
+              value={selectedSourceId}
+              onChange={(event) => setSelectedSourceId(event.target.value)}
+            >
+              <option value="">Select source</option>
+              {sources.map((source) => (
+                <option value={source.id} key={source.id}>
+                  {source.name}
+                </option>
+              ))}
+            </select>
           </label>
           <label>
-            Source URL
-            <input value={sourceUrl} onChange={(event) => setSourceUrl(event.target.value)} />
+            Target root
+            <select
+              aria-label="Install target root"
+              value={selectedTargetRoot}
+              onChange={(event) => setSelectedTargetRoot(event.target.value)}
+            >
+              <option value="">Select root</option>
+              {roots.map((root) => (
+                <option value={root.rootPath} key={`${root.agentCode}:${root.rootPath}`}>
+                  {root.agentDisplayName} - {root.rootPath}
+                </option>
+              ))}
+            </select>
           </label>
-          <button type="button" onClick={onPreview}>
+          <label>
+            Projection mode
+            <select
+              aria-label="Projection mode"
+              value={projectionMode}
+              onChange={(event) => setProjectionMode(event.target.value as 'copy' | 'symlink')}
+            >
+              <option value="copy">copy</option>
+              <option value="symlink">symlink</option>
+            </select>
+          </label>
+          <button type="button" onClick={onPreview} disabled={!selectedSourceId}>
             <FolderSearch size={16} aria-hidden="true" />
             Preview source
           </button>
+          {pendingPlan ? (
+            <div className="conflict-box">
+              <strong>{pendingPlan.writes.filter((write: InstallPlan['writes'][number]) => write.status === 'conflict').length} conflicts</strong>
+              <button type="button" onClick={onConfirmOverwrite}>
+                Confirm overwrite
+              </button>
+            </div>
+          ) : null}
         </div>
       </section>
       <section className="panel">
         <h2>Candidates</h2>
+        {sources.length === 0 ? <p className="empty">No marketplace sources</p> : null}
         {previewSkills.length === 0 ? <p className="empty">No sources previewed</p> : null}
         <div className="candidate-list">
           {previewSkills.map((skill) => (
@@ -317,6 +731,14 @@ function SourcesPage({
               <strong>{skill.name}</strong>
               <span>{skill.path}</span>
               <p>{skill.description}</p>
+              <div className="candidate-actions">
+                <button type="button" onClick={() => void onImport(skill)}>
+                  Import
+                </button>
+                <button type="button" onClick={() => onInstall(skill)}>
+                  Install
+                </button>
+              </div>
             </article>
           ))}
         </div>
@@ -328,21 +750,92 @@ function SourcesPage({
 function SettingsPage({
   roots,
   state,
-  pluginRegistry
+  pluginRegistry,
+  sourceName,
+  sourceUrl,
+  setSourceName,
+  setSourceUrl,
+  rootAgentCode,
+  setRootAgentCode,
+  rootPath,
+  setRootPath,
+  discoverSources,
+  onAddRoot,
+  onAddSource,
+  onRemoveSource
 }: {
   roots: AgentRootTarget[];
   state: DesktopWorkspaceState;
   pluginRegistry: PluginRegistry;
+  sourceName: string;
+  sourceUrl: string;
+  setSourceName: (value: string) => void;
+  setSourceUrl: (value: string) => void;
+  rootAgentCode: RootAgentCode;
+  setRootAgentCode: (value: RootAgentCode) => void;
+  rootPath: string;
+  setRootPath: (value: string) => void;
+  discoverSources: DiscoverSource[];
+  onAddRoot: () => void;
+  onAddSource: () => void;
+  onRemoveSource: (sourceId: string) => void;
 }) {
   return (
     <div className="split-two">
       <section className="panel">
         <h2>Local roots</h2>
+        <div className="form-grid compact-form">
+          <label>
+            Agent
+            <select
+              aria-label="Root agent"
+              value={rootAgentCode}
+              onChange={(event) => setRootAgentCode(event.target.value as RootAgentCode)}
+            >
+              <option value="codex">Codex</option>
+              <option value="claude">Claude</option>
+              <option value="gemini">Gemini</option>
+              <option value="opencode">OpenCode</option>
+              <option value="agents">Agents</option>
+            </select>
+          </label>
+          <label>
+            Root path
+            <input value={rootPath} onChange={(event) => setRootPath(event.target.value)} />
+          </label>
+          <button type="button" onClick={onAddRoot}>
+            Add root
+          </button>
+        </div>
         {roots.length === 0 ? <p className="empty">No local roots</p> : null}
         {roots.map((root) => (
           <div className="key-row" key={`${root.agentCode}:${root.rootPath}`}>
             <span>{root.agentDisplayName}</span>
             <strong>{root.rootPath}</strong>
+          </div>
+        ))}
+        <h2>Marketplace sources</h2>
+        <div className="form-grid compact-form">
+          <label>
+            Marketplace source name
+            <input value={sourceName} onChange={(event) => setSourceName(event.target.value)} />
+          </label>
+          <label>
+            Marketplace source URL
+            <input value={sourceUrl} onChange={(event) => setSourceUrl(event.target.value)} />
+          </label>
+          <button type="button" onClick={onAddSource}>
+            Add source
+          </button>
+        </div>
+        {discoverSources.length === 0 ? <p className="empty">No marketplace sources</p> : null}
+        {discoverSources.map((source) => (
+          <div className="key-row three-col" key={source.id}>
+            <span>{source.name}</span>
+            <strong>{source.url}</strong>
+            <button type="button" className="inline-action" aria-label={`Remove ${source.name}`} onClick={() => onRemoveSource(source.id)}>
+              Remove
+            </button>
           </div>
         ))}
         <h2>Sync</h2>
@@ -386,8 +879,28 @@ function SettingsPage({
 function titleForPage(page: PageKey): string {
   return {
     home: 'Home',
-    inventory: 'Inventory',
-    sources: 'Sources',
+    skills: 'Skills',
     settings: 'Settings'
   }[page];
+}
+
+function groupByRoot(rows: DesktopWorkspaceState['librarySkills']) {
+  const groups = new Map<string, DesktopWorkspaceState['librarySkills']>();
+  for (const row of rows) {
+    const rootPath = row.rootPath;
+    groups.set(rootPath, [...(groups.get(rootPath) ?? []), row]);
+  }
+  return [...groups.entries()].map(([rootPath, groupedRows]) => ({ rootPath, rows: groupedRows }));
+}
+
+function formatScanStatus(scan: LibraryScanResult): string {
+  if (scan.errors.length === 0) {
+    return `${scan.indexedSkills.length} indexed`;
+  }
+  const errorLabel = scan.errors.length === 1 ? '1 error' : `${scan.errors.length} errors`;
+  return `${scan.indexedSkills.length} indexed, ${errorLabel}`;
+}
+
+function formatError(error: unknown): string {
+  return error instanceof Error ? error.message : String(error);
 }

@@ -1,4 +1,4 @@
-# OpenHub Inventory UI Design
+# OpenHub Skills UI Design
 
 This document supersedes the previous Dashboard, Discover, Installs, Usage,
 Reviews, Security, and Settings mockup set. The generated HTML, renderer script,
@@ -7,8 +7,7 @@ and PNG artifacts for those removed surfaces have been retired.
 ## Current Navigation
 
 - Home
-- Inventory
-- Sources
+- Skills
 - Settings
 
 ## Product Vocabulary
@@ -16,10 +15,12 @@ and PNG artifacts for those removed surfaces have been retired.
 Use:
 
 - local inventory
+- skills library
 - indexed skills
 - imported skills
 - agent roots
-- source preview
+- marketplace source preview
+- app-owned installs
 - versions
 - collections
 - sync disabled
@@ -42,7 +43,7 @@ Do not use runtime UI vocabulary for removed surfaces:
 ## Visual Direction
 
 - Quiet desktop workbench.
-- Dense but readable inventory tables.
+- Dense but readable skills tables.
 - Compact left navigation.
 - Top search and command bar.
 - Full-width sections, not card stacks nested inside cards.
@@ -51,8 +52,9 @@ Do not use runtime UI vocabulary for removed surfaces:
 
 ## Acceptance
 
-- Renderer tests cover Home, Inventory, Sources, and Settings.
+- Renderer tests cover Home, Skills, and Settings.
 - No first-screen UI exposes removed Deploy or Trust surfaces.
-- Source preview stays local/Git candidate inspection, not marketplace
+- Marketplace source preview stays local/Git candidate inspection, not
   reputation.
-- Agent roots are scanned for inventory only and are not write targets.
+- Agent roots are scanned by default; writes require explicit app-owned
+  copy/symlink install plans.

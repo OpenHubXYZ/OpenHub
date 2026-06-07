@@ -11,14 +11,16 @@ collections, sync, and plugin workflows unreliable.
 ## Decision
 
 SQLite is the authoritative local source of truth for skills, versions, files,
-indexed locations, sync state, and plugin state. Agent directories are read-only
-inventory inputs in the current runtime.
+indexed locations, installations, sync state, and plugin state. Agent
+directories are read-only for scanning by default; root writes require explicit
+app-owned copy/symlink install plans.
 
 ## Consequences
 
 All write workflows must persist domain state in SQLite and the content store.
-Current workflows must not write to real user agent roots. Tests should use
-in-memory SQLite or temporary directories.
+Install workflows must write only planned target files or symlinks and uninstall
+only recorded app-owned files. Tests should use in-memory SQLite or temporary
+directories.
 
 ## Verification
 

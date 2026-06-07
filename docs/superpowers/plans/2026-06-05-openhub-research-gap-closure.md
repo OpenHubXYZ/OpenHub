@@ -6,6 +6,11 @@ Implement the remaining high-value gaps from `references/deep-research-report.md
 
 Current verified baseline: `pnpm lint`, `pnpm typecheck`, `pnpm test`, and `pnpm build` pass.
 
+Status note: this historical gap-closure plan has been superseded for the
+renderer surface by `docs/mockup-implementation-goal-plan.md` and
+`docs/computer-use-full-app-test-goal-plan.md`. Current app scope is the
+skills-first Home / Skills / Settings workspace.
+
 ## Public Interfaces And Defaults
 
 - [ ] Add typed IPC only through `packages/shared/src/ipc-contracts.ts`, preload wrappers, and `desktop-runtime.ts`.
@@ -29,22 +34,19 @@ Acceptance:
 - [ ] Includes this same task list, assumptions, and acceptance gates.
 - [ ] `pnpm lint && pnpm typecheck && pnpm test && pnpm build` still pass.
 
-## Goal 2: First Launch And Migration Wizard
+## Goal 2: Root Detection Confirmation
 
-- [ ] Implement a first-launch flow for agent detection, existing skill roots, migration preview, and explicit import.
-- [ ] Show the first-launch wizard before the normal dashboard for fresh app state.
-- [ ] Detect Codex, Claude, Gemini, and OpenCode roots and read-only migration candidates.
-- [ ] Preview OpenSkills, Skills-Manager, SkillHub, and skills-manager-client imports.
-- [ ] Require explicit user action before import.
-- [ ] Keep previews read-only against agent roots.
+- [x] Replace migration-preview semantics with root detection confirmation.
+- [x] Detect Codex, Claude, Gemini, OpenCode, and Agents roots.
+- [x] Keep root detection read-only against agent roots.
+- [ ] Continue polishing the Home / Skills / Settings startup experience.
 
 Acceptance:
 
-- [ ] Fresh app state shows first-launch wizard before normal dashboard.
-- [ ] Wizard detects Codex, Claude, Gemini, OpenCode roots and read-only migration candidates.
-- [ ] OpenSkills, Skills-Manager, SkillHub, and skills-manager-client previews can be imported only after explicit user action.
-- [ ] No agent root writes occur during preview.
-- [ ] Tests cover fresh launch, skipped wizard, preview-only migration, and confirmed migration import.
+- [x] Fresh app state confirms detected roots before opening the workspace.
+- [x] Root detection covers Codex, Claude, Gemini, OpenCode, and Agents roots.
+- [x] No agent root writes occur during detection or scan.
+- [x] Tests cover root detection and removal of migration-preview behavior.
 
 ## Goal 3: Project Roots And Multi-Target Install
 

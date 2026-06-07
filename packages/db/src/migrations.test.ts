@@ -18,10 +18,11 @@ describe('SQLite migrations', () => {
       '006_inventory_productization',
       '007_app_settings',
       '008_local_similarity_index',
-      '009_plugin_directories'
+      '009_plugin_directories',
+      '010_skill_installations'
     ]);
     expect(secondRun.applied).toEqual([]);
-    expect(getCurrentSchemaVersion(db)).toBe(9);
+    expect(getCurrentSchemaVersion(db)).toBe(10);
   });
 
   it('creates the required Phase 2 domain tables and FTS table', () => {
@@ -46,6 +47,8 @@ describe('SQLite migrations', () => {
         'discover_source_cache',
         'discover_sources',
         'indexed_skill_locations',
+        'installation_files',
+        'installations',
         'plugin_errors',
         'plugin_catalog_entries',
         'plugin_directories',
@@ -67,8 +70,6 @@ describe('SQLite migrations', () => {
     );
     expect(tableNames).not.toEqual(
       expect.arrayContaining([
-        'installations',
-        'installation_files',
         'security_scans',
         'security_findings',
         'security_exemptions',
@@ -80,4 +81,5 @@ describe('SQLite migrations', () => {
       ])
     );
   });
+
 });

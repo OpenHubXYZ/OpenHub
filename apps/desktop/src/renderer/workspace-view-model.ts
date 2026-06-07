@@ -8,7 +8,7 @@ import type {
   SkillDetail
 } from '@theopenhub/shared';
 
-export const pageOrder = ['home', 'inventory', 'sources', 'settings'] as const;
+export const pageOrder = ['home', 'skills', 'settings'] as const;
 export type PageKey = (typeof pageOrder)[number];
 export type Tone = 'default' | 'low' | 'medium' | 'high' | 'neutral' | 'blue' | 'dark' | 'green' | 'red';
 
@@ -56,11 +56,8 @@ export interface WorkspaceViewModel {
     activity: KeyValueRow[];
     agentRoots: AgentRootView[];
   };
-  inventory: {
+  skills: {
     rows: TableRow[];
-  };
-  sources: {
-    previews: TableRow[];
   };
   settings: {
     syncRows: KeyValueRow[];
@@ -163,26 +160,25 @@ export function createWorkspaceViewModel(state: DesktopWorkspaceState): Workspac
     librarySkills: state.librarySkills,
     navItems: [
       { key: 'home', label: 'Home' },
-      { key: 'inventory', label: 'Inventory' },
-      { key: 'sources', label: 'Sources' },
+      { key: 'skills', label: 'Skills' },
       { key: 'settings', label: 'Settings' }
     ],
     dashboard: {
       metrics: [
         {
-          label: 'Indexed skills',
-          value: String(state.librarySkills.length),
-          detail: `${state.skills.length} imported`
+          label: 'Library skills',
+          value: String(state.skills.length || state.librarySkills.length),
+          detail: `${state.librarySkills.length} root locations`
         },
         {
-          label: 'Sources',
-          value: String(state.managementFlow.importItems.length),
-          detail: 'Recent imports'
+          label: 'Root locations',
+          value: String(new Set(state.librarySkills.map((skill) => skill.rootPath)).size),
+          detail: 'Indexed roots'
         },
         {
-          label: 'Sync profiles',
-          value: String(state.syncCenter.profiles.length),
-          detail: 'Local first'
+          label: 'App-owned installs',
+          value: String(state.librarySkills.filter((skill) => skill.ownership === 'app-owned').length),
+          detail: 'Managed projections'
         }
       ],
       activity: state.managementFlow.importItems.map((item) => ({ label: item.label, value: item.status })),
@@ -193,18 +189,15 @@ export function createWorkspaceViewModel(state: DesktopWorkspaceState): Workspac
         tone: 'green'
       }))
     },
-    inventory: {
+    skills: {
       rows: state.librarySkills.map((skill) => ({
         id: skill.id,
         cells: [
           { label: skill.name, detail: skill.path },
           { label: skill.sourceAgent },
-          { label: skill.visibilityStatus, tone: 'green' }
+          { label: `${skill.visibilityStatus} / ${skill.ownership}`, tone: 'green' }
         ]
       }))
-    },
-    sources: {
-      previews: []
     },
     settings: {
       syncRows: state.syncCenter.profiles.map((profile) => ({ label: profile.mode, value: profile.status })),
@@ -228,18 +221,18 @@ export function createWorkspaceUxModel(input: WorkspaceUxModelInput): WorkspaceU
         targetPage: 'settings'
       },
       {
-        label: 'Build inventory',
+        label: 'Build skills index',
         description: 'Index local skills',
         status: hasIndexedSkills ? 'done' : input.agentRootTargets.length > 0 ? 'current' : 'pending',
         provenance: hasIndexedSkills ? 'indexed' : 'not scanned',
-        targetPage: 'inventory'
+        targetPage: 'skills'
       },
       {
-        label: 'Preview source',
+        label: 'Review marketplace',
         description: 'Inspect local or Git candidates',
         status: hasPreview ? 'done' : hasIndexedSkills ? 'current' : 'pending',
         provenance: hasPreview ? 'source preview' : 'not previewed',
-        targetPage: 'sources'
+        targetPage: 'skills'
       }
     ],
     compatibilityRows: input.agentRootTargets.map((root) => ({
@@ -254,8 +247,7 @@ export function createWorkspaceUxModel(input: WorkspaceUxModelInput): WorkspaceU
     emptyStates: emptyStates(),
     primaryCommands: {
       home: [{ id: 'scan-roots', label: 'Scan roots' }],
-      inventory: [{ id: 'scan-roots', label: 'Scan roots' }],
-      sources: [{ id: 'preview-source', label: 'Preview source' }],
+      skills: [{ id: 'scan-roots', label: 'Scan roots' }],
       settings: [{ id: 'open-settings', label: 'Open settings' }]
     },
     provenanceChips: [
@@ -266,7 +258,7 @@ export function createWorkspaceUxModel(input: WorkspaceUxModelInput): WorkspaceU
     selectionSummary,
     workflowOwners: {
       roots: 'settings',
-      sourcePreview: 'sources',
+      sourcePreview: 'skills',
       settings: 'settings'
     }
   };
@@ -282,8 +274,14 @@ export function mergeScanIntoWorkspaceState(
       id: skill.id,
       name: skill.name,
       sourceAgent: displayNameForAgent(skill.agentCode),
+      agentCode: skill.agentCode,
       path: skill.path,
       visibilityStatus: 'indexed',
+      rootPath: parentPath(skill.path),
+      scope: 'user',
+      rootKind: 'user',
+      writable: true,
+      ownership: 'indexed',
       favorite: false
     }))
   };
@@ -318,7 +316,7 @@ function buildSelectionSummary(
 
   return {
     title: 'Nothing selected',
-    subtitle: 'Select an inventory item or source candidate',
+    subtitle: 'Select a skill or marketplace candidate',
     rows: []
   };
 }
@@ -338,7 +336,7 @@ function buildDiagnostics(input: WorkspaceUxModelInput): DiagnosticItem[] {
   if (input.state.librarySkills.length > 0) {
     return [
       {
-        title: 'Inventory ready',
+        title: 'Skills ready',
         detail: `${input.state.librarySkills.length} indexed skills`,
         action: 'Open an item to inspect files',
         tone: 'green'
@@ -359,22 +357,16 @@ function buildDiagnostics(input: WorkspaceUxModelInput): DiagnosticItem[] {
 function emptyStates(): Record<PageKey, EmptyStateModel> {
   return {
     home: {
-      title: 'No inventory yet',
+      title: 'No skills yet',
       text: 'Scan local roots or import a source.',
       actionLabel: 'Scan local roots',
       provenance: 'not scanned'
     },
-    inventory: {
-      title: 'No indexed skills',
-      text: 'Build the local inventory from agent roots.',
-      actionLabel: 'Scan roots',
-      provenance: 'inventory'
-    },
-    sources: {
-      title: 'No sources previewed',
-      text: 'Add a local folder or Git source.',
+    skills: {
+      title: 'No skills indexed',
+      text: 'Build the skills index from agent roots or marketplace candidates.',
       actionLabel: 'Add local or Git source',
-      provenance: 'source preview'
+      provenance: 'skills'
     },
     settings: {
       title: 'No local roots',
@@ -394,4 +386,10 @@ function displayNameForAgent(agentCode: string): string {
     agents: 'Agents'
   };
   return names[agentCode] ?? agentCode;
+}
+
+function parentPath(skillPath: string): string {
+  const normalized = skillPath.replace(/\/+$/, '');
+  const separator = normalized.lastIndexOf('/');
+  return separator === -1 ? normalized : normalized.slice(0, separator);
 }

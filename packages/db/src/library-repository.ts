@@ -15,14 +15,23 @@ export interface RecordIndexedSkillLocationInput {
   isDefault: boolean;
   skillPath: string;
   visibilityStatus: string;
+  installationId?: string;
+  ownership?: 'indexed' | 'app-owned';
 }
 
 export interface LibrarySkillSummary {
   id: string;
   name: string;
   sourceAgent: string;
+  agentCode: string;
   path: string;
   visibilityStatus: string;
+  rootPath: string;
+  scope: string;
+  rootKind: 'user' | 'project';
+  writable: boolean;
+  installationId?: string;
+  ownership: 'indexed' | 'app-owned';
   favorite: boolean;
 }
 
@@ -89,12 +98,14 @@ export function createLibraryRepository(database: SqliteDatabase): LibraryReposi
           .prepare(
             `
               insert into indexed_skill_locations
-                (id, skill_id, agent_root_id, skill_version_id, skill_path, visibility_status, last_indexed_at)
+                (id, skill_id, agent_root_id, skill_version_id, skill_path, visibility_status, installation_id, ownership, last_indexed_at)
               values
-                (@id, @skillId, @rootId, @versionId, @skillPath, @visibilityStatus, current_timestamp)
+                (@id, @skillId, @rootId, @versionId, @skillPath, @visibilityStatus, @installationId, @ownership, current_timestamp)
               on conflict(id) do update set
                 skill_version_id = excluded.skill_version_id,
                 visibility_status = excluded.visibility_status,
+                installation_id = excluded.installation_id,
+                ownership = excluded.ownership,
                 last_indexed_at = current_timestamp
             `
           )
@@ -104,7 +115,9 @@ export function createLibraryRepository(database: SqliteDatabase): LibraryReposi
             rootId,
             versionId: input.versionId,
             skillPath: input.skillPath,
-            visibilityStatus: input.visibilityStatus
+            visibilityStatus: input.visibilityStatus,
+            installationId: input.installationId ?? null,
+            ownership: input.ownership ?? 'indexed'
           });
       });
 
@@ -119,14 +132,22 @@ export function createLibraryRepository(database: SqliteDatabase): LibraryReposi
               s.id,
               s.name,
               a.display_name as sourceAgent,
+              a.code as agentCode,
               isl.skill_path as path,
               isl.visibility_status as visibilityStatus,
+              ar.root_path as rootPath,
+              ar.scope,
+              ar.root_kind as rootKind,
+              ar.writable,
+              isl.installation_id as installationId,
+              coalesce(isl.ownership, 'indexed') as ownership,
               case when sfav.skill_id is null then 0 else 1 end as favorite
             from indexed_skill_locations isl
             join skills s on s.id = isl.skill_id
             join agent_roots ar on ar.id = isl.agent_root_id
             join agents a on a.id = ar.agent_id
             left join skill_favorites sfav on sfav.skill_id = s.id
+            where isl.visibility_status != 'uninstalled'
             order by s.name collate nocase, a.display_name collate nocase
           `
         )
@@ -141,6 +162,18 @@ function stableId(prefix: string, value: string): string {
 }
 
 function librarySkillRow(row: unknown): LibrarySkillSummary {
-  const typed = row as Omit<LibrarySkillSummary, 'favorite'> & { favorite: number };
-  return { ...typed, favorite: typed.favorite === 1 };
+  const typed = row as Omit<LibrarySkillSummary, 'favorite' | 'writable'> & {
+    favorite: number;
+    writable: number;
+    installationId: string | null;
+  };
+  const result: LibrarySkillSummary = {
+    ...typed,
+    writable: typed.writable === 1,
+    favorite: typed.favorite === 1
+  };
+  if (!typed.installationId) {
+    delete result.installationId;
+  }
+  return result;
 }

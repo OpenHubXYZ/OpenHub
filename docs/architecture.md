@@ -32,8 +32,9 @@ The Electron main process owns privileged services:
 - sync drivers
 - plugin host APIs
 
-The current runtime treats agent roots as read-only inventory inputs. It does
-not deploy, uninstall, roll back, score, or block skills in external agent
+The current runtime treats agent roots as indexing inputs and explicit
+app-owned install targets. It does not perform arbitrary deploys, rollbacks,
+scoring, policy blocking, or untracked file edits in external agent
 directories.
 
 ## Workspace Layout
@@ -41,7 +42,7 @@ directories.
 - `apps/desktop`: Electron main process, preload IPC, Vite React renderer.
 - `packages/shared`: shared types, schemas, IPC contracts, constants.
 - `packages/core`: domain services for parsing, indexing, imports, versions,
-  collections, source preview, sync, and plugins.
+  collections, source preview, install plans, sync, and plugins.
 - `packages/db`: SQLite migrations, repositories, fixtures.
 - `packages/adapters`: built-in read-only agent adapters.
 
@@ -56,12 +57,14 @@ SQLite stores the authoritative state:
 - sources and Discover preview cache
 - agents and roots
 - indexed skill locations
+- installations and installation files
 - collections
 - sync profiles and events
 - plugin manifests and permissions
 
-Agent directories can be scanned, but they are not the app's persistence layer
-and are not mutated by current runtime workflows.
+Agent directories can be scanned, but they are not the app's persistence layer.
+Runtime mutations are limited to explicit copy/symlink install plans, and
+uninstall removes only app-owned file paths recorded in `installation_files`.
 
 ## Database Implementation
 
@@ -95,6 +98,10 @@ directories or agent roots.
 6. File contents are stored in a content-addressed blob store.
 7. Version, diff, collection, source preview, sync, and plugin workflows read
    from the same local SQLite state.
+8. Install plans project imported skill files into selected writable roots by
+   copy or symlink, block conflicts by default, and require explicit overwrite
+   confirmation.
+9. App-owned uninstall deletes only exact recorded file or symlink targets.
 
 ## Runtime IPC Integration
 
@@ -111,8 +118,11 @@ Runtime channels currently cover:
 - `agentRoots.list`, `agentRoots.detect`, and `agentRoots.addProjectRoot`:
   detect and register local roots for indexing.
 - `library.scan`, `library.list`, `library.search`, `library.facets`,
-  `library.favorite`, and `library.detail`: scan roots, query inventory, and
+  `library.favorite`, and `library.detail`: scan roots, query skills, and
   aggregate selected skill metadata and files.
+- `install.createPlan`, `install.applyPlan`, and `install.uninstall`: plan
+  copy/symlink projection writes, apply explicit plans, and remove only
+  app-owned installation files.
 - `import.localFolder`, `import.git`, and `import.zip`: stage and import local
   folders, Git URLs, and ZIP archives.
 - `collection.create`: group local skill records.
@@ -126,19 +136,20 @@ Runtime channels currently cover:
   `plugins.enable`, `plugins.disable`, and `plugins.registry`: add plugin
   folders, authorize declared permissions, enable/disable plugins, and inspect
   registered capabilities.
-- `discover.addSource` and `discover.previewSource`: configure local/Git
-  sources and preview candidates before import.
+- `discover.listSources`, `discover.addSource`, `discover.previewSource`, and
+  `discover.removeSource`: manage local/Git sources and preview candidates
+  before import.
 
 The preload bridge validates every response before exposing it to the renderer.
 
 ## Renderer Model
 
-The renderer uses four primary pages:
+The renderer uses three primary pages:
 
-- Home: metrics, first-run steps, and scan status.
-- Inventory: indexed and imported skills.
-- Sources: local/Git source preview.
-- Settings: roots, sync status, and plugin registry.
+- Home: skills, root, source, and app-owned install metrics.
+- Skills: agent tabs for indexed/app-owned root rows plus a Marketplace tab for
+  source preview, import, and install.
+- Settings: local roots, marketplace sources, sync status, and plugin registry.
 
 Renderer code consumes typed preload APIs only. It must not reach into Node,
 SQLite, the filesystem, or Electron IPC directly.
@@ -172,7 +183,9 @@ code before enabling it.
 
 ## Source Preview
 
-The Discover layer is local-first and preview-oriented:
+The Discover layer is local-first and preview-oriented. In the UI it appears as
+configured marketplace sources, but the runtime stores ordinary local/Git
+source records, not remote ratings or reputation:
 
 - `discover_sources` stores configured local or Git sources.
 - `discover_source_cache` stores preview rows for skill name, description,
@@ -191,8 +204,9 @@ Release readiness is verified by:
 - workspace build, lint, typecheck, and test gates
 - current-platform unpacked desktop packaging
 - release smoke for package entrypoints, native SQLite runtime, database
-  migrations, local/Git/ZIP import, inventory flow, source preview, sync
-  disabled default, plugin disabled default, and renderer privilege boundaries
+  migrations, local/Git/ZIP import, skills flow, marketplace source preview,
+  install lifecycle, sync disabled default, plugin disabled default, and
+  renderer privilege boundaries
 - checksum and dependency inventory scripts
 - redacted release logs
 

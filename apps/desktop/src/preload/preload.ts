@@ -11,6 +11,8 @@ import type {
   DiscoverSource,
   FileDiff,
   ImportedSkillResult,
+  InstallPlan,
+  InstallResult,
   LibraryFacets,
   LibraryScanResult,
   LibrarySearchFilters,
@@ -127,6 +129,27 @@ const api = {
 
   getSkillDetail(skillId: string): Promise<SkillDetail> {
     return invoke('libraryDetail', { skillId }) as Promise<SkillDetail>;
+  },
+
+  createInstallPlan(input: {
+    skillId: string;
+    targetRoot: string;
+    agentCode: string;
+    agentDisplayName: string;
+    adapterVersion: string;
+    scope: string;
+    rootKind?: 'user' | 'project';
+    projectionMode: 'copy' | 'symlink';
+  }): Promise<InstallPlan> {
+    return invoke('installCreatePlan', input) as Promise<InstallPlan>;
+  },
+
+  applyInstallPlan(plan: InstallPlan, confirmOverwrite: boolean): Promise<InstallResult> {
+    return invoke('installApplyPlan', { plan, confirmOverwrite }) as Promise<InstallResult>;
+  },
+
+  uninstallSkill(installationId: string): Promise<{ status: 'uninstalled'; installationId: string }> {
+    return invoke('installUninstall', { installationId }) as Promise<{ status: 'uninstalled'; installationId: string }>;
   },
 
   listVersions(skillId: string): Promise<SkillVersionSummary[]> {
@@ -289,8 +312,16 @@ const api = {
     return invoke('discoverAddSource', input) as Promise<DiscoverSource>;
   },
 
+  listDiscoverSources(): Promise<DiscoverSource[]> {
+    return invoke('discoverListSources', {}) as Promise<DiscoverSource[]>;
+  },
+
   previewDiscoverSource(sourceId: string): Promise<DiscoverPreviewResult> {
     return invoke('discoverPreviewSource', { sourceId }) as Promise<DiscoverPreviewResult>;
+  },
+
+  removeDiscoverSource(sourceId: string): Promise<StatusOnlyResult> {
+    return invoke('discoverRemoveSource', { sourceId }) as Promise<StatusOnlyResult>;
   }
 };
 

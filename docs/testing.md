@@ -1,8 +1,8 @@
 # Testing
 
-Testing follows the current inventory-first roadmap. The test suite should
-prove local data safety, typed IPC, import staging, read-only indexing, sync
-defaults, plugin constraints, and release packaging.
+Testing follows the current skills-first roadmap. The test suite should prove
+local data safety, typed IPC, import staging, root indexing, app-owned install
+safety, sync defaults, plugin constraints, and release packaging.
 
 ## Command Gates
 
@@ -19,8 +19,8 @@ CI must run the same gates.
 
 - Electron `BrowserWindow` options keep `contextIsolation: true`,
   `nodeIntegration: false`, and `sandbox: true`.
-- The renderer shell displays OpenHub and stable Home, Inventory, Sources, and
-  Settings navigation.
+- The renderer shell displays OpenHub and stable Home, Skills, and Settings
+  navigation.
 - The shared IPC contract validates retained channels and rejects unknown
   channels.
 - Static renderer search must not find direct Node, filesystem, SQLite, or
@@ -30,7 +30,9 @@ CI must run the same gates.
 
 - Migrations run from empty database to latest and are idempotent.
 - Current domain tables and the `skill_search` FTS5 table exist.
-- Removed deploy/trust tables stay absent from the current schema.
+- Narrow `installations` and `installation_files` tables exist.
+- Removed deploy/trust/security/policy tables stay absent from the current
+  schema.
 - Repository tests cover create, list, update, FTS search, facets, indexed
   locations, and delete behavior.
 - Test data uses `:memory:` SQLite databases or temp directories.
@@ -42,14 +44,14 @@ CI must run the same gates.
 - Fixture roots for `.codex/skills`, `.claude/skills`, `.gemini/skills`,
   `.opencode/skills`, and `.agents/skills` scan successfully.
 - Missing `SKILL.md` and malformed metadata produce explainable scan errors.
-- Indexed library rows preserve skill name, source agent, path, and visibility
-  status.
+- Indexed library rows preserve skill name, source agent, root metadata,
+  visibility status, favorite state, and ownership.
 - IPC contract tests cover `library.scan`, `library.list`, `library.search`,
   `library.facets`, `library.favorite`, and `library.detail`.
 - Renderer tests cover empty, indexed, search result, selected detail, file
   tree, and `SKILL.md` preview states.
 - Desktop runtime tests scan a detected local fixture root through typed IPC and
-  then list the indexed inventory rows.
+  then list the indexed skills rows.
 
 ## Import Coverage
 
@@ -58,13 +60,27 @@ CI must run the same gates.
 - ZIP slip and symlink escape fixtures are rejected before they can leave the
   staging boundary.
 - Desktop runtime tests import local, Git, and ZIP fixtures through IPC and
-  prove they are searchable inventory records.
-- Renderer tests cover local inventory refresh and source preview actions.
+  prove they are searchable skill records.
+- Renderer tests cover local skills refresh and Marketplace source preview
+  actions.
+
+## Install Coverage
+
+- Install plans enumerate copy or symlink writes before touching a root.
+- Conflicts block apply by default.
+- Explicit overwrite confirmation overwrites only exact planned target files or
+  symlinks.
+- Directory conflicts, root escapes, unsafe relative paths, and stale
+  unplanned conflicts are blocked.
+- App-owned uninstall deletes only `installation_files` targets and preserves
+  user-created files and directories.
+- Runtime IPC tests cover create/apply/uninstall lifecycle.
 
 ## Discover Source Coverage
 
-- Discover is rendered as source preview, not a marketplace.
-- Runtime UI must not show ratings, trending, source reputation, trust levels,
+- Discover sources are managed in Settings and previewed from the Skills
+  Marketplace tab.
+- Marketplace does not mean ratings, trending, source reputation, trust levels,
   or risk scores.
 - Adding a local or Git source records source metadata without importing skills
   or fetching a remote catalog by default.
@@ -82,7 +98,7 @@ CI must run the same gates.
 - Version diffs classify added, modified, and deleted files.
 - Version compare reports file-level changes without writing external roots.
 - Collections group local skill records.
-- Renderer tests cover inventory rows and collection state where exposed.
+- Renderer tests cover skills rows and collection state where exposed.
 
 ## Sync Coverage
 
@@ -125,9 +141,9 @@ CI must run the same gates.
   package manifests.
 - `pnpm release:smoke` verifies package entrypoints, packaged main startup under
   the Electron runtime, privacy defaults, database migrations, local/Git/ZIP
-  import, FTS search, inventory flow, first-launch wizard, OS-backed
-  credential-store boundary, sync-disabled default, plugin-disabled default,
-  desktop runtime IPC coverage, and redacted release logs.
+  import, FTS search, skills flow, root detection, OS-backed credential-store
+  boundary, sync-disabled default, plugin-disabled default, desktop runtime IPC
+  coverage, and redacted release logs.
 
 ## Unit Test Targets
 
@@ -165,7 +181,7 @@ CI must run the same gates.
 - Agent detection.
 - Import a skill.
 - Preview a source.
-- Search inventory.
+- Search skills.
 - Optional sync remains disabled until a profile is enabled.
 - Plugins remain disabled until permissions are authorized and the plugin is
   enabled.

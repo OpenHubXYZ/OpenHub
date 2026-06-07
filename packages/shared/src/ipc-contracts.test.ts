@@ -8,7 +8,7 @@ describe('desktop shell IPC contract', () => {
     expect(desktopShellContract.appInfo.request.parse({})).toEqual({});
   });
 
-  it('keeps the runtime contract focused on inventory, sources, settings, sync, and plugins', () => {
+  it('keeps the runtime contract focused on skills, marketplace sources, settings, sync, plugins, and narrow installs', () => {
     const channels = Object.values(desktopShellContract).map((contract) => contract.channel);
 
     expect(channels).toEqual(
@@ -20,6 +20,9 @@ describe('desktop shell IPC contract', () => {
         'library.search',
         'library.facets',
         'library.detail',
+        'install.createPlan',
+        'install.applyPlan',
+        'install.uninstall',
         'import.localFolder',
         'import.git',
         'import.zip',
@@ -36,8 +39,10 @@ describe('desktop shell IPC contract', () => {
         'plugins.enable',
         'plugins.disable',
         'settings.get',
+        'discover.listSources',
         'discover.addSource',
-        'discover.previewSource'
+        'discover.previewSource',
+        'discover.removeSource'
       ])
     );
 
@@ -45,9 +50,6 @@ describe('desktop shell IPC contract', () => {
       expect.arrayContaining([
         'export.skill',
         'export.signedSkill',
-        'install.createPlan',
-        'install.applyPlan',
-        'install.uninstall',
         'install.reinstall',
         'install.relink',
         'install.setReadOnlyLock',
@@ -79,8 +81,14 @@ describe('desktop shell IPC contract', () => {
           id: 'skill-1',
           name: 'Runtime Helper',
           sourceAgent: 'Codex',
+          agentCode: 'codex',
           path: '/tmp/.codex/skills/runtime-helper',
-          visibilityStatus: 'indexed'
+          visibilityStatus: 'indexed',
+          rootPath: '/tmp/.codex/skills',
+          scope: 'user',
+          rootKind: 'user',
+          writable: true,
+          ownership: 'indexed'
         }
       ],
       skills: [
@@ -121,9 +129,6 @@ describe('desktop shell IPC contract', () => {
 
   it('rejects removed Deploy and Trust IPC channels before dispatch', () => {
     for (const channel of [
-      'install.createPlan',
-      'install.applyPlan',
-      'install.uninstall',
       'security.scan',
       'security.createExemption',
       'policy.create',
@@ -137,7 +142,7 @@ describe('desktop shell IPC contract', () => {
     }
   });
 
-  it('validates retained inventory, source, sync, and plugin requests', () => {
+  it('validates retained skills, source, sync, and plugin requests', () => {
     expect(parseIpcRequest('import.git', { gitUrl: 'file:///tmp/skill-repo' })).toEqual({
       gitUrl: 'file:///tmp/skill-repo'
     });
@@ -148,6 +153,47 @@ describe('desktop shell IPC contract', () => {
     });
     expect(parseIpcRequest('library.search', { query: 'docs', filters: { sourceTypes: ['git'] } })).toMatchObject({
       filters: { sourceTypes: ['git'] }
+    });
+    expect(parseIpcRequest('install.createPlan', {
+      skillId: 'skill-1',
+      targetRoot: '/tmp/.codex/skills',
+      agentCode: 'codex',
+      agentDisplayName: 'Codex',
+      adapterVersion: 'builtin',
+      scope: 'user',
+      rootKind: 'user',
+      projectionMode: 'copy'
+    })).toMatchObject({ projectionMode: 'copy' });
+    expect(parseIpcRequest('install.applyPlan', {
+      plan: {
+        id: 'plan-1',
+        skillId: 'skill-1',
+        skillVersionId: 'version-1',
+        skillName: 'Runtime Helper',
+        skillSlug: 'runtime-helper',
+        targetRoot: '/tmp/.codex/skills',
+        targetSkillPath: '/tmp/.codex/skills/runtime-helper',
+        agentCode: 'codex',
+        agentDisplayName: 'Codex',
+        adapterVersion: 'builtin',
+        scope: 'user',
+        rootKind: 'user',
+        projectionMode: 'copy',
+        status: 'ready',
+        writes: [
+          {
+            relativePath: 'SKILL.md',
+            targetPath: '/tmp/.codex/skills/runtime-helper/SKILL.md',
+            sourceHash: 'hash-1',
+            action: 'copy',
+            status: 'clean'
+          }
+        ]
+      },
+      confirmOverwrite: false
+    })).toMatchObject({ confirmOverwrite: false });
+    expect(parseIpcRequest('install.uninstall', { installationId: 'installation-1' })).toEqual({
+      installationId: 'installation-1'
     });
     expect(
       desktopShellContract.libraryFacets.response.parse({
@@ -181,5 +227,7 @@ describe('desktop shell IPC contract', () => {
       sourceType: 'local',
       url: '/tmp/source'
     })).toMatchObject({ sourceType: 'local' });
+    expect(parseIpcRequest('discover.listSources', {})).toEqual({});
+    expect(parseIpcRequest('discover.removeSource', { sourceId: 'source-1' })).toEqual({ sourceId: 'source-1' });
   });
 });

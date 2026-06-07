@@ -1,5 +1,5 @@
 import { createHash } from 'node:crypto';
-import { mkdir, rm, writeFile } from 'node:fs/promises';
+import { lstat, mkdir, readFile, rm, writeFile } from 'node:fs/promises';
 import { mkdtemp } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
@@ -37,7 +37,7 @@ describe('desktop runtime IPC dispatch', () => {
     await Promise.all(tempDirectories.splice(0).map((directory) => rm(directory, { recursive: true })));
   });
 
-  it('imports local skills and returns inventory workspace state without deploy or trust centers', async () => {
+  it('imports local skills and returns skills workspace state without deploy or trust centers', async () => {
     const workspace = await tempDir();
     const dataDirectory = path.join(workspace, 'app-data');
     const database = createMemoryDatabase();
@@ -89,6 +89,9 @@ describe('desktop runtime IPC dispatch', () => {
       expect.objectContaining({
         name: 'scanned-helper',
         sourceAgent: 'Codex',
+        agentCode: 'codex',
+        rootPath: path.join(homeDirectory, '.codex/skills'),
+        ownership: 'indexed',
         visibilityStatus: 'indexed'
       })
     ]);
@@ -97,7 +100,7 @@ describe('desktop runtime IPC dispatch', () => {
     ]);
   });
 
-  it('dispatches version, collection, sync, discover, and plugin inventory workflows', async () => {
+  it('dispatches version, collection, sync, discover, and plugin skills workflows', async () => {
     const workspace = await tempDir();
     const dataDirectory = path.join(workspace, 'app-data');
     const database = createMemoryDatabase();
@@ -123,7 +126,7 @@ describe('desktop runtime IPC dispatch', () => {
     });
     const collection = await runtime.dispatch('collection.create', {
       name: 'Runtime Collection',
-      description: 'Inventory grouping',
+      description: 'Skill grouping',
       skillIds: [imported.skill.id]
     }) as { name: string };
     const profile = await runtime.dispatch('sync.createProfile', {
@@ -177,8 +180,14 @@ describe('desktop runtime IPC dispatch', () => {
     ]));
     expect(collection).toMatchObject({ name: 'Runtime Collection' });
     expect(outbox).toMatchObject({ status: 'queued', entityId: imported.skill.id });
+    await expect(runtime.dispatch('discover.listSources', {})).resolves.toEqual([
+      expect.objectContaining({ id: discoverSource.id, name: 'Local Discover' })
+    ]);
     await expect(runtime.dispatch('discover.previewSource', { sourceId: discoverSource.id })).resolves.toMatchObject({
       skills: [expect.objectContaining({ name: 'discover-helper' })]
+    });
+    await expect(runtime.dispatch('discover.removeSource', { sourceId: discoverSource.id })).resolves.toEqual({
+      status: 'removed'
     });
     await expect(runtime.dispatch('plugins.enable', { pluginId: plugin.id })).resolves.toMatchObject({
       importers: [{ pluginId: plugin.id, id: 'runtime-importer', name: 'Runtime Importer' }],
@@ -190,6 +199,56 @@ describe('desktop runtime IPC dispatch', () => {
       capabilityId: 'runtime-importer',
       input: { path: 'SKILL.md' }
     })).resolves.toEqual({ accepted: true });
+  });
+
+  it('plans, applies, and uninstalls app-owned skill projections through IPC', async () => {
+    const workspace = await tempDir();
+    const targetRoot = path.join(workspace, 'project-skills');
+    await mkdir(targetRoot, { recursive: true });
+    const runtime = createDesktopRuntime({
+      dataDirectory: path.join(workspace, 'app-data'),
+      homeDirectory: path.join(workspace, 'home'),
+      secretStore: createInMemorySecretStore()
+    });
+    const imported = (await runtime.dispatch('import.localFolder', {
+      folderPath: await createSkillFixture(path.join(workspace, 'install-source'), 'install-helper')
+    })) as RuntimeImportedResult;
+
+    const plan = await runtime.dispatch('install.createPlan', {
+      skillId: imported.skill.id,
+      targetRoot,
+      agentCode: 'codex',
+      agentDisplayName: 'Codex',
+      adapterVersion: 'builtin',
+      scope: 'project',
+      rootKind: 'project',
+      projectionMode: 'copy'
+    }) as { status: string };
+
+    expect(plan).toMatchObject({ status: 'ready' });
+    const installed = await runtime.dispatch('install.applyPlan', { plan, confirmOverwrite: false }) as {
+      installationId: string;
+    };
+    await expect(readFile(path.join(targetRoot, 'install-helper', 'SKILL.md'), 'utf8')).resolves.toContain(
+      'install-helper'
+    );
+    await expect(runtime.dispatch('library.list', {})).resolves.toEqual([
+      expect.objectContaining({
+        name: 'install-helper',
+        visibilityStatus: 'installed',
+        ownership: 'app-owned',
+        installationId: installed.installationId
+      })
+    ]);
+
+    await writeFile(path.join(targetRoot, 'install-helper', 'user-note.md'), 'preserve me');
+    await expect(runtime.dispatch('install.uninstall', { installationId: installed.installationId })).resolves.toEqual({
+      status: 'uninstalled',
+      installationId: installed.installationId
+    });
+    await expect(lstat(path.join(targetRoot, 'install-helper', 'SKILL.md'))).rejects.toMatchObject({ code: 'ENOENT' });
+    await expect(readFile(path.join(targetRoot, 'install-helper', 'user-note.md'), 'utf8')).resolves.toBe('preserve me');
+    await expect(runtime.dispatch('library.list', {})).resolves.toEqual([]);
   });
 });
 

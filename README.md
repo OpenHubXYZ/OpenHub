@@ -5,41 +5,46 @@ organizing AI coding agent skills across Codex, Claude, Gemini, OpenCode, and
 other local agent environments.
 
 The current product direction is intentionally simple: SQLite is the local
-source of truth, agent skill directories are read-only inventory inputs, and
-the app focuses on import, indexing, search, version history, collections,
-source preview, optional sync, and constrained plugin capabilities. OpenHub no
-longer deploys skills into agent roots and no longer maintains a trust,
-security-review, or policy-scoring workflow.
+source of truth, agent skill directories are indexing inputs and explicit
+app-owned install targets, and the app focuses on import, indexing, search,
+version history, collections, marketplace source preview, optional sync,
+constrained copy/symlink installs, and constrained plugin capabilities.
+OpenHub does not maintain a trust, security-review, or policy-scoring workflow.
 
 ## Current Status
 
-The desktop shell now presents four product surfaces:
+The desktop shell now presents three product surfaces:
 
-- Home: local inventory metrics and the first-run path.
-- Inventory: indexed and imported skills with search.
-- Sources: local or Git source preview before import.
-- Settings: detected roots, sync status, and plugin registry state.
+- Home: skills, root, source, and app-owned install metrics.
+- Skills: agent-grouped skill rows plus a Marketplace tab for source preview,
+  import, and copy/symlink install into a selected root.
+- Settings: detected and project roots, marketplace sources, sync status, and
+  plugin registry state.
 
 The Electron main process wires typed runtime IPC to local app-data SQLite and a
 content store for first-launch root detection, read-only root scanning,
 local/Git/ZIP import, FTS-backed library search, favorites, skill detail,
 version list/diff/compare, collection creation, opt-in sync operations, plugin
-state, plugin provider workflows, and Discover source previews.
+state, plugin provider workflows, Discover source management, and app-owned
+install/uninstall plans.
 
 `packages/db` contains idempotent SQLite migrations, FTS5 skill search,
 app-data directory resolution, indexed skill location records, sync profiles,
 outbox, inbox, conflicts, events, plugin manifests, permission grants, plugin
-errors, Discover sources, and repository tests.
+errors, Discover sources, installations, installation files, and repository
+tests.
 
 `packages/core` parses `SKILL.md`, indexes fixture roots into SQLite, imports
 local folders, Git repositories, and ZIP archives through isolated staging
-directories, writes file blobs to a content-addressed store, creates inventory
+directories, writes file blobs to a content-addressed store, creates skill
 versions, diffs version files, creates collections, keeps sync disabled by
-default, and manages the constrained plugin registry.
+default, creates/apply/uninstalls constrained skill projections, and manages
+the constrained plugin registry.
 
 `packages/adapters` detects Codex, Claude, Gemini, OpenCode, and Agents skill
 roots and can list `SKILL.md` directories for indexing. It does not write,
-deploy, uninstall, or verify files in agent roots.
+deploy, uninstall, or verify files in agent roots; root writes are owned by the
+separate install service and require an explicit install plan.
 
 The tracked historical planning inputs are:
 
@@ -83,15 +88,17 @@ Generated release artifacts are written under `out/`, which is ignored by Git.
   collection is required.
 - SQLite is the local source of truth for skills, versions, indexed locations,
   sync state, and plugin state.
-- Agent directories are inventory inputs. Current runtime code must not deploy
-  files into those directories.
+- Agent directories are indexing inputs by default. Runtime root writes are
+  limited to explicit user-triggered copy/symlink install plans, and uninstall
+  removes only files recorded as app-owned installation files.
 - The renderer must not directly access Node, the filesystem, or SQLite.
   Privileged work belongs behind typed Electron preload IPC.
 - Sync and plugins are opt-in and constrained by explicit permissions.
 - Imported folders, Git repositories, and archives must be isolated and path
   checked before their contents enter SQLite or the content store.
-- Source preview is provenance and inventory only. Do not display ratings,
-  trust levels, reputation, or risk scoring without a new accepted spec.
+- Marketplace source preview is provenance and candidate discovery only. Do not
+  display ratings, trust levels, reputation, or risk scoring without a new
+  accepted spec.
 
 ## Architecture
 
@@ -100,7 +107,7 @@ The workspace uses pnpm, TypeScript, Electron, Vite, React, Node, and SQLite:
 - `apps/desktop`: Electron main process, Vite React renderer, preload IPC.
 - `packages/shared`: shared types, IPC contracts, validators, constants.
 - `packages/core`: domain services for skills, versions, imports, collections,
-  source preview, sync, and plugins.
+  source preview, install plans, sync, and plugins.
 - `packages/db`: SQLite schema, migrations, repositories, fixtures.
 - `packages/adapters`: read-only Codex, Claude, Gemini, OpenCode, and Agents
   adapters.
@@ -138,13 +145,14 @@ See `SECURITY.md` for vulnerability reporting and security boundaries.
 
 ## Roadmap
 
-The current roadmap has been collapsed around inventory-first behavior:
+The current roadmap has been collapsed around skills-first behavior:
 
 - Repository foundation, tooling, and Electron shell.
 - SQLite source of truth.
-- Read-only agent root detection and skill indexing.
+- Agent root detection and skill indexing.
 - Local/Git/ZIP import into SQLite and the content-addressed store.
-- Discover source preview before import.
+- Marketplace source preview before import.
+- Copy/symlink install plans and app-owned uninstall.
 - Version history, file diff, and collections.
 - Optional offline-first sync.
 - Constrained plugin runtime.

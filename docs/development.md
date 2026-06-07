@@ -104,8 +104,9 @@ capability removal, and Plugins UI state.
 
 Release smoke tests should use generated `out/` artifacts only. They must
 verify package payload entrypoints, packaged main startup under the Electron
-runtime, database migration, inventory import/search/index flow, first-launch
-Electron window options, privacy defaults, and redacted release logs.
+runtime, database migration, skills import/search/index flow, root-detection
+startup behavior, Electron window options, privacy defaults, and redacted
+release logs.
 
 ## Dependency Changes
 

@@ -1,6 +1,6 @@
 # Computer Use Full App Test Plan
 
-This plan verifies the current inventory-first desktop app. It supersedes the
+This plan verifies the current skills-first desktop app. It supersedes the
 older full-app plan that covered removed Deploy and Trust surfaces.
 
 ## Baseline
@@ -22,11 +22,11 @@ agent directories for write tests.
 Verify:
 
 - The app opens to Home.
-- Navigation contains Home, Inventory, Sources, and Settings.
+- Navigation contains Home, Skills, and Settings.
 - The renderer has no direct Node, filesystem, SQLite, or `ipcRenderer` access.
 - No Deploy, Trust, Security, Usage, or Reviews navigation is present.
 
-## Test 2: Root Detection And Inventory Scan
+## Test 2: Root Detection And Skills Scan
 
 Create synthetic `.codex/skills`, `.claude/skills`, `.gemini/skills`,
 `.opencode/skills`, and `.agents/skills` roots with small `SKILL.md` fixtures.
@@ -35,7 +35,8 @@ Verify:
 
 - Settings shows detected roots.
 - Running scan indexes fixture skills.
-- Inventory lists skill name, source agent, path, and visibility status.
+- Skills lists skill name, source agent, path, visibility status, root metadata,
+  and ownership.
 - No files are written into agent roots by the scan.
 
 ## Test 3: Local Import
@@ -45,18 +46,23 @@ Import a synthetic local skill folder.
 Verify:
 
 - The import appears in workspace state.
-- Inventory search finds the imported skill.
+- Skills search finds the imported skill.
 - Skill detail and version data are available through runtime tests.
-- No deploy action or target-root picker appears.
+- No Deploy or Trust workflow appears.
 
-## Test 4: Source Preview
+## Test 4: Marketplace Source Preview And Install
 
 Add a local or Git source containing synthetic skills and run preview.
 
 Verify:
 
-- Sources shows candidate skills before import.
+- Settings manages the configured source.
+- Skills > Marketplace shows candidate skills before import.
 - Preview does not write to agent roots.
+- Import writes to SQLite and the content store.
+- Installing requires an explicit target root and copy/symlink projection mode.
+- Conflicts require explicit overwrite confirmation.
+- Uninstall removes only app-owned installed files.
 - The UI does not show ratings, reputation, trust levels, risk status, or
   approval prompts.
 
@@ -73,7 +79,8 @@ Verify:
 ## Acceptance
 
 - Computer Use evidence covers launch, navigation, root detection, scan, local
-  import, source preview, Settings privacy checks, and absence of removed
+  import, marketplace source preview, app-owned install/uninstall, Settings
+  privacy checks, and absence of removed
   Deploy/Trust surfaces.
 - Automated tests and release smoke cover lower-level Git import, ZIP import,
   version diff/compare, sync drivers, and plugin enable flows.

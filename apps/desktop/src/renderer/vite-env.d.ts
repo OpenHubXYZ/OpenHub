@@ -10,6 +10,8 @@ import type {
   DiscoverSource,
   FileDiff,
   ImportedSkillResult,
+  InstallPlan,
+  InstallResult,
   LibraryFacets,
   LibraryScanResult,
   LibrarySearchFilters,
@@ -60,6 +62,18 @@ declare global {
       getLibraryFacets(filters?: LibrarySearchFilters): Promise<LibraryFacets>;
       setFavorite(skillId: string, favorite: boolean): Promise<SkillSummary>;
       getSkillDetail(skillId: string): Promise<SkillDetail>;
+      createInstallPlan(input: {
+        skillId: string;
+        targetRoot: string;
+        agentCode: string;
+        agentDisplayName: string;
+        adapterVersion: string;
+        scope: string;
+        rootKind?: 'user' | 'project';
+        projectionMode: 'copy' | 'symlink';
+      }): Promise<InstallPlan>;
+      applyInstallPlan(plan: InstallPlan, confirmOverwrite: boolean): Promise<InstallResult>;
+      uninstallSkill(installationId: string): Promise<{ status: 'uninstalled'; installationId: string }>;
       listVersions(skillId: string): Promise<SkillVersionSummary[]>;
       diffVersions(fromVersionId: string, toVersionId: string): Promise<FileDiff[]>;
       compareVersions(fromVersionId: string, toVersionId: string): Promise<VersionComparisonReport>;
@@ -121,7 +135,9 @@ declare global {
         sourceType: 'local' | 'git';
         url: string;
       }): Promise<DiscoverSource>;
+      listDiscoverSources(): Promise<DiscoverSource[]>;
       previewDiscoverSource(sourceId: string): Promise<DiscoverPreviewResult>;
+      removeDiscoverSource(sourceId: string): Promise<StatusOnlyResult>;
     };
   }
 }

@@ -37,23 +37,21 @@ describe('workspace view model fixture boundaries', () => {
 
     expect(viewModel.navItems.map((item) => item.label)).toEqual([
       'Home',
-      'Inventory',
-      'Sources',
+      'Skills',
       'Settings'
     ]);
-    expect(JSON.stringify(viewModel.navItems)).not.toMatch(/Deploy|Trust|Usage|Reviews|Security|Installs|Discover|Library/);
+    expect(JSON.stringify(viewModel.navItems)).not.toMatch(/Deploy|Trust|Usage|Reviews|Security|Installs|Discover|Library|Inventory|Sources/);
     expect(uxModel.workflowOwners).toEqual({
       roots: 'settings',
-      sourcePreview: 'sources',
+      sourcePreview: 'skills',
       settings: 'settings'
     });
     expect(Object.keys(uxModel.sectionEmptyStates)).toEqual([
       'home',
-      'inventory',
-      'sources',
+      'skills',
       'settings'
     ]);
-    expect(JSON.stringify(uxModel)).not.toMatch(/trust|deploy|install|security/i);
+    expect(JSON.stringify(uxModel)).not.toMatch(/trust|deploy|security/i);
   });
 
   it('keeps scanned local agent skills visible as indexed locations', () => {
@@ -76,12 +74,14 @@ describe('workspace view model fixture boundaries', () => {
       expect.objectContaining({
         name: 'openai-docs',
         sourceAgent: 'Codex',
-        visibilityStatus: 'indexed'
+        agentCode: 'codex',
+        visibilityStatus: 'indexed',
+        ownership: 'indexed'
       })
     ]);
     expect(viewModel.dashboard.metrics).toContainEqual(
       expect.objectContaining({
-        label: 'Indexed skills',
+        label: 'Library skills',
         value: '1'
       })
     );
@@ -98,18 +98,18 @@ describe('workspace view model fixture boundaries', () => {
 
     expect(uxModel.actionSteps.map((step) => step.label)).toEqual([
       'Set local roots',
-      'Build inventory',
-      'Preview source'
+      'Build skills index',
+      'Review marketplace'
     ]);
     expect(uxModel.actionSteps[0]).toMatchObject({
       status: 'current',
       provenance: 'not scanned',
       targetPage: 'settings'
     });
-    expect(uxModel.sectionEmptyStates.sources).toMatchObject({
-      title: 'No sources previewed',
+    expect(uxModel.sectionEmptyStates.skills).toMatchObject({
+      title: 'No skills indexed',
       actionLabel: 'Add local or Git source',
-      provenance: 'source preview'
+      provenance: 'skills'
     });
     expect(uxModel.provenanceChips.map((chip) => chip.label)).toContain('not scanned');
   });
@@ -117,7 +117,7 @@ describe('workspace view model fixture boundaries', () => {
   it('summarizes source preview without trust or write impact language', () => {
     const uxModel = createWorkspaceUxModel({
       state: createEmptyWorkspaceState(),
-      activePage: 'sources',
+      activePage: 'skills',
       selectedSkillDetail: null,
       discoverPreviewSkills: [
         {
@@ -145,7 +145,7 @@ describe('workspace view model fixture boundaries', () => {
     const state = createEmptyWorkspaceState();
     const uxModel = createWorkspaceUxModel({
       state,
-      activePage: 'inventory',
+      activePage: 'skills',
       selectedSkillDetail: {
         skill: {
           id: 'skill-runtime',

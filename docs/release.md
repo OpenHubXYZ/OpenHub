@@ -22,8 +22,9 @@ Before a release:
 - Verify database migrations from empty and previous supported versions.
 - Verify first launch root detection, `Open workspace`, root scan, and ordinary
   import paths.
-- Verify local/Git/ZIP import, FTS search, inventory flow, Discover source
-  preview, and version diff/compare behavior.
+- Verify local/Git/ZIP import, FTS search, skills flow, Marketplace source
+  preview, install plan/apply/uninstall behavior, and version diff/compare
+  behavior.
 - Verify optional sync remains disabled until a profile is enabled.
 - Verify sync credentials use OS-backed credential storage and release logs do
   not contain credential material.
@@ -89,7 +90,8 @@ Release validation must confirm:
 - crash or diagnostic logs are redacted
 - credentials use OS keychain storage
 - renderer code has no direct Node, filesystem, SQLite, or `ipcRenderer` access
-- agent roots are not written by current inventory workflows
+- root writes happen only through explicit copy/symlink install plans
+- uninstall removes only files recorded as app-owned installation files
 - source preview does not expose ratings, reputation, trust levels, or risk
   scores
 

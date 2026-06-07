@@ -87,7 +87,7 @@ describe('version service', () => {
     });
   });
 
-  it('creates additional inventory versions without promotion or rollback APIs', async () => {
+  it('creates additional skill versions without promotion or rollback APIs', async () => {
     const workspace = await tempDir();
     const source = path.join(workspace, 'source-followup');
     await mkdir(source, { recursive: true });

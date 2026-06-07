@@ -1,8 +1,9 @@
 # Roadmap
 
-The current roadmap is inventory-first. Historical planning documents in
+The current roadmap is skills-first. Historical planning documents in
 `references/` remain useful context, but the current product no longer includes
 agent-root deploy workflows, trust scoring, policy packs, or review queues.
+Root writes are limited to explicit app-owned copy/symlink install plans.
 
 ## Phase 0: Open-Source Repository Foundation
 
@@ -33,12 +34,12 @@ real user directories.
 
 - Add Codex, Claude, Gemini, OpenCode, and Agents adapters.
 - Parse `SKILL.md` files.
-- Expose Inventory search, Skill Detail, and Settings roots UI.
+- Expose Skills search, Skill Detail, and Settings roots UI.
 
 Acceptance: fixture roots scan, malformed files produce explainable errors, and
 IPC library search/detail tests pass.
 
-## Phase 4: Import Into Local Inventory
+## Phase 4: Import Into Local Skills Library
 
 - Add local folder, Git, and ZIP importers.
 - Add path sanitization and isolated staging.
@@ -47,18 +48,21 @@ IPC library search/detail tests pass.
 Acceptance: fixture imports, ZIP slip rejection, symlink escape rejection,
 search, detail, and renderer import state tests pass.
 
-## Phase 4.5: Discover Sources And Root-Aware Imports
+## Phase 4.5: Marketplace Sources And Root-Aware Installs
 
 - Add local and Git source configuration.
 - Cache source preview listings.
 - Keep first launch focused on common local root detection.
 - Route non-standard directories through ordinary local folder, Git, ZIP, TAR,
   sparse-Git, or mirror imports when supported.
+- Add copy/symlink install plans for imported skills.
+- Add app-owned uninstall that removes only recorded installation files.
 
 Acceptance: adding a source performs no network or import writes by itself,
 preview reports candidate skills before import, first-launch root detection is
-read-only, and no account, telemetry, remote catalog fetch, trust level, or risk
-score is required by default.
+read-only, install conflicts require explicit overwrite confirmation, uninstall
+preserves user-created files, and no account, telemetry, remote catalog fetch,
+trust level, or risk score is required by default.
 
 ## Phase 5: Version History, Blob Store, Collections
 
@@ -91,8 +95,8 @@ example plugin contract tests pass.
   inventory, and launch README.
 
 Acceptance: current-platform package build and smoke coverage for search,
-local/Git/ZIP import, inventory flow, source preview, sync disabled default, and
-plugin disabled default pass.
+local/Git/ZIP import, skills flow, marketplace source preview, sync disabled
+default, and plugin disabled default pass.
 
 ## Phase 9: Maintainer Operations
 

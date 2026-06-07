@@ -14,7 +14,7 @@ describe('desktop release smoke', () => {
     await Promise.all(tempDirectories.splice(0).map((directory) => rm(directory, { recursive: true })));
   });
 
-  it('runs the packaged startup inventory flow in isolated directories', async () => {
+  it('runs the packaged startup skills flow in isolated directories', async () => {
     const workspace = await tempDir();
     const result = await runDesktopReleaseSmoke({
       dataDirectory: path.join(workspace, 'app-data'),

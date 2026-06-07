@@ -49,6 +49,7 @@ export interface DiscoverService {
     url: string;
   }): DiscoverSource;
   listSources(): DiscoverSource[];
+  removeSource(input: { sourceId: string }): { status: 'removed' };
   previewSource(input: { sourceId: string }): Promise<DiscoverPreviewResult>;
 }
 
@@ -103,6 +104,11 @@ export function createDiscoverService(input: CreateDiscoverServiceInput): Discov
         )
         .all()
         .map(discoverSourceRow);
+    },
+
+    removeSource({ sourceId }) {
+      input.database.prepare('delete from discover_sources where id = ?').run(sourceId);
+      return { status: 'removed' };
     },
 
     async previewSource({ sourceId }) {
