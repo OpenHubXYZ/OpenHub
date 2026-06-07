@@ -123,6 +123,13 @@ describe('renderer layout containment CSS', () => {
     expect(tagBlock).toContain('text-overflow: ellipsis;');
   });
 
+  it('separates repeated panel section headings from preceding rows', async () => {
+    const css = await readFile(cssPath, 'utf8');
+    const sectionHeadingBlock = cssBlock(css, '.panel h2:not(:first-child)');
+
+    expect(sectionHeadingBlock).toContain('margin-top: 20px;');
+  });
+
   it('allows long command error statuses to wrap without clipping', async () => {
     const css = await readFile(cssPath, 'utf8');
     const statusErrorBlock = cssBlock(css, '.status-error');
