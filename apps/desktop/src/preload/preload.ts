@@ -63,6 +63,10 @@ const api = {
     return invoke('agentRootsAddProject', input) as Promise<AgentRootTarget>;
   },
 
+  removeProjectRoot(input: { agentCode: string; rootPath: string }): Promise<StatusOnlyResult> {
+    return invoke('agentRootsRemoveProject', input) as Promise<StatusOnlyResult>;
+  },
+
   listAgentRoots(): Promise<AgentRootTarget[]> {
     return invoke('agentRootsList', {}) as Promise<AgentRootTarget[]>;
   },

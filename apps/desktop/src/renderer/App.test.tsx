@@ -716,6 +716,33 @@ describe('desktop app shell', () => {
     await waitFor(() => expect(window.theOpenHub?.removeDiscoverSource).toHaveBeenCalledWith('source-local'));
   });
 
+  it('removes project roots from Settings without offering removal for detected roots', async () => {
+    const detectedRoot = createRoot('/tmp/.codex/skills');
+    const projectRoot = createProjectRoot('/tmp/project-skills');
+    window.theOpenHub = {
+      getWorkspaceState: vi.fn().mockResolvedValue(createEmptyWorkspaceState()),
+      listAgentRoots: vi.fn().mockResolvedValue([detectedRoot, projectRoot]),
+      listDiscoverSources: vi.fn().mockResolvedValue([]),
+      removeProjectRoot: vi.fn().mockResolvedValue({ status: 'removed' })
+    } as unknown as NonNullable<typeof window.theOpenHub>;
+
+    render(<App initialAgentRoots={[detectedRoot, projectRoot]} />);
+    fireEvent.click(screen.getByRole('button', { name: 'Settings' }));
+    expect(await screen.findByText('/tmp/.codex/skills')).toBeInTheDocument();
+    expect(screen.getByText('/tmp/project-skills')).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Remove /tmp/.codex/skills' })).not.toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Remove /tmp/project-skills' }));
+
+    await waitFor(() => expect(window.theOpenHub?.removeProjectRoot).toHaveBeenCalledWith({
+      agentCode: 'codex',
+      rootPath: '/tmp/project-skills'
+    }));
+    expect(await screen.findByText('Root removed')).toBeInTheDocument();
+    expect(screen.queryByText('/tmp/project-skills')).not.toBeInTheDocument();
+    expect(screen.getByText('/tmp/.codex/skills')).toBeInTheDocument();
+  });
+
   it('reports settings source and root failures without mutating visible lists', async () => {
     window.theOpenHub = {
       getWorkspaceState: vi.fn().mockResolvedValue(createEmptyWorkspaceState()),
@@ -923,6 +950,15 @@ function createRoot(rootPath: string) {
     rootKind: 'user' as const,
     writable: true,
     isDefault: true
+  };
+}
+
+function createProjectRoot(rootPath: string) {
+  return {
+    ...createRoot(rootPath),
+    scope: 'project',
+    rootKind: 'project' as const,
+    isDefault: false
   };
 }
 

@@ -311,6 +311,24 @@ export function App({
     }
   }
 
+  async function removeProjectRoot(root: AgentRootTarget) {
+    const api = window.theOpenHub;
+    if (!api?.removeProjectRoot) {
+      return;
+    }
+    try {
+      await api.removeProjectRoot({ agentCode: root.agentCode, rootPath: root.rootPath });
+      await refreshWorkspace().catch(() => undefined);
+      setAgentRoots((current) =>
+        current.filter((item) => item.rootPath !== root.rootPath || item.agentCode !== root.agentCode || item.rootKind !== 'project')
+      );
+      setSelectedTargetRoot((current) => (current === root.rootPath ? '' : current));
+      setStatusMessage('Root removed');
+    } catch (error: unknown) {
+      setStatusMessage(formatError(error), 'error');
+    }
+  }
+
   async function addRoot() {
     const api = window.theOpenHub;
     if (!api || !rootPath.trim()) {
@@ -529,6 +547,7 @@ export function App({
               setRootPath={setRootPath}
               discoverSources={discoverSources}
               onAddRoot={addRoot}
+              onRemoveRoot={removeProjectRoot}
               onAddSource={addMarketplaceSource}
               onRemoveSource={removeMarketplaceSource}
             />
@@ -886,6 +905,7 @@ function SettingsPage({
   setRootPath,
   discoverSources,
   onAddRoot,
+  onRemoveRoot,
   onAddSource,
   onRemoveSource
 }: {
@@ -902,6 +922,7 @@ function SettingsPage({
   setRootPath: (value: string) => void;
   discoverSources: DiscoverSource[];
   onAddRoot: () => void;
+  onRemoveRoot: (root: AgentRootTarget) => void;
   onAddSource: () => void;
   onRemoveSource: (sourceId: string) => void;
 }) {
@@ -934,9 +955,16 @@ function SettingsPage({
         </div>
         {roots.length === 0 ? <p className="empty">No local roots</p> : null}
         {roots.map((root) => (
-          <div className="key-row" key={`${root.agentCode}:${root.rootPath}`}>
+          <div className="key-row three-col" key={`${root.agentCode}:${root.rootPath}:${root.scope}`}>
             <span>{root.agentDisplayName}</span>
             <strong>{root.rootPath}</strong>
+            {root.rootKind === 'project' ? (
+              <button type="button" className="inline-action" aria-label={`Remove ${root.rootPath}`} onClick={() => onRemoveRoot(root)}>
+                Remove
+              </button>
+            ) : (
+              <span className="muted">Detected</span>
+            )}
           </div>
         ))}
         <h2>Marketplace sources</h2>

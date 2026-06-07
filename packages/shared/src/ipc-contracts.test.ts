@@ -15,6 +15,7 @@ describe('desktop shell IPC contract', () => {
       expect.arrayContaining([
         'app.info',
         'workspace.state',
+        'agentRoots.removeProject',
         'library.list',
         'library.scan',
         'library.search',

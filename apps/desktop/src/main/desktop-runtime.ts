@@ -130,6 +130,10 @@ export function createDesktopRuntime(input: CreateDesktopRuntimeInput): DesktopR
         );
       }
 
+      if (channel === desktopShellContract.agentRootsRemoveProject.channel) {
+        return parseIpcResponse(channel, removeProjectRoot(database, request as { agentCode: string; rootPath: string }));
+      }
+
       if (channel === desktopShellContract.agentRootsList.channel) {
         return parseIpcResponse(channel, await listAgentRootTargets(database, adapters));
       }
@@ -590,6 +594,67 @@ function addProjectRoot(database: SqliteDatabase, adapters: AgentAdapter[], inpu
   });
   record();
   return target;
+}
+
+function removeProjectRoot(database: SqliteDatabase, input: { agentCode: string; rootPath: string }) {
+  const agentId = stableId('agent', input.agentCode);
+  const remove = database.transaction(() => {
+    database
+      .prepare(
+        `
+          delete from agent_roots
+          where agent_id = ?
+            and root_path = ?
+            and scope = 'project'
+            and root_kind = 'project'
+        `
+      )
+      .run(agentId, input.rootPath);
+
+    const orphanedAgentRootSkills = database
+      .prepare(
+        `
+          select s.id, s.canonical_source_id as sourceId
+          from skills s
+          join sources src on src.id = s.canonical_source_id
+          where src.source_type = 'agent-root'
+            and not exists (
+              select 1
+              from indexed_skill_locations isl
+              where isl.skill_id = s.id
+            )
+        `
+      )
+      .all() as Array<{ id: string; sourceId: string }>;
+
+    if (orphanedAgentRootSkills.length === 0) {
+      return;
+    }
+
+    const skillIds = orphanedAgentRootSkills.map((row) => row.id);
+    const skillPlaceholders = skillIds.map(() => '?').join(', ');
+    database.prepare(`delete from skill_search where skill_id in (${skillPlaceholders})`).run(...skillIds);
+    database.prepare(`delete from skill_similarity_index where skill_id in (${skillPlaceholders})`).run(...skillIds);
+    database.prepare(`delete from skills where id in (${skillPlaceholders})`).run(...skillIds);
+
+    const sourceIds = [...new Set(orphanedAgentRootSkills.map((row) => row.sourceId))];
+    const sourcePlaceholders = sourceIds.map(() => '?').join(', ');
+    database
+      .prepare(
+        `
+          delete from sources
+          where id in (${sourcePlaceholders})
+            and not exists (
+              select 1
+              from skills s
+              where s.canonical_source_id = sources.id
+            )
+        `
+      )
+      .run(...sourceIds);
+  });
+  remove();
+  return { status: 'removed' };
 }
 
 function agentRootRow(row: unknown) {

@@ -44,6 +44,7 @@ declare global {
         agentCode: 'codex' | 'claude' | 'gemini' | 'opencode' | 'agents';
         rootPath: string;
       }): Promise<AgentRootTarget>;
+      removeProjectRoot(input: { agentCode: string; rootPath: string }): Promise<StatusOnlyResult>;
       listAgentRoots(): Promise<AgentRootTarget[]>;
       listLibrarySkills(): Promise<LibrarySkillSummary[]>;
       scanAgentRoots(): Promise<LibraryScanResult>;

@@ -671,6 +671,11 @@ export const desktopShellContract = {
     request: z.object({ agentCode: z.string().min(1), rootPath: z.string().min(1) }).strict(),
     response: agentRootTargetSchema
   },
+  agentRootsRemoveProject: {
+    channel: 'agentRoots.removeProject',
+    request: z.object({ agentCode: z.string().min(1), rootPath: z.string().min(1) }).strict(),
+    response: statusOnlyResultSchema
+  },
   agentRootsList: {
     channel: 'agentRoots.list',
     request: emptyRequestSchema,

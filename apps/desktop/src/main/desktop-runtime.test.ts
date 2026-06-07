@@ -135,6 +135,22 @@ describe('desktop runtime IPC dispatch', () => {
         visibilityStatus: 'indexed'
       })
     ]);
+
+    const dispatch = runtime.dispatch as (channel: string, payload: unknown) => Promise<unknown>;
+    await expect(dispatch('agentRoots.removeProject', {
+      agentCode: 'codex',
+      rootPath: projectRoot
+    })).resolves.toEqual({ status: 'removed' });
+    await expect(runtime.dispatch('agentRoots.list', {})).resolves.not.toEqual(
+      expect.arrayContaining([expect.objectContaining({ rootPath: projectRoot })])
+    );
+    await expect(runtime.dispatch('library.list', {})).resolves.toEqual([]);
+    await expect(runtime.dispatch('workspace.state', {})).resolves.toEqual(
+      expect.objectContaining({
+        skills: [],
+        librarySkills: []
+      })
+    );
   });
 
   it('dispatches version, collection, sync, discover, and plugin skills workflows', async () => {
