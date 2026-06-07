@@ -1444,6 +1444,73 @@ describe('desktop app shell', () => {
     expect(screen.queryByText('Security rules')).not.toBeInTheDocument();
     expect(screen.queryByText('Exporters')).not.toBeInTheDocument();
   });
+
+  it('manages plugin directories from Settings through typed preload IPC', async () => {
+    const settings = createAppSettings({
+      pluginDirectories: [
+        {
+          id: 'plugin-dir-existing',
+          rootPath: '/tmp/openhub-existing-plugins',
+          status: 'scanned',
+          scannedAt: '2026-06-07T00:00:00.000Z'
+        }
+      ]
+    });
+    const addedDirectory = {
+      id: 'plugin-dir-added',
+      rootPath: '/tmp/openhub-added-plugins',
+      status: 'pending',
+      scannedAt: null
+    };
+    const addSettingsPluginDirectory = vi.fn().mockResolvedValue(addedDirectory);
+    const scanPluginDirectory = vi.fn().mockResolvedValue({
+      directory: {
+        ...addedDirectory,
+        status: 'scanned',
+        scannedAt: '2026-06-07T01:00:00.000Z'
+      },
+      catalog: [
+        {
+          id: 'catalog-local-importer',
+          directoryId: addedDirectory.id,
+          pluginId: 'local-importer',
+          name: 'Local Importer',
+          version: '1.0.0',
+          rootPath: '/tmp/openhub-added-plugins/local-importer',
+          installed: false,
+          status: 'available'
+        }
+      ]
+    });
+    const removeSettingsPluginDirectory = vi.fn().mockResolvedValue({ status: 'removed' });
+    window.theOpenHub = {
+      getWorkspaceState: vi.fn().mockResolvedValue(createEmptyWorkspaceState()),
+      listAgentRoots: vi.fn().mockResolvedValue([]),
+      listDiscoverSources: vi.fn().mockResolvedValue([]),
+      getSettings: vi.fn().mockResolvedValue(settings),
+      addSettingsPluginDirectory,
+      scanPluginDirectory,
+      removeSettingsPluginDirectory
+    } as unknown as NonNullable<typeof window.theOpenHub>;
+
+    render(<App />);
+    fireEvent.click(screen.getByRole('button', { name: 'Settings' }));
+
+    expect(await screen.findByText('/tmp/openhub-existing-plugins')).toBeInTheDocument();
+    fireEvent.change(screen.getByLabelText('Plugin directory path'), { target: { value: addedDirectory.rootPath } });
+    fireEvent.click(screen.getByRole('button', { name: 'Add plugin directory' }));
+
+    await waitFor(() => expect(addSettingsPluginDirectory).toHaveBeenCalledWith(addedDirectory.rootPath));
+    expect(await screen.findByText('/tmp/openhub-added-plugins')).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: `Scan ${addedDirectory.rootPath}` }));
+    await waitFor(() => expect(scanPluginDirectory).toHaveBeenCalledWith(addedDirectory.id));
+    expect(await screen.findByText('Local Importer')).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: `Remove ${addedDirectory.rootPath}` }));
+    await waitFor(() => expect(removeSettingsPluginDirectory).toHaveBeenCalledWith(addedDirectory.id));
+    expect(screen.queryByText('/tmp/openhub-added-plugins')).not.toBeInTheDocument();
+  });
 });
 
 function createAppSettings(input: Partial<AppSettings> = {}): AppSettings {

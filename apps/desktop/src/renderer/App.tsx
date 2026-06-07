@@ -74,6 +74,7 @@ export function App({
   const [selectedSourceId, setSelectedSourceId] = useState('');
   const [rootAgentCode, setRootAgentCode] = useState<RootAgentCode>('codex');
   const [rootPath, setRootPath] = useState('');
+  const [pluginDirectoryPath, setPluginDirectoryPath] = useState('');
   const [selectedTargetRoot, setSelectedTargetRoot] = useState('');
   const [projectionMode, setProjectionMode] = useState<'copy' | 'symlink'>('copy');
   const [pendingPlan, setPendingPlan] = useState<InstallPlan | null>(null);
@@ -445,6 +446,85 @@ export function App({
     }
   }
 
+  async function addPluginDirectory() {
+    const api = window.theOpenHub;
+    const trimmedPluginDirectoryPath = pluginDirectoryPath.trim();
+    if (!trimmedPluginDirectoryPath) {
+      setStatusMessage('Enter a plugin directory path first', 'error');
+      return;
+    }
+    if (!api?.addSettingsPluginDirectory) {
+      return;
+    }
+    try {
+      const directory = await api.addSettingsPluginDirectory(trimmedPluginDirectoryPath);
+      setAppSettings((current) =>
+        current ? { ...current, pluginDirectories: upsertPluginDirectory(current.pluginDirectories, directory) } : current
+      );
+      setState((current) => ({
+        ...current,
+        plugins: {
+          ...current.plugins,
+          directories: upsertPluginDirectory(current.plugins.directories, directory)
+        }
+      }));
+      setPluginDirectoryPath('');
+      setStatusMessage('Plugin directory added');
+    } catch (error: unknown) {
+      setStatusMessage(formatError(error), 'error');
+    }
+  }
+
+  async function scanPluginDirectory(directoryId: string) {
+    const api = window.theOpenHub;
+    if (!api?.scanPluginDirectory) {
+      return;
+    }
+    try {
+      const result = await api.scanPluginDirectory(directoryId);
+      setAppSettings((current) =>
+        current ? { ...current, pluginDirectories: upsertPluginDirectory(current.pluginDirectories, result.directory) } : current
+      );
+      setState((current) => ({
+        ...current,
+        plugins: {
+          ...current.plugins,
+          directories: upsertPluginDirectory(current.plugins.directories, result.directory),
+          catalog: replacePluginCatalogForDirectory(current.plugins.catalog, directoryId, result.catalog)
+        }
+      }));
+      setStatusMessage(`${result.catalog.length} plugin entries`);
+    } catch (error: unknown) {
+      setStatusMessage(formatError(error), 'error');
+    }
+  }
+
+  async function removePluginDirectory(directoryId: string) {
+    const api = window.theOpenHub;
+    if (!api?.removeSettingsPluginDirectory) {
+      return;
+    }
+    try {
+      await api.removeSettingsPluginDirectory(directoryId);
+      setAppSettings((current) =>
+        current
+          ? { ...current, pluginDirectories: current.pluginDirectories.filter((directory) => directory.id !== directoryId) }
+          : current
+      );
+      setState((current) => ({
+        ...current,
+        plugins: {
+          ...current.plugins,
+          directories: current.plugins.directories.filter((directory) => directory.id !== directoryId),
+          catalog: current.plugins.catalog.filter((entry) => entry.directoryId !== directoryId)
+        }
+      }));
+      setStatusMessage('Plugin directory removed');
+    } catch (error: unknown) {
+      setStatusMessage(formatError(error), 'error');
+    }
+  }
+
   async function importCandidate(skill: DiscoverSkillPreview): Promise<string | null> {
     const api = window.theOpenHub;
     if (!api) {
@@ -712,6 +792,8 @@ export function App({
               setRootAgentCode={setRootAgentCode}
               rootPath={rootPath}
               setRootPath={setRootPath}
+              pluginDirectoryPath={pluginDirectoryPath}
+              setPluginDirectoryPath={setPluginDirectoryPath}
               discoverSources={discoverSources}
               onAddRoot={addRoot}
               onRemoveRoot={removeProjectRoot}
@@ -719,6 +801,9 @@ export function App({
               onRemoveSource={removeMarketplaceSource}
               onSetUpdateChecks={setUpdateChecksPreference}
               onSetLogLevel={setLogLevelPreference}
+              onAddPluginDirectory={addPluginDirectory}
+              onScanPluginDirectory={scanPluginDirectory}
+              onRemovePluginDirectory={removePluginDirectory}
             />
           ) : null}
         </section>
@@ -1208,13 +1293,18 @@ function SettingsPage({
   setRootAgentCode,
   rootPath,
   setRootPath,
+  pluginDirectoryPath,
+  setPluginDirectoryPath,
   discoverSources,
   onAddRoot,
   onRemoveRoot,
   onAddSource,
   onRemoveSource,
   onSetUpdateChecks,
-  onSetLogLevel
+  onSetLogLevel,
+  onAddPluginDirectory,
+  onScanPluginDirectory,
+  onRemovePluginDirectory
 }: {
   roots: AgentRootTarget[];
   state: DesktopWorkspaceState;
@@ -1228,6 +1318,8 @@ function SettingsPage({
   setRootAgentCode: (value: RootAgentCode) => void;
   rootPath: string;
   setRootPath: (value: string) => void;
+  pluginDirectoryPath: string;
+  setPluginDirectoryPath: (value: string) => void;
   discoverSources: DiscoverSource[];
   onAddRoot: () => void;
   onRemoveRoot: (root: AgentRootTarget) => void;
@@ -1235,7 +1327,12 @@ function SettingsPage({
   onRemoveSource: (sourceId: string) => void;
   onSetUpdateChecks: (enabled: boolean) => void;
   onSetLogLevel: (logLevel: AppSettings['logLevel']) => void;
+  onAddPluginDirectory: () => void;
+  onScanPluginDirectory: (directoryId: string) => void;
+  onRemovePluginDirectory: (directoryId: string) => void;
 }) {
+  const pluginDirectories = appSettings?.pluginDirectories ?? state.plugins.directories;
+
   return (
     <div className="split-two">
       <div className="settings-stack">
@@ -1337,6 +1434,50 @@ function SettingsPage({
               <strong>{plugin.status}</strong>
             </div>
           ))}
+          <h2>Plugin directories</h2>
+          <div className="form-grid compact-form">
+            <label>
+              Plugin directory path
+              <input value={pluginDirectoryPath} onChange={(event) => setPluginDirectoryPath(event.target.value)} />
+            </label>
+            <button type="button" onClick={onAddPluginDirectory}>
+              Add plugin directory
+            </button>
+          </div>
+          {pluginDirectories.length === 0 ? <p className="empty">No plugin directories</p> : null}
+          {pluginDirectories.map((directory) => (
+            <div className="key-row three-col" key={directory.id}>
+              <span>{directory.status}</span>
+              <strong>{directory.rootPath}</strong>
+              <span className="row-actions">
+                <button
+                  type="button"
+                  className="inline-action"
+                  aria-label={`Scan ${directory.rootPath}`}
+                  onClick={() => onScanPluginDirectory(directory.id)}
+                >
+                  Scan
+                </button>
+                <button
+                  type="button"
+                  className="inline-action"
+                  aria-label={`Remove ${directory.rootPath}`}
+                  onClick={() => onRemovePluginDirectory(directory.id)}
+                >
+                  Remove
+                </button>
+              </span>
+            </div>
+          ))}
+          <h2>Plugin catalog</h2>
+          {state.plugins.catalog.length === 0 ? <p className="empty">No plugin catalog entries</p> : null}
+          {state.plugins.catalog.map((entry) => (
+            <div className="key-row three-col" key={entry.id}>
+              <span>{entry.name}</span>
+              <strong>{entry.rootPath}</strong>
+              <span className="tag">{entry.installed ? 'Installed' : entry.status}</span>
+            </div>
+          ))}
         </section>
         <section className="panel">
           <h2>App preferences</h2>
@@ -1427,6 +1568,21 @@ function groupByRoot(rows: DesktopWorkspaceState['librarySkills']) {
     groups.set(rootPath, [...(groups.get(rootPath) ?? []), row]);
   }
   return [...groups.entries()].map(([rootPath, groupedRows]) => ({ rootPath, rows: groupedRows }));
+}
+
+function upsertPluginDirectory(
+  directories: DesktopWorkspaceState['plugins']['directories'],
+  directory: DesktopWorkspaceState['plugins']['directories'][number]
+) {
+  return [directory, ...directories.filter((item) => item.id !== directory.id)];
+}
+
+function replacePluginCatalogForDirectory(
+  catalog: DesktopWorkspaceState['plugins']['catalog'],
+  directoryId: string,
+  entries: DesktopWorkspaceState['plugins']['catalog']
+) {
+  return [...catalog.filter((entry) => entry.directoryId !== directoryId), ...entries];
 }
 
 function skillMatchesSearch(skill: DesktopWorkspaceState['librarySkills'][number], normalizedSearchQuery: string): boolean {
