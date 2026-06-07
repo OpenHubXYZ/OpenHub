@@ -56,6 +56,19 @@ describe('renderer layout containment CSS', () => {
     expect(compactRules).toContain('text-overflow: clip;');
   });
 
+  it('stacks mobile conflict confirmations so file names stay readable', async () => {
+    const css = await readFile(cssPath, 'utf8');
+    const compactRules = atRuleBlock(css, '@media (max-width: 900px)');
+
+    expect(compactRules).toContain('.conflict-box {');
+    expect(compactRules).toContain('flex-direction: column;');
+    expect(compactRules).toContain('align-items: stretch;');
+    expect(compactRules).toContain('.conflict-files code {');
+    expect(compactRules).toContain('white-space: normal;');
+    expect(compactRules).toContain('overflow-wrap: anywhere;');
+    expect(compactRules).toContain('text-overflow: clip;');
+  });
+
   it('keeps compact labels clipped inside table cells', async () => {
     const css = await readFile(cssPath, 'utf8');
     const tagBlock = cssBlock(css, '.tag,\n.status');
