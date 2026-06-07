@@ -100,6 +100,43 @@ describe('desktop runtime IPC dispatch', () => {
     ]);
   });
 
+  it('scans added project roots into the library', async () => {
+    const workspace = await tempDir();
+    const projectRoot = path.join(workspace, 'project-skills');
+    await createSkillFixture(path.join(projectRoot, 'project-helper'), 'project-helper');
+    const runtime = createDesktopRuntime({
+      dataDirectory: path.join(workspace, 'app-data'),
+      homeDirectory: path.join(workspace, 'home'),
+      secretStore: createInMemorySecretStore()
+    });
+
+    await expect(runtime.dispatch('agentRoots.addProject', {
+      agentCode: 'codex',
+      rootPath: projectRoot
+    })).resolves.toMatchObject({
+      agentCode: 'codex',
+      rootPath: projectRoot,
+      rootKind: 'project'
+    });
+
+    const scan = (await runtime.dispatch('library.scan', {})) as RuntimeScanResult;
+
+    expect(scan.indexedSkills).toEqual([
+      expect.objectContaining({ name: 'project-helper', agentCode: 'codex' })
+    ]);
+    await expect(runtime.dispatch('library.list', {})).resolves.toEqual([
+      expect.objectContaining({
+        name: 'project-helper',
+        sourceAgent: 'Codex',
+        agentCode: 'codex',
+        rootPath: projectRoot,
+        rootKind: 'project',
+        ownership: 'indexed',
+        visibilityStatus: 'indexed'
+      })
+    ]);
+  });
+
   it('dispatches version, collection, sync, discover, and plugin skills workflows', async () => {
     const workspace = await tempDir();
     const dataDirectory = path.join(workspace, 'app-data');

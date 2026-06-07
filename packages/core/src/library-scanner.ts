@@ -1,7 +1,7 @@
 import { readdir, readFile, stat } from 'node:fs/promises';
 import path from 'node:path';
 
-import type { AgentAdapter, AgentCode, AgentRoot } from '@theopenhub/adapters';
+import type { AgentAdapter, AgentCode, AgentRoot, AgentRootScope } from '@theopenhub/adapters';
 import { createLibraryRepository, createSkillRepository } from '@theopenhub/db';
 import type { SqliteDatabase } from '@theopenhub/db';
 
@@ -35,6 +35,8 @@ export interface ScanAgentLibrariesResult {
   errors: ScanErrorResult[];
 }
 
+type ScannableAgentRoot = AgentRoot & { rootKind: 'user' | 'project' };
+
 export async function scanAgentLibraries(
   input: ScanAgentLibrariesInput
 ): Promise<ScanAgentLibrariesResult> {
@@ -44,10 +46,21 @@ export async function scanAgentLibraries(
   const errors: ScanErrorResult[] = [];
 
   for (const adapter of input.adapters) {
-    const roots = await adapter.detectRoots();
+    const roots = await scannableRootsForAdapter(input.database, adapter);
 
     for (const root of roots) {
-      const candidates = await listSkillCandidates(root);
+      let candidates: string[];
+      try {
+        candidates = await listSkillCandidates(root);
+      } catch (error) {
+        errors.push({
+          agentCode: root.agentCode,
+          code: 'root_unreadable',
+          skillPath: root.rootPath,
+          message: error instanceof Error ? error.message : 'Root could not be read'
+        });
+        continue;
+      }
 
       for (const candidate of candidates) {
         const manifestPath = path.join(candidate, 'SKILL.md');
@@ -89,6 +102,7 @@ export async function scanAgentLibraries(
             adapterVersion: root.adapterVersion,
             rootPath: root.rootPath,
             rootScope: root.scope,
+            rootKind: root.rootKind,
             writable: root.writable,
             isDefault: root.isDefault,
             skillPath: candidate,
@@ -113,6 +127,59 @@ export async function scanAgentLibraries(
   }
 
   return { indexedSkills, errors };
+}
+
+async function scannableRootsForAdapter(database: SqliteDatabase, adapter: AgentAdapter): Promise<ScannableAgentRoot[]> {
+  const detectedRoots = (await adapter.detectRoots()).map<ScannableAgentRoot>((root) => ({ ...root, rootKind: 'user' }));
+  const storedRoots = database
+    .prepare(
+      `
+        select
+          a.code as agentCode,
+          a.display_name as agentDisplayName,
+          a.adapter_version as adapterVersion,
+          ar.root_path as rootPath,
+          ar.scope,
+          ar.root_kind as rootKind,
+          ar.writable,
+          ar.is_default as isDefault
+        from agent_roots ar
+        join agents a on a.id = ar.agent_id
+        where a.code = ?
+        order by ar.created_at
+      `
+    )
+    .all(adapter.id)
+    .map(scannableRootRow);
+
+  const byKey = new Map<string, ScannableAgentRoot>();
+  for (const root of [...detectedRoots, ...storedRoots]) {
+    byKey.set(`${root.agentCode}:${root.rootPath}:${root.scope}`, root);
+  }
+  return [...byKey.values()];
+}
+
+function scannableRootRow(row: unknown): ScannableAgentRoot {
+  const typed = row as {
+    agentCode: AgentCode;
+    agentDisplayName: string;
+    adapterVersion: string;
+    rootPath: string;
+    scope: AgentRootScope;
+    rootKind: 'user' | 'project';
+    writable: number;
+    isDefault: number;
+  };
+  return {
+    agentCode: typed.agentCode,
+    agentDisplayName: typed.agentDisplayName,
+    adapterVersion: typed.adapterVersion,
+    rootPath: typed.rootPath,
+    scope: typed.scope,
+    rootKind: typed.rootKind,
+    writable: typed.writable === 1,
+    isDefault: typed.isDefault === 1
+  };
 }
 
 async function listSkillCandidates(root: AgentRoot): Promise<string[]> {
