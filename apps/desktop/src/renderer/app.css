@@ -774,4 +774,15 @@ button {
   .split-two {
     grid-template-columns: 1fr;
   }
+
+  .key-row.three-col {
+    grid-template-columns: 1fr;
+    align-items: start;
+  }
+
+  .key-row.three-col strong {
+    white-space: normal;
+    overflow-wrap: anywhere;
+    text-overflow: clip;
+  }
 }

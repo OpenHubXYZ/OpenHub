@@ -44,6 +44,18 @@ describe('renderer layout containment CSS', () => {
     expect(compactRules).toContain('grid-template-rows: auto minmax(0, 1fr);');
   });
 
+  it('lets narrow settings rows show long local paths instead of collapsing to ellipses', async () => {
+    const css = await readFile(cssPath, 'utf8');
+    const compactRules = atRuleBlock(css, '@media (max-width: 900px)');
+
+    expect(compactRules).toContain('.key-row.three-col {');
+    expect(compactRules).toContain('grid-template-columns: 1fr;');
+    expect(compactRules).toContain('.key-row.three-col strong {');
+    expect(compactRules).toContain('white-space: normal;');
+    expect(compactRules).toContain('overflow-wrap: anywhere;');
+    expect(compactRules).toContain('text-overflow: clip;');
+  });
+
   it('keeps compact labels clipped inside table cells', async () => {
     const css = await readFile(cssPath, 'utf8');
     const tagBlock = cssBlock(css, '.tag,\n.status');
