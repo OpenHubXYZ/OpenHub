@@ -783,6 +783,12 @@ button {
   align-items: start;
 }
 
+.detail-panel .key-row strong {
+  white-space: normal;
+  overflow-wrap: anywhere;
+  text-overflow: clip;
+}
+
 .markdown-preview {
   max-height: 220px;
   min-width: 0;

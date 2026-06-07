@@ -93,9 +93,16 @@ describe('renderer layout containment CSS', () => {
     expect(compactRules).toContain('flex-direction: column;');
     expect(compactRules).toContain('.detail-panel .key-row {');
     expect(compactRules).toContain('grid-template-columns: 1fr;');
-    expect(compactRules).toContain('.detail-panel .key-row strong {');
-    expect(compactRules).toContain('white-space: normal;');
-    expect(compactRules).toContain('overflow-wrap: anywhere;');
+  });
+
+  it('lets skill detail file and version rows wrap long values at every viewport size', async () => {
+    const css = await readFile(cssPath, 'utf8');
+    const baseCss = css.slice(0, css.indexOf('@media (max-width: 900px)'));
+    const detailValueBlock = cssBlock(baseCss, '.detail-panel .key-row strong');
+
+    expect(detailValueBlock).toContain('white-space: normal;');
+    expect(detailValueBlock).toContain('overflow-wrap: anywhere;');
+    expect(detailValueBlock).toContain('text-overflow: clip;');
   });
 
   it('lets mobile page status messages wrap instead of truncating long skill names', async () => {
