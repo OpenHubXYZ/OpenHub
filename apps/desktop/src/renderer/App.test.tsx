@@ -31,6 +31,19 @@ describe('desktop app shell', () => {
     expect(screen.queryByText(/install plan/i)).not.toBeInTheDocument();
   });
 
+  it('keeps home action buttons accessible by their primary labels', () => {
+    render(<App />);
+
+    expect(screen.getByRole('button', { name: 'Set local roots' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Build skills index' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Review marketplace' })).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Review marketplace' }));
+
+    expect(screen.getByRole('heading', { name: 'Skills' })).toBeInTheDocument();
+    expect(screen.getByRole('tab', { name: 'Marketplace' })).toHaveAttribute('aria-selected', 'true');
+  });
+
   it('starts automatic root scanning after initial workspace data is visible', async () => {
     const state = createEmptyWorkspaceState();
     const initialWorkspace = deferred<DesktopWorkspaceState>();

@@ -71,6 +71,7 @@ export interface ActionStep {
   status: 'current' | 'done' | 'pending';
   provenance: string;
   targetPage: PageKey;
+  targetSkillsTab?: 'marketplace';
 }
 
 export interface EmptyStateModel {
@@ -232,7 +233,8 @@ export function createWorkspaceUxModel(input: WorkspaceUxModelInput): WorkspaceU
         description: 'Inspect local or Git candidates',
         status: hasPreview ? 'done' : hasIndexedSkills ? 'current' : 'pending',
         provenance: hasPreview ? 'source preview' : 'not previewed',
-        targetPage: 'skills'
+        targetPage: 'skills',
+        targetSkillsTab: 'marketplace'
       }
     ],
     compatibilityRows: input.agentRootTargets.map((root) => ({

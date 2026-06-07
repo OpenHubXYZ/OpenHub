@@ -144,6 +144,12 @@ export function App({
     setStatus(message);
     setStatusTone(tone);
   }, []);
+  const navigateHomeStep = useCallback((step: ReturnType<typeof createWorkspaceUxModel>['actionSteps'][number]) => {
+    setActivePage(step.targetPage);
+    if (step.targetSkillsTab) {
+      setSkillsTab(step.targetSkillsTab);
+    }
+  }, []);
 
   const isInactive = useCallback((isCancelled?: AsyncGuard) => !mountedRef.current || Boolean(isCancelled?.()), []);
 
@@ -483,7 +489,7 @@ export function App({
           </div>
 
           {activePage === 'home' ? (
-            <HomePage metrics={homeMetrics} steps={uxModel.actionSteps} onNavigate={setActivePage} />
+            <HomePage metrics={homeMetrics} steps={uxModel.actionSteps} onNavigate={navigateHomeStep} />
           ) : null}
           {activePage === 'skills' ? (
             <SkillsPage
@@ -542,7 +548,7 @@ function HomePage({
 }: {
   metrics: ReturnType<typeof createWorkspaceViewModel>['dashboard']['metrics'];
   steps: ReturnType<typeof createWorkspaceUxModel>['actionSteps'];
-  onNavigate: (page: PageKey) => void;
+  onNavigate: (step: ReturnType<typeof createWorkspaceUxModel>['actionSteps'][number]) => void;
 }) {
   return (
     <div className="content-grid">
@@ -558,12 +564,21 @@ function HomePage({
       <section className="panel">
         <h2>Start here</h2>
         <div className="steps">
-          {steps.map((step) => (
-            <button type="button" key={step.label} onClick={() => onNavigate(step.targetPage)}>
-              <span>{step.label}</span>
-              <small>{step.provenance}</small>
-            </button>
-          ))}
+          {steps.map((step) => {
+            const descriptionId = `home-step-${step.label.toLowerCase().replace(/[^a-z0-9]+/g, '-')}`;
+            return (
+              <button
+                type="button"
+                key={step.label}
+                aria-label={step.label}
+                aria-describedby={descriptionId}
+                onClick={() => onNavigate(step)}
+              >
+                <span>{step.label}</span>
+                <small id={descriptionId}>{step.provenance}</small>
+              </button>
+            );
+          })}
         </div>
       </section>
     </div>
