@@ -349,6 +349,7 @@ button {
 .tag,
 .status {
   max-width: 100%;
+  min-width: 0;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -363,8 +364,19 @@ button {
 }
 
 .status-error {
+  overflow: visible;
+  text-overflow: clip;
+  white-space: normal;
+  overflow-wrap: anywhere;
+  align-items: flex-start;
+  line-height: 1.35;
+  padding-block: 6px;
   background: #fdecec;
   color: #9f1d1d;
+}
+
+.page-title .status-error {
+  flex-basis: 100%;
 }
 
 .split-two {

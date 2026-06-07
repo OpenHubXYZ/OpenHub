@@ -248,7 +248,11 @@ export function App({
   }, [initialPluginRegistry, runRootScan, setRootsAndSources, setStatusMessage]);
 
   async function refreshWorkspaceCommand() {
-    await refreshWorkspace();
+    try {
+      await refreshWorkspace();
+    } catch (error: unknown) {
+      setStatusMessage(formatError(error), 'error');
+    }
   }
 
   async function scanRoots() {
@@ -260,9 +264,13 @@ export function App({
     if (!api || !selectedSourceId) {
       return;
     }
-    const preview = await api.previewDiscoverSource(selectedSourceId);
-    setPreviewSkills(preview.skills);
-    setStatusMessage(`${preview.skills.length} candidates`);
+    try {
+      const preview = await api.previewDiscoverSource(selectedSourceId);
+      setPreviewSkills(preview.skills);
+      setStatusMessage(`${preview.skills.length} candidates`);
+    } catch (error: unknown) {
+      setStatusMessage(formatError(error), 'error');
+    }
   }
 
   async function addMarketplaceSource() {
@@ -270,14 +278,18 @@ export function App({
     if (!api || !sourceUrl.trim()) {
       return;
     }
-    const source = await api.addDiscoverSource({
-      name: sourceName.trim() || 'Local Source',
-      sourceType: sourceUrl.includes('://') ? 'git' : 'local',
-      url: sourceUrl.trim()
-    });
-    setDiscoverSources((current) => [source, ...current.filter((item) => item.id !== source.id)]);
-    setSelectedSourceId(source.id);
-    setStatusMessage(`Source added: ${source.name}`);
+    try {
+      const source = await api.addDiscoverSource({
+        name: sourceName.trim() || 'Local Source',
+        sourceType: sourceUrl.includes('://') ? 'git' : 'local',
+        url: sourceUrl.trim()
+      });
+      setDiscoverSources((current) => [source, ...current.filter((item) => item.id !== source.id)]);
+      setSelectedSourceId(source.id);
+      setStatusMessage(`Source added: ${source.name}`);
+    } catch (error: unknown) {
+      setStatusMessage(formatError(error), 'error');
+    }
   }
 
   async function removeMarketplaceSource(sourceId: string) {
@@ -285,11 +297,15 @@ export function App({
     if (!api) {
       return;
     }
-    await api.removeDiscoverSource?.(sourceId);
-    setDiscoverSources((current) => current.filter((source) => source.id !== sourceId));
-    setPreviewSkills([]);
-    setSelectedSourceId((current) => (current === sourceId ? '' : current));
-    setStatusMessage('Source removed');
+    try {
+      await api.removeDiscoverSource?.(sourceId);
+      setDiscoverSources((current) => current.filter((source) => source.id !== sourceId));
+      setPreviewSkills([]);
+      setSelectedSourceId((current) => (current === sourceId ? '' : current));
+      setStatusMessage('Source removed');
+    } catch (error: unknown) {
+      setStatusMessage(formatError(error), 'error');
+    }
   }
 
   async function addRoot() {
@@ -297,13 +313,17 @@ export function App({
     if (!api || !rootPath.trim()) {
       return;
     }
-    const root = await api.addProjectRoot({
-      agentCode: rootAgentCode,
-      rootPath: rootPath.trim()
-    });
-    setAgentRoots((current) => [root, ...current.filter((item) => item.rootPath !== root.rootPath || item.agentCode !== root.agentCode)]);
-    setSelectedTargetRoot(root.rootPath);
-    setStatusMessage(`Root added: ${root.agentDisplayName}`);
+    try {
+      const root = await api.addProjectRoot({
+        agentCode: rootAgentCode,
+        rootPath: rootPath.trim()
+      });
+      setAgentRoots((current) => [root, ...current.filter((item) => item.rootPath !== root.rootPath || item.agentCode !== root.agentCode)]);
+      setSelectedTargetRoot(root.rootPath);
+      setStatusMessage(`Root added: ${root.agentDisplayName}`);
+    } catch (error: unknown) {
+      setStatusMessage(formatError(error), 'error');
+    }
   }
 
   async function importCandidate(skill: DiscoverSkillPreview): Promise<string | null> {
@@ -387,12 +407,16 @@ export function App({
     if (!api) {
       return;
     }
-    await api.uninstallSkill(installationId);
-    setInstalledSkillIds((current) =>
-      Object.fromEntries(Object.entries(current).filter(([, currentInstallationId]) => currentInstallationId !== installationId))
-    );
-    await refreshWorkspace();
-    setStatusMessage('Uninstalled');
+    try {
+      await api.uninstallSkill(installationId);
+      setInstalledSkillIds((current) =>
+        Object.fromEntries(Object.entries(current).filter(([, currentInstallationId]) => currentInstallationId !== installationId))
+      );
+      await refreshWorkspace();
+      setStatusMessage('Uninstalled');
+    } catch (error: unknown) {
+      setStatusMessage(formatError(error), 'error');
+    }
   }
 
   return (

@@ -31,8 +31,20 @@ describe('renderer layout containment CSS', () => {
     const tagBlock = cssBlock(css, '.tag,\n.status');
 
     expect(tagBlock).toContain('max-width: 100%;');
+    expect(tagBlock).toContain('min-width: 0;');
     expect(tagBlock).toContain('overflow: hidden;');
     expect(tagBlock).toContain('text-overflow: ellipsis;');
+  });
+
+  it('allows long command error statuses to wrap without clipping', async () => {
+    const css = await readFile(cssPath, 'utf8');
+    const statusErrorBlock = cssBlock(css, '.status-error');
+
+    expect(statusErrorBlock).toContain('overflow: visible;');
+    expect(statusErrorBlock).toContain('text-overflow: clip;');
+    expect(statusErrorBlock).toContain('white-space: normal;');
+    expect(statusErrorBlock).toContain('overflow-wrap: anywhere;');
+    expect(cssBlock(css, '.page-title .status-error')).toContain('flex-basis: 100%;');
   });
 
   it('contains long marketplace candidate paths inside the split panel', async () => {

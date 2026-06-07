@@ -317,6 +317,37 @@ describe('desktop app shell', () => {
     expect(within(skillsPage).queryByText(/trust/i)).not.toBeInTheDocument();
   });
 
+  it('reports marketplace preview failures without clearing current candidates', async () => {
+    window.theOpenHub = {
+      getWorkspaceState: vi.fn().mockResolvedValue(createEmptyWorkspaceState()),
+      listAgentRoots: vi.fn().mockResolvedValue([]),
+      listDiscoverSources: vi.fn().mockResolvedValue([createSource()]),
+      previewDiscoverSource: vi.fn().mockRejectedValue(new Error('Preview failed'))
+    } as unknown as NonNullable<typeof window.theOpenHub>;
+
+    render(
+      <App
+        initialPreviewSkills={[
+          {
+            name: 'market-helper',
+            description: 'Marketplace helper',
+            tags: ['market'],
+            path: '/tmp/source/market-helper'
+          }
+        ]}
+      />
+    );
+    fireEvent.click(screen.getByRole('button', { name: 'Skills' }));
+    fireEvent.click(screen.getByRole('tab', { name: 'Marketplace' }));
+    await screen.findByText('Local Source');
+    expect(screen.getByText('market-helper')).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Preview source' }));
+
+    expect(await screen.findByText('Preview failed')).toHaveClass('status-error');
+    expect(screen.getByText('market-helper')).toBeInTheDocument();
+  });
+
   it('marks marketplace candidates as imported and installed instead of repeating actions', async () => {
     const plan = {
       id: 'plan-market',
@@ -516,6 +547,24 @@ describe('desktop app shell', () => {
     expect(window.theOpenHub?.applyInstallPlan).not.toHaveBeenCalled();
   });
 
+  it('reports refresh failures without clearing the loaded workspace', async () => {
+    const state = workspaceWithSkill(createEmptyWorkspaceState(), 'Cached Helper');
+    window.theOpenHub = {
+      getWorkspaceState: vi.fn().mockResolvedValueOnce(state).mockRejectedValueOnce(new Error('Refresh failed')),
+      listAgentRoots: vi.fn().mockResolvedValue([]),
+      listDiscoverSources: vi.fn().mockResolvedValue([])
+    } as unknown as NonNullable<typeof window.theOpenHub>;
+
+    render(<App />);
+    fireEvent.click(screen.getByRole('button', { name: 'Skills' }));
+    expect(await screen.findByText('Cached Helper')).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Refresh' }));
+
+    expect(await screen.findByText('Refresh failed')).toHaveClass('status-error');
+    expect(screen.getByText('Cached Helper')).toBeInTheDocument();
+  });
+
   it('manages marketplace sources from Settings', async () => {
     const source = {
       id: 'source-local',
@@ -548,6 +597,51 @@ describe('desktop app shell', () => {
     }));
     fireEvent.click(screen.getByRole('button', { name: 'Remove Local Source' }));
     await waitFor(() => expect(window.theOpenHub?.removeDiscoverSource).toHaveBeenCalledWith('source-local'));
+  });
+
+  it('reports settings source and root failures without mutating visible lists', async () => {
+    window.theOpenHub = {
+      getWorkspaceState: vi.fn().mockResolvedValue(createEmptyWorkspaceState()),
+      listAgentRoots: vi.fn().mockResolvedValue([]),
+      listDiscoverSources: vi.fn().mockResolvedValue([]),
+      addProjectRoot: vi.fn().mockRejectedValue(new Error('Root failed')),
+      addDiscoverSource: vi.fn().mockRejectedValue(new Error('Source failed'))
+    } as unknown as NonNullable<typeof window.theOpenHub>;
+
+    render(<App />);
+    fireEvent.click(screen.getByRole('button', { name: 'Settings' }));
+    expect(await screen.findByText('No local roots')).toBeInTheDocument();
+    expect(screen.getByText('No marketplace sources')).toBeInTheDocument();
+
+    fireEvent.change(screen.getByLabelText('Root path'), { target: { value: '/tmp/project-skills' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Add root' }));
+    expect(await screen.findByText('Root failed')).toHaveClass('status-error');
+    expect(screen.getByText('No local roots')).toBeInTheDocument();
+
+    fireEvent.change(screen.getByLabelText('Marketplace source URL'), { target: { value: '/tmp/source' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Add source' }));
+    expect(await screen.findByText('Source failed')).toHaveClass('status-error');
+    expect(screen.getByText('No marketplace sources')).toBeInTheDocument();
+  });
+
+  it('reports uninstall failures without hiding app-owned skills', async () => {
+    const state = workspaceWithInstalledSkill(createEmptyWorkspaceState(), 'market-helper');
+    window.theOpenHub = {
+      getWorkspaceState: vi.fn().mockResolvedValue(state),
+      listAgentRoots: vi.fn().mockResolvedValue([]),
+      listDiscoverSources: vi.fn().mockResolvedValue([]),
+      uninstallSkill: vi.fn().mockRejectedValue(new Error('Uninstall failed'))
+    } as unknown as NonNullable<typeof window.theOpenHub>;
+
+    render(<App initialState={state} />);
+    fireEvent.click(screen.getByRole('button', { name: 'Skills' }));
+    expect(await screen.findByText('market-helper')).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Uninstall' }));
+
+    expect(await screen.findByText('Uninstall failed')).toHaveClass('status-error');
+    expect(screen.getByText('market-helper')).toBeInTheDocument();
+    expect(window.theOpenHub.uninstallSkill).toHaveBeenCalledWith('installation-market-helper');
   });
 
   it('shows retained plugin capabilities only', async () => {
