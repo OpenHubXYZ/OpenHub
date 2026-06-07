@@ -109,13 +109,13 @@ export function App({
       },
       {
         label: 'Root locations',
-        value: String(state.librarySkills.length),
-        detail: 'Indexed rows'
+        value: String(new Set(state.librarySkills.map((skill) => skill.rootPath)).size),
+        detail: 'Indexed roots'
       },
       {
         label: 'Local roots',
         value: String(agentRoots.length),
-        detail: 'Settings roots'
+        detail: 'Detected roots'
       },
       {
         label: 'Marketplace sources',

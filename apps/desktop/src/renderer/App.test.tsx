@@ -44,6 +44,19 @@ describe('desktop app shell', () => {
     expect(screen.getByRole('tab', { name: 'Marketplace' })).toHaveAttribute('aria-selected', 'true');
   });
 
+  it('counts home root locations by unique indexed root paths', () => {
+    render(<App initialState={workspaceWithSkills(createEmptyWorkspaceState())} initialAgentRoots={[createRoot('/tmp/.codex/skills')]} />);
+
+    const rootMetric = screen.getByText('Root locations').closest('article');
+    expect(rootMetric).not.toBeNull();
+    expect(within(rootMetric!).getByText('1')).toBeInTheDocument();
+    expect(within(rootMetric!).queryByText('2')).not.toBeInTheDocument();
+
+    const localRootsMetric = screen.getByText('Local roots').closest('article');
+    expect(localRootsMetric).not.toBeNull();
+    expect(within(localRootsMetric!).getByText('Detected roots')).toBeInTheDocument();
+  });
+
   it('filters indexed skills by path as well as name', () => {
     render(<App initialState={workspaceWithSkills(createEmptyWorkspaceState())} />);
 
