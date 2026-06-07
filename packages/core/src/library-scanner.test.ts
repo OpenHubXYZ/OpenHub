@@ -145,4 +145,47 @@ describe('agent library scanner', () => {
     ]);
     expect(repository.searchSkills('binary')).toEqual([]);
   });
+
+  it('rescans detected roots without duplicating already indexed skills', async () => {
+    const homeDirectory = await mkdtemp(path.join(tmpdir(), 'theopenhub-scan-'));
+    tempDirectories.push(homeDirectory);
+
+    const codexSkill = path.join(homeDirectory, '.codex/skills/path-safety');
+    await mkdir(codexSkill, { recursive: true });
+    await writeFile(
+      path.join(codexSkill, 'SKILL.md'),
+      [
+        '---',
+        'name: path-safety',
+        'description: Checks imports before installation.',
+        'tags: [security, imports]',
+        '---',
+        '# Path Safety'
+      ].join('\n')
+    );
+
+    const database = createMemoryDatabase();
+    runMigrations(database);
+    const adapters = createBuiltInAgentAdapters({ homeDirectory, adapterVersion: 'test' });
+
+    const firstScan = await scanAgentLibraries({ database, adapters });
+    const secondScan = await scanAgentLibraries({ database, adapters });
+
+    expect(firstScan).toMatchObject({
+      indexedSkills: [expect.objectContaining({ name: 'path-safety', agentCode: 'codex' })],
+      errors: []
+    });
+    expect(secondScan).toMatchObject({
+      indexedSkills: [expect.objectContaining({ name: 'path-safety', agentCode: 'codex' })],
+      errors: []
+    });
+    expect(createLibraryRepository(database).listLibrarySkills()).toEqual([
+      expect.objectContaining({
+        name: 'path-safety',
+        sourceAgent: 'Codex',
+        path: codexSkill,
+        visibilityStatus: 'indexed'
+      })
+    ]);
+  });
 });

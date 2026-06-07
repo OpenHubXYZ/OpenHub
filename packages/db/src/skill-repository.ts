@@ -69,6 +69,7 @@ export interface SkillRepository {
   createSkill(input: CreateSkillInput): SkillRecord;
   listSkills(): SkillRecord[];
   getSkill(skillId: string): SkillRecord | null;
+  getSkillBySlug(slug: string): SkillRecord | null;
   updateSkillMetadata(skillId: string, input: UpdateSkillMetadataInput): void;
   searchSkills(query: string, options?: SkillSearchOptions): SkillRecord[];
   getFacets(filters?: SkillSearchFilters): LibraryFacets;
@@ -209,6 +210,10 @@ export function createSkillRepository(database: SqliteDatabase): SkillRepository
 
     getSkill(skillId) {
       return getSkillRecord(database, skillId);
+    },
+
+    getSkillBySlug(slug) {
+      return getSkillRecordBySlug(database, slug);
     },
 
     updateSkillMetadata(skillId, input) {
@@ -413,6 +418,31 @@ function getSkillRecord(database: SqliteDatabase, skillId: string): SkillRecord 
       `
     )
     .get(skillId);
+
+  return row ? skillRow(row) : null;
+}
+
+function getSkillRecordBySlug(database: SqliteDatabase, slug: string): SkillRecord | null {
+  const row = database
+    .prepare(
+      `
+        select
+          s.id,
+          s.slug,
+          s.name,
+          s.description,
+          s.tags_json as tagsJson,
+          sv.id as versionId,
+          max(sv.version_no) as versionNo,
+          case when sfav.skill_id is null then 0 else 1 end as favorite
+        from skills s
+        join skill_versions sv on sv.skill_id = s.id
+        left join skill_favorites sfav on sfav.skill_id = s.id
+        where s.slug = ?
+        group by s.id
+      `
+    )
+    .get(slug);
 
   return row ? skillRow(row) : null;
 }

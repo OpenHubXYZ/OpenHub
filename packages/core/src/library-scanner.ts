@@ -78,21 +78,23 @@ export async function scanAgentLibraries(
           const manifestContent = await readFile(manifestPath, 'utf8');
           const manifest = parseSkillManifest(manifestContent, manifestPath);
           const files = await collectSkillFiles(candidate);
-          const skill = skillRepository.createSkill({
-            slug: manifest.name,
-            name: manifest.name,
-            description: manifest.description,
-            tags: manifest.tags,
-            source: {
-              type: 'agent-root',
-              url: candidate
-            },
-            files: files.map((file) => ({
-              relativePath: file.relativePath,
-              contentBuffer: file.content,
-              ...(file.searchableContent === null ? {} : { searchableContent: file.searchableContent })
-            }))
-          });
+          const skill =
+            skillRepository.getSkillBySlug(manifest.name) ??
+            skillRepository.createSkill({
+              slug: manifest.name,
+              name: manifest.name,
+              description: manifest.description,
+              tags: manifest.tags,
+              source: {
+                type: 'agent-root',
+                url: candidate
+              },
+              files: files.map((file) => ({
+                relativePath: file.relativePath,
+                contentBuffer: file.content,
+                ...(file.searchableContent === null ? {} : { searchableContent: file.searchableContent })
+              }))
+            });
 
           libraryRepository.recordIndexedSkillLocation({
             skillId: skill.id,
