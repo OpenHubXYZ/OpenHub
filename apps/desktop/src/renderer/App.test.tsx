@@ -447,6 +447,35 @@ describe('desktop app shell', () => {
     expect(screen.getByText('No sources previewed')).toBeInTheDocument();
   });
 
+  it('summarizes command failures from marketplace preview', async () => {
+    window.theOpenHub = {
+      getWorkspaceState: vi.fn().mockResolvedValue(createEmptyWorkspaceState()),
+      listAgentRoots: vi.fn().mockResolvedValue([]),
+      listDiscoverSources: vi.fn().mockResolvedValue([createSource()]),
+      previewDiscoverSource: vi.fn().mockRejectedValue(new Error(
+        [
+          'Command failed: git clone --depth 1 file:///tmp/source /tmp/cache',
+          "Cloning into '/tmp/cache'...",
+          "fatal: '/tmp/source' does not appear to be a git repository",
+          'fatal: Could not read from remote repository.',
+          '',
+          'Please make sure you have the correct access rights',
+          'and the repository exists.'
+        ].join('\n')
+      ))
+    } as unknown as NonNullable<typeof window.theOpenHub>;
+
+    render(<App />);
+    fireEvent.click(screen.getByRole('button', { name: 'Skills' }));
+    fireEvent.click(screen.getByRole('tab', { name: 'Marketplace' }));
+    await screen.findByText('Local Source');
+    fireEvent.click(screen.getByRole('button', { name: 'Preview source' }));
+
+    expect(await screen.findByText("Command failed: '/tmp/source' does not appear to be a git repository")).toHaveClass('status-error');
+    expect(screen.queryByText(/git clone --depth/)).not.toBeInTheDocument();
+    expect(screen.queryByText(/Please make sure/)).not.toBeInTheDocument();
+  });
+
   it('filters marketplace preview candidates by description, tags, and path', async () => {
     window.theOpenHub = {
       getWorkspaceState: vi.fn().mockResolvedValue(createEmptyWorkspaceState()),

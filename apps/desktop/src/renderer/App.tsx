@@ -1195,7 +1195,27 @@ function formatConflictCount(plan: InstallPlan): string {
 }
 
 function formatError(error: unknown): string {
-  return (error instanceof Error ? error.message : String(error))
+  const message = (error instanceof Error ? error.message : String(error))
     .replace(/^Error invoking remote method ['"][^'"]+['"]:\s*/, '')
     .replace(/^Error:\s*/, '');
+  return summarizeCommandFailure(message);
+}
+
+function summarizeCommandFailure(message: string): string {
+  if (!message.startsWith('Command failed:')) {
+    return message;
+  }
+  const lines = message
+    .split(/\r?\n/)
+    .map((line) => line.trim())
+    .filter(Boolean);
+  const fatalLine = lines.find((line) => line.startsWith('fatal:'));
+  if (fatalLine) {
+    return `Command failed: ${fatalLine.replace(/^fatal:\s*/, '')}`;
+  }
+  const errorLine = lines.find((line) => /^error:/i.test(line));
+  if (errorLine) {
+    return `Command failed: ${errorLine.replace(/^error:\s*/i, '')}`;
+  }
+  return lines[0] ?? 'Command failed';
 }
