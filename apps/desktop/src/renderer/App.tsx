@@ -220,7 +220,7 @@ export function App({
         setSkillsTab((current) => firstPopulatedAgentTab(scan.indexedSkills.map((skill) => skill.agentCode), current));
         await refreshWorkspace(isCancelled).catch(() => undefined);
         if (!isInactive(isCancelled)) {
-          setStatusMessage(formatScanStatus(scan));
+          setStatusMessage(formatScanStatus(scan), scan.errors.length > 0 ? 'error' : 'default');
         }
       } catch (error: unknown) {
         if (!isInactive(isCancelled)) {
@@ -1122,7 +1122,8 @@ function formatScanStatus(scan: LibraryScanResult): string {
     return `${scan.indexedSkills.length} indexed`;
   }
   const errorLabel = scan.errors.length === 1 ? '1 error' : `${scan.errors.length} errors`;
-  return `${scan.indexedSkills.length} indexed, ${errorLabel}`;
+  const firstError = scan.errors[0]!;
+  return `${scan.indexedSkills.length} indexed, ${errorLabel}: ${firstError.code} at ${firstError.skillPath} - ${firstError.message}`;
 }
 
 function formatConflictCount(plan: InstallPlan): string {

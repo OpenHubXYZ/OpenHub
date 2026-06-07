@@ -219,7 +219,7 @@ describe('desktop app shell', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Skills' }));
 
     expect(await screen.findByText('Scanned Helper')).toBeInTheDocument();
-    expect(await screen.findByText('1 indexed, 2 errors')).toBeInTheDocument();
+    expect(await screen.findByText('1 indexed, 2 errors: parse_error at /tmp/a - Bad skill A')).toHaveClass('status-error');
   });
 
   it('keeps initial workspace state visible when automatic scanning rejects', async () => {
