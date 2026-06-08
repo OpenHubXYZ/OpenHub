@@ -8,9 +8,18 @@ import type {
   SkillDetail
 } from '@theopenhub/shared';
 
-export const pageOrder = ['home', 'skills', 'settings'] as const;
+export const pageOrder = ['home', 'marketplace', 'skills', 'analytics', 'settings'] as const;
 export type PageKey = (typeof pageOrder)[number];
-export type Tone = 'default' | 'low' | 'medium' | 'high' | 'neutral' | 'blue' | 'dark' | 'green' | 'red';
+export type Tone =
+  | 'default'
+  | 'low'
+  | 'medium'
+  | 'high'
+  | 'neutral'
+  | 'blue'
+  | 'dark'
+  | 'green'
+  | 'red';
 
 export interface NavItem {
   key: PageKey;
@@ -71,7 +80,6 @@ export interface ActionStep {
   status: 'current' | 'done' | 'pending';
   provenance: string;
   targetPage: PageKey;
-  targetSkillsTab?: 'marketplace';
 }
 
 export interface EmptyStateModel {
@@ -161,7 +169,9 @@ export function createWorkspaceViewModel(state: DesktopWorkspaceState): Workspac
     librarySkills: state.librarySkills,
     navItems: [
       { key: 'home', label: 'Dashboard' },
-      { key: 'skills', label: 'Skills' },
+      { key: 'marketplace', label: 'Marketplace' },
+      { key: 'skills', label: 'My Skills' },
+      { key: 'analytics', label: 'Analytics' },
       { key: 'settings', label: 'Settings' }
     ],
     dashboard: {
@@ -178,11 +188,16 @@ export function createWorkspaceViewModel(state: DesktopWorkspaceState): Workspac
         },
         {
           label: 'App-owned installs',
-          value: String(state.librarySkills.filter((skill) => skill.ownership === 'app-owned').length),
+          value: String(
+            state.librarySkills.filter((skill) => skill.ownership === 'app-owned').length
+          ),
           detail: 'Managed projections'
         }
       ],
-      activity: state.managementFlow.importItems.map((item) => ({ label: item.label, value: item.status })),
+      activity: state.managementFlow.importItems.map((item) => ({
+        label: item.label,
+        value: item.status
+      })),
       agentRoots: state.librarySkills.map((skill) => ({
         agent: skill.sourceAgent,
         path: skill.path,
@@ -201,8 +216,14 @@ export function createWorkspaceViewModel(state: DesktopWorkspaceState): Workspac
       }))
     },
     settings: {
-      syncRows: state.syncCenter.profiles.map((profile) => ({ label: profile.mode, value: profile.status })),
-      pluginRows: state.plugins.plugins.map((plugin) => ({ label: plugin.name, value: plugin.status }))
+      syncRows: state.syncCenter.profiles.map((profile) => ({
+        label: profile.mode,
+        value: profile.status
+      })),
+      pluginRows: state.plugins.plugins.map((plugin) => ({
+        label: plugin.name,
+        value: plugin.status
+      }))
     }
   };
 }
@@ -210,7 +231,10 @@ export function createWorkspaceViewModel(state: DesktopWorkspaceState): Workspac
 export function createWorkspaceUxModel(input: WorkspaceUxModelInput): WorkspaceUxModel {
   const hasIndexedSkills = input.state.librarySkills.length > 0;
   const hasPreview = input.discoverPreviewSkills.length > 0;
-  const selectionSummary = buildSelectionSummary(input.selectedSkillDetail, input.discoverPreviewSkills[0]);
+  const selectionSummary = buildSelectionSummary(
+    input.selectedSkillDetail,
+    input.discoverPreviewSkills[0]
+  );
 
   return {
     actionSteps: [
@@ -224,7 +248,11 @@ export function createWorkspaceUxModel(input: WorkspaceUxModelInput): WorkspaceU
       {
         label: 'Build skills index',
         description: 'Index local skills',
-        status: hasIndexedSkills ? 'done' : input.agentRootTargets.length > 0 ? 'current' : 'pending',
+        status: hasIndexedSkills
+          ? 'done'
+          : input.agentRootTargets.length > 0
+            ? 'current'
+            : 'pending',
         provenance: hasIndexedSkills ? 'indexed' : 'not scanned',
         targetPage: 'skills'
       },
@@ -233,8 +261,7 @@ export function createWorkspaceUxModel(input: WorkspaceUxModelInput): WorkspaceU
         description: 'Inspect local or Git candidates',
         status: hasPreview ? 'done' : hasIndexedSkills ? 'current' : 'pending',
         provenance: hasPreview ? 'source preview' : 'not previewed',
-        targetPage: 'skills',
-        targetSkillsTab: 'marketplace'
+        targetPage: 'marketplace'
       }
     ],
     compatibilityRows: input.agentRootTargets.map((root) => ({
@@ -249,18 +276,23 @@ export function createWorkspaceUxModel(input: WorkspaceUxModelInput): WorkspaceU
     emptyStates: emptyStates(),
     primaryCommands: {
       home: [{ id: 'scan-roots', label: 'Scan roots' }],
+      marketplace: [{ id: 'preview-source', label: 'Preview source' }],
       skills: [{ id: 'scan-roots', label: 'Scan roots' }],
+      analytics: [{ id: 'review-activity', label: 'Review local activity' }],
       settings: [{ id: 'open-settings', label: 'Open settings' }]
     },
     provenanceChips: [
-      { label: hasIndexedSkills ? 'indexed' : 'not scanned', tone: hasIndexedSkills ? 'green' : 'medium' },
+      {
+        label: hasIndexedSkills ? 'indexed' : 'not scanned',
+        tone: hasIndexedSkills ? 'green' : 'medium'
+      },
       { label: hasPreview ? 'source preview' : 'not previewed', tone: hasPreview ? 'green' : 'low' }
     ],
     sectionEmptyStates: emptyStates(),
     selectionSummary,
     workflowOwners: {
       roots: 'settings',
-      sourcePreview: 'skills',
+      sourcePreview: 'marketplace',
       settings: 'settings'
     }
   };
@@ -364,11 +396,23 @@ function emptyStates(): Record<PageKey, EmptyStateModel> {
       actionLabel: 'Scan local roots',
       provenance: 'not scanned'
     },
+    marketplace: {
+      title: 'No source preview',
+      text: 'Preview a local folder or Git source before importing.',
+      actionLabel: 'Preview source',
+      provenance: 'marketplace'
+    },
     skills: {
       title: 'No skills indexed',
       text: 'Build the skills index from agent roots or marketplace candidates.',
       actionLabel: 'Add local or Git source',
       provenance: 'skills'
+    },
+    analytics: {
+      title: 'No local activity yet',
+      text: 'Activity appears after roots, source previews, imports, and app-owned changes.',
+      actionLabel: 'Review workspace',
+      provenance: 'local activity'
     },
     settings: {
       title: 'No local roots',

@@ -21,7 +21,9 @@ describe('renderer layout containment CSS', () => {
 
     expect(cssBlock(css, 'html,\nbody,\n#root')).toContain('overflow: hidden;');
     expect(cssBlock(css, '.screen')).toContain('height: 100%;');
-    expect(cssBlock(css, '.screen')).toContain('grid-template-columns: var(--oh-sidebar-width) minmax(0, 1fr);');
+    expect(cssBlock(css, '.screen')).toContain(
+      'grid-template-columns: var(--oh-sidebar-width) minmax(0, 1fr);'
+    );
     expect(css).not.toContain('100vw');
   });
 
@@ -30,7 +32,9 @@ describe('renderer layout containment CSS', () => {
 
     expect(cssBlock(css, '.app-frame')).toContain('grid-template-rows: 72px minmax(0, 1fr);');
     expect(cssBlock(css, '.workspace')).toContain('overflow: auto;');
-    expect(cssBlock(css, '.split-two')).toContain('grid-template-columns: repeat(2, minmax(0, 1fr));');
+    expect(cssBlock(css, '.split-two')).toContain(
+      'grid-template-columns: repeat(2, minmax(0, 1fr));'
+    );
     expect(css).not.toContain('.right-pane');
     expect(css).not.toContain('.statusbar');
     expect(css).not.toMatch(/deploy|trust|install|security/i);
@@ -52,6 +56,8 @@ describe('renderer layout containment CSS', () => {
     expect(compactRules).toContain('grid-template-columns: repeat(2, minmax(0, 1fr));');
     expect(compactRules).toContain('.metric {');
     expect(compactRules).toContain('padding: 12px;');
+    expect(compactRules).toContain('.metric-grid-primary .metric:nth-child(3) {');
+    expect(compactRules).toContain('grid-column: 1 / -1;');
   });
 
   it('lets narrow settings rows show long local paths instead of collapsing to ellipses', async () => {
@@ -225,9 +231,15 @@ describe('renderer layout containment CSS', () => {
   it('keeps indexed skill row actions visible without horizontal clipping', async () => {
     const css = await readFile(cssPath, 'utf8');
 
-    expect(cssBlock(css, '.skills-table .table-head,\n.skills-table .table-row')).toContain('minmax(176px, 0.7fr)');
-    expect(cssBlock(css, '.skills-table .table-row > span:last-child')).toContain('overflow: visible;');
-    expect(cssBlock(css, '.skills-table .table-row > span:last-child')).toContain('white-space: normal;');
+    expect(cssBlock(css, '.skills-table .table-head,\n.skills-table .table-row')).toContain(
+      'minmax(176px, 0.7fr)'
+    );
+    expect(cssBlock(css, '.skills-table .table-row > span:last-child')).toContain(
+      'overflow: visible;'
+    );
+    expect(cssBlock(css, '.skills-table .table-row > span:last-child')).toContain(
+      'white-space: normal;'
+    );
     expect(cssBlock(css, '.row-actions')).toContain('flex-wrap: wrap;');
     expect(cssBlock(css, '.row-actions')).toContain('justify-content: flex-end;');
   });

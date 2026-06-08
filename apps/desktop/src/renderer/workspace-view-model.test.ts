@@ -37,7 +37,9 @@ describe('workspace view model fixture boundaries', () => {
 
     expect(viewModel.navItems.map((item) => item.label)).toEqual([
       'Dashboard',
-      'Skills',
+      'Marketplace',
+      'My Skills',
+      'Analytics',
       'Settings'
     ]);
     expect(viewModel.dashboard.metrics.map((metric) => metric.label)).toEqual([
@@ -45,15 +47,19 @@ describe('workspace view model fixture boundaries', () => {
       'Root locations',
       'App-owned installs'
     ]);
-    expect(JSON.stringify(viewModel.navItems)).not.toMatch(/Deploy|Trust|Usage|Reviews|Security|Installs|Discover|Library|Inventory|Sources/);
+    expect(JSON.stringify(viewModel.navItems)).not.toMatch(
+      /Deploy|Trust|Reviews|Security|Installs|Discover|Library|Inventory|Sources/
+    );
     expect(uxModel.workflowOwners).toEqual({
       roots: 'settings',
-      sourcePreview: 'skills',
+      sourcePreview: 'marketplace',
       settings: 'settings'
     });
     expect(Object.keys(uxModel.sectionEmptyStates)).toEqual([
       'home',
+      'marketplace',
       'skills',
+      'analytics',
       'settings'
     ]);
     expect(JSON.stringify(uxModel)).not.toMatch(/trust|deploy|security/i);
@@ -136,7 +142,10 @@ describe('workspace view model fixture boundaries', () => {
     });
 
     expect(uxModel.selectionSummary.title).toBe('Preview Helper');
-    expect(uxModel.selectionSummary.rows).toContainEqual({ label: 'Path', value: 'preview-helper' });
+    expect(uxModel.selectionSummary.rows).toContainEqual({
+      label: 'Path',
+      value: 'preview-helper'
+    });
     expect(JSON.stringify(uxModel.selectionSummary)).not.toMatch(/trust|risk|writes/i);
     expect(uxModel.diagnostics).toContainEqual(
       expect.objectContaining({

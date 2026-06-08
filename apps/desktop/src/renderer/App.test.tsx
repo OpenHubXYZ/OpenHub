@@ -4,7 +4,12 @@
 import { act, cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
-import type { AppSettings, DesktopWorkspaceState, InstallPlan, LibraryScanResult } from '@theopenhub/shared';
+import type {
+  AppSettings,
+  DesktopWorkspaceState,
+  InstallPlan,
+  LibraryScanResult
+} from '@theopenhub/shared';
 
 import { App } from './App';
 import { createEmptyWorkspaceState } from './workspace-view-model';
@@ -17,7 +22,11 @@ describe('desktop app shell', () => {
     cleanup();
     delete window.theOpenHub;
     vi.restoreAllMocks();
-    Object.defineProperty(window, 'matchMedia', { configurable: true, writable: true, value: originalMatchMedia });
+    Object.defineProperty(window, 'matchMedia', {
+      configurable: true,
+      writable: true,
+      value: originalMatchMedia
+    });
     Object.defineProperty(HTMLElement.prototype, 'scrollIntoView', {
       configurable: true,
       writable: true,
@@ -29,11 +38,16 @@ describe('desktop app shell', () => {
     render(<App />);
 
     expect(screen.getByRole('navigation', { name: 'Primary pages' })).toBeInTheDocument();
-    expect(screen.getByRole('heading', { name: 'Dashboard' })).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: 'Dashboard Overview' })).toBeInTheDocument();
     expect(screen.getByText('Local-first workspace')).toBeInTheDocument();
     expect(screen.queryByText('Phase 10')).not.toBeInTheDocument();
-    expect(screen.getByRole('button', { name: 'Dashboard' })).toHaveAttribute('aria-current', 'page');
-    expect(screen.getByRole('button', { name: 'Skills' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Dashboard' })).toHaveAttribute(
+      'aria-current',
+      'page'
+    );
+    expect(screen.getByRole('button', { name: 'Marketplace' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'My Skills' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Analytics' })).toBeInTheDocument();
     expect(screen.queryByRole('button', { name: 'Inventory' })).not.toBeInTheDocument();
     expect(screen.queryByRole('button', { name: 'Sources' })).not.toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Settings' })).toBeInTheDocument();
@@ -53,8 +67,35 @@ describe('desktop app shell', () => {
 
     fireEvent.click(screen.getByRole('button', { name: 'Review marketplace' }));
 
-    expect(screen.getByRole('heading', { name: 'Skills' })).toBeInTheDocument();
-    expect(screen.getByRole('tab', { name: 'Marketplace' })).toHaveAttribute('aria-selected', 'true');
+    expect(screen.getByRole('heading', { level: 1, name: 'Marketplace' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Marketplace' })).toHaveAttribute(
+      'aria-current',
+      'page'
+    );
+  });
+
+  it('renders analytics as local OpenHub activity without execution or feedback telemetry claims', () => {
+    render(
+      <App
+        initialState={workspaceWithSkills(createEmptyWorkspaceState())}
+        initialAgentRoots={[createRoot('/tmp/.codex/skills')]}
+      />
+    );
+
+    fireEvent.click(screen.getByRole('button', { name: 'Analytics' }));
+
+    expect(screen.getByRole('heading', { name: 'Local Activity Analytics' })).toBeInTheDocument();
+    expect(screen.getAllByText('Local Activity Analytics')).toHaveLength(1);
+    expect(
+      screen.getByText(
+        'Derived from local library, roots, source previews, and app-managed changes.'
+      )
+    ).toBeInTheDocument();
+    expect(
+      screen.queryByText(
+        /execution logs|skill triggered|share usage analytics|telemetry|ratings|\breviews\b/i
+      )
+    ).not.toBeInTheDocument();
   });
 
   it('opens the first populated agent tab when entering Skills from Home', () => {
@@ -78,33 +119,48 @@ describe('desktop app shell', () => {
 
     fireEvent.click(screen.getByRole('button', { name: 'Build skills index' }));
 
-    expect(screen.getByRole('heading', { name: 'Skills' })).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: 'My Skills' })).toBeInTheDocument();
     expect(screen.getByRole('tab', { name: 'Claude' })).toHaveAttribute('aria-selected', 'true');
     expect(screen.getByText('Claude Helper')).toBeInTheDocument();
     expect(screen.queryByText('Codex skills')).not.toBeInTheDocument();
   });
 
-  it('counts home root locations by unique indexed root paths', () => {
-    render(<App initialState={workspaceWithSkills(createEmptyWorkspaceState())} initialAgentRoots={[createRoot('/tmp/.codex/skills')]} />);
+  it('renders the dashboard KPI cards from local runtime state', () => {
+    render(
+      <App
+        initialState={workspaceWithSkills(createEmptyWorkspaceState())}
+        initialAgentRoots={[createRoot('/tmp/.codex/skills')]}
+      />
+    );
 
-    const rootMetric = screen.getByText('Root locations').closest('article');
+    const totalSkillsMetric = screen.getByText('Total active skills').closest('article');
+    expect(totalSkillsMetric).not.toBeNull();
+    expect(within(totalSkillsMetric!).getByText('2')).toBeInTheDocument();
+
+    const rootMetric = screen.getByText('Indexed root locations').closest('article');
     expect(rootMetric).not.toBeNull();
     expect(within(rootMetric!).getByText('1')).toBeInTheDocument();
-    expect(within(rootMetric!).queryByText('2')).not.toBeInTheDocument();
 
-    const localRootsMetric = screen.getByText('Local roots').closest('article');
-    expect(localRootsMetric).not.toBeNull();
-    expect(within(localRootsMetric!).getByText('Detected roots')).toBeInTheDocument();
+    const managedMetric = screen.getByText('App-managed skills').closest('article');
+    expect(managedMetric).not.toBeNull();
+    expect(within(managedMetric!).getByText('0')).toBeInTheDocument();
+    const readiness = within(managedMetric!).getByRole('progressbar', {
+      name: 'Workspace readiness'
+    });
+    expect(readiness).toHaveAttribute('aria-valuenow', '67');
+    expect(within(managedMetric!).getByText('67%')).toBeInTheDocument();
   });
 
   it('filters indexed skills by path as well as name', () => {
     render(<App initialState={workspaceWithSkills(createEmptyWorkspaceState())} />);
 
-    fireEvent.click(screen.getByRole('button', { name: 'Skills' }));
+    fireEvent.click(screen.getByRole('button', { name: 'My Skills' }));
     expect(screen.getByText('Prompt Writer')).toBeInTheDocument();
     expect(screen.getByText('Palette Helper')).toBeInTheDocument();
 
-    fireEvent.change(screen.getByLabelText('Search skills'), { target: { value: 'visual-assets' } });
+    fireEvent.change(screen.getByLabelText('Search skills'), {
+      target: { value: 'visual-assets' }
+    });
 
     expect(screen.getByText('Palette Helper')).toBeInTheDocument();
     expect(screen.queryByText('Prompt Writer')).not.toBeInTheDocument();
@@ -124,7 +180,7 @@ describe('desktop app shell', () => {
 
     fireEvent.change(screen.getByLabelText('Search skills'), { target: { value: 'Claude' } });
 
-    expect(screen.getByRole('heading', { name: 'Skills' })).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: 'My Skills' })).toBeInTheDocument();
     expect(screen.getByRole('tab', { name: 'Claude' })).toHaveAttribute('aria-selected', 'true');
     expect(screen.getByText('Claude Helper')).toBeInTheDocument();
   });
@@ -132,7 +188,7 @@ describe('desktop app shell', () => {
   it('shows a search-specific empty state when indexed skills do not match', () => {
     render(<App initialState={workspaceWithSkills(createEmptyWorkspaceState())} />);
 
-    fireEvent.click(screen.getByRole('button', { name: 'Skills' }));
+    fireEvent.click(screen.getByRole('button', { name: 'My Skills' }));
     fireEvent.change(screen.getByLabelText('Search skills'), { target: { value: 'no-match' } });
 
     expect(screen.getByText('No skills match "no-match"')).toBeInTheDocument();
@@ -191,7 +247,7 @@ describe('desktop app shell', () => {
       initialWorkspace.resolve(workspaceWithSkill(state, 'Cached Helper'));
     });
 
-    fireEvent.click(screen.getByRole('button', { name: 'Skills' }));
+    fireEvent.click(screen.getByRole('button', { name: 'My Skills' }));
     expect(await screen.findByText('Cached Helper')).toBeInTheDocument();
     expect(await screen.findByText('Scanning roots...')).toBeInTheDocument();
     await waitFor(() => expect(window.theOpenHub!.scanAgentRoots).toHaveBeenCalledTimes(1));
@@ -248,10 +304,12 @@ describe('desktop app shell', () => {
     } as unknown as NonNullable<typeof window.theOpenHub>;
 
     render(<App />);
-    fireEvent.click(screen.getByRole('button', { name: 'Skills' }));
+    fireEvent.click(screen.getByRole('button', { name: 'My Skills' }));
 
     expect(await screen.findByText('Scanned Helper')).toBeInTheDocument();
-    expect(await screen.findByText('1 indexed, 2 errors: parse_error at /tmp/a - Bad skill A')).toHaveClass('status-error');
+    expect(
+      await screen.findByText('1 indexed, 2 errors: parse_error at /tmp/a - Bad skill A')
+    ).toHaveClass('status-error');
   });
 
   it('keeps initial workspace state visible when automatic scanning rejects', async () => {
@@ -264,7 +322,7 @@ describe('desktop app shell', () => {
     } as unknown as NonNullable<typeof window.theOpenHub>;
 
     render(<App />);
-    fireEvent.click(screen.getByRole('button', { name: 'Skills' }));
+    fireEvent.click(screen.getByRole('button', { name: 'My Skills' }));
 
     expect(await screen.findByText('Cached Helper')).toBeInTheDocument();
     expect(await screen.findByText('Scan failed')).toBeInTheDocument();
@@ -351,7 +409,10 @@ describe('desktop app shell', () => {
       getWorkspaceState: vi.fn().mockResolvedValue(workspaceWithSkill(state, 'Runtime Helper')),
       listAgentRoots: vi.fn().mockResolvedValue([]),
       listDiscoverSources: vi.fn().mockResolvedValue([]),
-      scanAgentRoots: vi.fn().mockResolvedValueOnce(scanResult).mockReturnValueOnce(manualScan.promise)
+      scanAgentRoots: vi
+        .fn()
+        .mockResolvedValueOnce(scanResult)
+        .mockReturnValueOnce(manualScan.promise)
     } as unknown as NonNullable<typeof window.theOpenHub>;
 
     const { unmount } = render(<App />);
@@ -415,13 +476,12 @@ describe('desktop app shell', () => {
     } as unknown as NonNullable<typeof window.theOpenHub>;
 
     render(<App />);
-    fireEvent.click(screen.getByRole('button', { name: 'Skills' }));
-    fireEvent.click(screen.getByRole('tab', { name: 'Marketplace' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Marketplace' }));
     await screen.findByText('Local Source');
     fireEvent.click(screen.getByRole('button', { name: 'Preview source' }));
 
     expect(await screen.findByText('Preview Helper')).toBeInTheDocument();
-    const skillsPage = screen.getByRole('region', { name: 'Skills workspace' });
+    const skillsPage = screen.getByRole('region', { name: 'Marketplace workspace' });
     expect(within(skillsPage).queryByText(/trust/i)).not.toBeInTheDocument();
   });
 
@@ -432,7 +492,9 @@ describe('desktop app shell', () => {
       listDiscoverSources: vi.fn().mockResolvedValue([createSource()]),
       previewDiscoverSource: vi
         .fn()
-        .mockRejectedValue(new Error("Error invoking remote method 'discover.previewSource': Error: Preview failed"))
+        .mockRejectedValue(
+          new Error("Error invoking remote method 'discover.previewSource': Error: Preview failed")
+        )
     } as unknown as NonNullable<typeof window.theOpenHub>;
 
     render(
@@ -447,8 +509,7 @@ describe('desktop app shell', () => {
         ]}
       />
     );
-    fireEvent.click(screen.getByRole('button', { name: 'Skills' }));
-    fireEvent.click(screen.getByRole('tab', { name: 'Marketplace' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Marketplace' }));
     await screen.findByText('Local Source');
     expect(screen.getByText('market-helper')).toBeInTheDocument();
 
@@ -465,26 +526,33 @@ describe('desktop app shell', () => {
       getWorkspaceState: vi.fn().mockResolvedValue(createEmptyWorkspaceState()),
       listAgentRoots: vi.fn().mockResolvedValue([]),
       listDiscoverSources: vi.fn().mockResolvedValue([createSource()]),
-      previewDiscoverSource: vi.fn().mockRejectedValue(new Error(
-        [
-          'Command failed: git clone --depth 1 file:///tmp/source /tmp/cache',
-          "Cloning into '/tmp/cache'...",
-          "fatal: '/tmp/source' does not appear to be a git repository",
-          'fatal: Could not read from remote repository.',
-          '',
-          'Please make sure you have the correct access rights',
-          'and the repository exists.'
-        ].join('\n')
-      ))
+      previewDiscoverSource: vi
+        .fn()
+        .mockRejectedValue(
+          new Error(
+            [
+              'Command failed: git clone --depth 1 file:///tmp/source /tmp/cache',
+              "Cloning into '/tmp/cache'...",
+              "fatal: '/tmp/source' does not appear to be a git repository",
+              'fatal: Could not read from remote repository.',
+              '',
+              'Please make sure you have the correct access rights',
+              'and the repository exists.'
+            ].join('\n')
+          )
+        )
     } as unknown as NonNullable<typeof window.theOpenHub>;
 
     render(<App />);
-    fireEvent.click(screen.getByRole('button', { name: 'Skills' }));
-    fireEvent.click(screen.getByRole('tab', { name: 'Marketplace' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Marketplace' }));
     await screen.findByText('Local Source');
     fireEvent.click(screen.getByRole('button', { name: 'Preview source' }));
 
-    expect(await screen.findByText("Command failed: '/tmp/source' does not appear to be a git repository")).toHaveClass('status-error');
+    expect(
+      await screen.findByText(
+        "Command failed: '/tmp/source' does not appear to be a git repository"
+      )
+    ).toHaveClass('status-error');
     expect(screen.queryByText(/git clone --depth/)).not.toBeInTheDocument();
     expect(screen.queryByText(/Please make sure/)).not.toBeInTheDocument();
   });
@@ -514,8 +582,7 @@ describe('desktop app shell', () => {
         ]}
       />
     );
-    fireEvent.click(screen.getByRole('button', { name: 'Skills' }));
-    fireEvent.click(screen.getByRole('tab', { name: 'Marketplace' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Marketplace' }));
 
     await screen.findByText('Local Source');
     expect(screen.getByText('market-helper')).toBeInTheDocument();
@@ -542,14 +609,43 @@ describe('desktop app shell', () => {
       />
     );
 
-    fireEvent.click(screen.getByRole('button', { name: 'Skills' }));
-    fireEvent.click(screen.getByRole('tab', { name: 'Marketplace' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Marketplace' }));
 
     const candidate = screen.getByRole('article', { name: 'Preview Helper' });
     expect(within(candidate).getByText('automation')).toBeInTheDocument();
     expect(within(candidate).getByText('codex')).toBeInTheDocument();
     expect(within(candidate).getByText('/tmp/source/preview-helper')).toBeInTheDocument();
-    expect(within(candidate).queryByText(/rating|reviews|installs|reputation|trending/i)).not.toBeInTheDocument();
+    expect(
+      within(candidate).queryByText(/rating|reviews|installs|reputation|trending/i)
+    ).not.toBeInTheDocument();
+  });
+
+  it('renders marketplace empty guidance cards without public feedback or telemetry claims', () => {
+    render(<App />);
+
+    fireEvent.click(screen.getByRole('button', { name: 'Marketplace' }));
+
+    const marketplace = screen.getByRole('region', { name: 'Marketplace workspace' });
+    expect(
+      within(marketplace).getByRole('article', { name: 'Add a local source' })
+    ).toBeInTheDocument();
+    expect(
+      within(marketplace).getByRole('article', { name: 'Preview a Git source' })
+    ).toBeInTheDocument();
+    expect(
+      within(marketplace).getByRole('article', { name: 'Choose a writable root' })
+    ).toBeInTheDocument();
+    expect(within(marketplace).getByText('0 sources')).toBeInTheDocument();
+    expect(within(marketplace).getByText('0 previewed')).toBeInTheDocument();
+    expect(
+      within(marketplace).queryByText(
+        /rating|reviews|reputation|trust|risk score|telemetry|public installs/i
+      )
+    ).not.toBeInTheDocument();
+
+    fireEvent.click(within(marketplace).getByRole('button', { name: 'Configure sources' }));
+
+    expect(screen.getByRole('heading', { level: 1, name: 'Settings' })).toBeInTheDocument();
   });
 
   it('shows a marketplace search empty state when preview candidates do not match', async () => {
@@ -571,8 +667,7 @@ describe('desktop app shell', () => {
         ]}
       />
     );
-    fireEvent.click(screen.getByRole('button', { name: 'Skills' }));
-    fireEvent.click(screen.getByRole('tab', { name: 'Marketplace' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Marketplace' }));
     await screen.findByText('Local Source');
 
     fireEvent.change(screen.getByLabelText('Search skills'), { target: { value: 'no-candidate' } });
@@ -644,8 +739,7 @@ describe('desktop app shell', () => {
     } as unknown as NonNullable<typeof window.theOpenHub>;
 
     render(<App />);
-    fireEvent.click(screen.getByRole('button', { name: 'Skills' }));
-    fireEvent.click(screen.getByRole('tab', { name: 'Marketplace' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Marketplace' }));
     await screen.findByText('Local Source');
     fireEvent.click(screen.getByRole('button', { name: 'Preview source' }));
 
@@ -656,16 +750,26 @@ describe('desktop app shell', () => {
     fireEvent.click(within(marketCandidate()).getByRole('button', { name: 'Import' }));
     expect(await screen.findByText('Imported market-helper')).toBeInTheDocument();
     expect(within(marketCandidate()).getByText('Imported')).toBeInTheDocument();
-    expect(within(marketCandidate()).queryByRole('button', { name: 'Import' })).not.toBeInTheDocument();
+    expect(
+      within(marketCandidate()).queryByRole('button', { name: 'Import' })
+    ).not.toBeInTheDocument();
     expect(within(marketCandidate()).getByRole('button', { name: 'Install' })).toBeInTheDocument();
 
-    fireEvent.change(screen.getByLabelText('Install target root'), { target: { value: '/tmp/.codex/skills' } });
+    fireEvent.change(screen.getByLabelText('Install target root'), {
+      target: { value: '/tmp/.codex/skills' }
+    });
     fireEvent.click(within(marketCandidate()).getByRole('button', { name: 'Install' }));
     expect(await screen.findByText('Installed market-helper')).toBeInTheDocument();
     expect(within(marketCandidate()).getByText('Installed')).toBeInTheDocument();
-    expect(within(marketCandidate()).queryByRole('button', { name: 'Import' })).not.toBeInTheDocument();
-    expect(within(marketCandidate()).queryByRole('button', { name: 'Install' })).not.toBeInTheDocument();
-    expect(window.theOpenHub?.createInstallPlan).toHaveBeenCalledWith(expect.objectContaining({ skillId: 'skill-market' }));
+    expect(
+      within(marketCandidate()).queryByRole('button', { name: 'Import' })
+    ).not.toBeInTheDocument();
+    expect(
+      within(marketCandidate()).queryByRole('button', { name: 'Install' })
+    ).not.toBeInTheDocument();
+    expect(window.theOpenHub?.createInstallPlan).toHaveBeenCalledWith(
+      expect.objectContaining({ skillId: 'skill-market' })
+    );
   });
 
   it('keeps installed marketplace candidates marked after workspace state reloads', () => {
@@ -684,12 +788,15 @@ describe('desktop app shell', () => {
       />
     );
 
-    fireEvent.click(screen.getByRole('button', { name: 'Skills' }));
-    fireEvent.click(screen.getByRole('tab', { name: 'Marketplace' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Marketplace' }));
 
     expect(within(marketCandidate()).getByText('Installed')).toBeInTheDocument();
-    expect(within(marketCandidate()).queryByRole('button', { name: 'Import' })).not.toBeInTheDocument();
-    expect(within(marketCandidate()).queryByRole('button', { name: 'Install' })).not.toBeInTheDocument();
+    expect(
+      within(marketCandidate()).queryByRole('button', { name: 'Import' })
+    ).not.toBeInTheDocument();
+    expect(
+      within(marketCandidate()).queryByRole('button', { name: 'Install' })
+    ).not.toBeInTheDocument();
   });
 
   it('does not mark different marketplace candidates installed just because their names match', () => {
@@ -708,8 +815,7 @@ describe('desktop app shell', () => {
       />
     );
 
-    fireEvent.click(screen.getByRole('button', { name: 'Skills' }));
-    fireEvent.click(screen.getByRole('tab', { name: 'Marketplace' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Marketplace' }));
 
     expect(within(marketCandidate()).queryByText('Installed')).not.toBeInTheDocument();
     expect(within(marketCandidate()).getByRole('button', { name: 'Import' })).toBeInTheDocument();
@@ -754,13 +860,14 @@ describe('desktop app shell', () => {
     } as unknown as NonNullable<typeof window.theOpenHub>;
 
     render(<App />);
-    fireEvent.click(screen.getByRole('button', { name: 'Skills' }));
-    fireEvent.click(screen.getByRole('tab', { name: 'Marketplace' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Marketplace' }));
     await screen.findByText('Local Source');
     fireEvent.click(screen.getByRole('button', { name: 'Preview source' }));
 
     expect(await screen.findByText('market-helper')).toBeInTheDocument();
-    fireEvent.change(screen.getByLabelText('Install target root'), { target: { value: '/tmp/.codex/skills' } });
+    fireEvent.change(screen.getByLabelText('Install target root'), {
+      target: { value: '/tmp/.codex/skills' }
+    });
     fireEvent.click(within(marketCandidate()).getByRole('button', { name: 'Install' }));
 
     expect(await screen.findByText('1 conflict')).toBeInTheDocument();
@@ -768,7 +875,9 @@ describe('desktop app shell', () => {
     expect(screen.queryByText('1 conflicts')).not.toBeInTheDocument();
     fireEvent.click(screen.getByRole('button', { name: 'Confirm overwrite' }));
 
-    await waitFor(() => expect(window.theOpenHub?.applyInstallPlan).toHaveBeenCalledWith(plan, true));
+    await waitFor(() =>
+      expect(window.theOpenHub?.applyInstallPlan).toHaveBeenCalledWith(plan, true)
+    );
     expect(await screen.findByText('Installed market-helper')).toBeInTheDocument();
   });
 
@@ -789,22 +898,27 @@ describe('desktop app shell', () => {
         ],
         cachedAt: '2026-06-07T00:00:00.000Z'
       }),
-      importLocalFolder: vi.fn().mockRejectedValue(new Error('UNIQUE constraint failed: skills.slug')),
+      importLocalFolder: vi
+        .fn()
+        .mockRejectedValue(new Error('UNIQUE constraint failed: skills.slug')),
       createInstallPlan: vi.fn(),
       applyInstallPlan: vi.fn()
     } as unknown as NonNullable<typeof window.theOpenHub>;
 
     render(<App />);
-    fireEvent.click(screen.getByRole('button', { name: 'Skills' }));
-    fireEvent.click(screen.getByRole('tab', { name: 'Marketplace' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Marketplace' }));
     await screen.findByText('Local Source');
     fireEvent.click(screen.getByRole('button', { name: 'Preview source' }));
 
     expect(await screen.findByText('market-helper')).toBeInTheDocument();
-    fireEvent.change(screen.getByLabelText('Install target root'), { target: { value: '/tmp/.codex/skills' } });
+    fireEvent.change(screen.getByLabelText('Install target root'), {
+      target: { value: '/tmp/.codex/skills' }
+    });
     fireEvent.click(within(marketCandidate()).getByRole('button', { name: 'Install' }));
 
-    expect(await screen.findByText('UNIQUE constraint failed: skills.slug')).toHaveClass('status-error');
+    expect(await screen.findByText('UNIQUE constraint failed: skills.slug')).toHaveClass(
+      'status-error'
+    );
     expect(window.theOpenHub?.createInstallPlan).not.toHaveBeenCalled();
     expect(window.theOpenHub?.applyInstallPlan).not.toHaveBeenCalled();
   });
@@ -847,27 +961,30 @@ describe('desktop app shell', () => {
         ]}
       />
     );
-    fireEvent.click(screen.getByRole('button', { name: 'Skills' }));
-    fireEvent.click(screen.getByRole('tab', { name: 'Marketplace' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Marketplace' }));
 
     expect(screen.getByLabelText('Install target root')).toHaveValue('');
     fireEvent.click(within(marketCandidate()).getByRole('button', { name: 'Install' }));
 
-    expect(await screen.findByText('Select an install target root first')).toHaveClass('status-error');
+    expect(await screen.findByText('Select an install target root first')).toHaveClass(
+      'status-error'
+    );
     expect(window.theOpenHub?.importLocalFolder).not.toHaveBeenCalled();
     expect(window.theOpenHub?.createInstallPlan).not.toHaveBeenCalled();
     expect(window.theOpenHub?.applyInstallPlan).not.toHaveBeenCalled();
   });
 
   it('shows the full selected marketplace install target path', () => {
-    const longTargetRoot = '/tmp/.codex/skills/very-long-install-target-root-that-needs-confirmation';
+    const longTargetRoot =
+      '/tmp/.codex/skills/very-long-install-target-root-that-needs-confirmation';
 
     render(<App initialAgentRoots={[createRoot(longTargetRoot)]} />);
-    fireEvent.click(screen.getByRole('button', { name: 'Skills' }));
-    fireEvent.click(screen.getByRole('tab', { name: 'Marketplace' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Marketplace' }));
 
     expect(screen.queryByLabelText('Selected install target path')).not.toBeInTheDocument();
-    fireEvent.change(screen.getByLabelText('Install target root'), { target: { value: longTargetRoot } });
+    fireEvent.change(screen.getByLabelText('Install target root'), {
+      target: { value: longTargetRoot }
+    });
 
     expect(screen.getByLabelText('Selected install target path')).toHaveTextContent(longTargetRoot);
   });
@@ -905,14 +1022,15 @@ describe('desktop app shell', () => {
     } as unknown as NonNullable<typeof window.theOpenHub>;
 
     render(<App />);
-    fireEvent.click(screen.getByRole('button', { name: 'Skills' }));
-    fireEvent.click(screen.getByRole('tab', { name: 'Marketplace' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Marketplace' }));
     await screen.findByText('Local Source');
     fireEvent.click(screen.getByRole('button', { name: 'Preview source' }));
 
     expect(await screen.findByText('market-helper')).toBeInTheDocument();
     const targetRootSelect = screen.getByLabelText('Install target root');
-    expect(within(targetRootSelect).queryByRole('option', { name: `Codex - ${readOnlyRoot.rootPath}` })).not.toBeInTheDocument();
+    expect(
+      within(targetRootSelect).queryByRole('option', { name: `Codex - ${readOnlyRoot.rootPath}` })
+    ).not.toBeInTheDocument();
     expect(screen.getByText('No writable install roots')).toBeInTheDocument();
 
     fireEvent.click(within(marketCandidate()).getByRole('button', { name: 'Install' }));
@@ -926,13 +1044,16 @@ describe('desktop app shell', () => {
   it('reports refresh failures without clearing the loaded workspace', async () => {
     const state = workspaceWithSkill(createEmptyWorkspaceState(), 'Cached Helper');
     window.theOpenHub = {
-      getWorkspaceState: vi.fn().mockResolvedValueOnce(state).mockRejectedValueOnce(new Error('Refresh failed')),
+      getWorkspaceState: vi
+        .fn()
+        .mockResolvedValueOnce(state)
+        .mockRejectedValueOnce(new Error('Refresh failed')),
       listAgentRoots: vi.fn().mockResolvedValue([]),
       listDiscoverSources: vi.fn().mockResolvedValue([])
     } as unknown as NonNullable<typeof window.theOpenHub>;
 
     render(<App />);
-    fireEvent.click(screen.getByRole('button', { name: 'Skills' }));
+    fireEvent.click(screen.getByRole('button', { name: 'My Skills' }));
     expect(await screen.findByText('Cached Helper')).toBeInTheDocument();
 
     fireEvent.click(screen.getByRole('button', { name: 'Refresh' }));
@@ -962,17 +1083,25 @@ describe('desktop app shell', () => {
     render(<App />);
     fireEvent.click(screen.getByRole('button', { name: 'Settings' }));
     expect(await screen.findByText('Local Source')).toBeInTheDocument();
-    fireEvent.change(screen.getByLabelText('Marketplace source name'), { target: { value: 'Local Source' } });
-    fireEvent.change(screen.getByLabelText('Marketplace source URL'), { target: { value: '/tmp/source' } });
+    fireEvent.change(screen.getByLabelText('Marketplace source name'), {
+      target: { value: 'Local Source' }
+    });
+    fireEvent.change(screen.getByLabelText('Marketplace source URL'), {
+      target: { value: '/tmp/source' }
+    });
     fireEvent.click(screen.getByRole('button', { name: 'Add source' }));
 
-    await waitFor(() => expect(window.theOpenHub?.addDiscoverSource).toHaveBeenCalledWith({
-      name: 'Local Source',
-      sourceType: 'local',
-      url: '/tmp/source'
-    }));
+    await waitFor(() =>
+      expect(window.theOpenHub?.addDiscoverSource).toHaveBeenCalledWith({
+        name: 'Local Source',
+        sourceType: 'local',
+        url: '/tmp/source'
+      })
+    );
     fireEvent.click(screen.getByRole('button', { name: 'Remove Local Source' }));
-    await waitFor(() => expect(window.theOpenHub?.removeDiscoverSource).toHaveBeenCalledWith('source-local'));
+    await waitFor(() =>
+      expect(window.theOpenHub?.removeDiscoverSource).toHaveBeenCalledWith('source-local')
+    );
   });
 
   it('normalizes file URL marketplace sources as local paths', async () => {
@@ -994,14 +1123,18 @@ describe('desktop app shell', () => {
 
     render(<App />);
     fireEvent.click(screen.getByRole('button', { name: 'Settings' }));
-    fireEvent.change(screen.getByLabelText('Marketplace source URL'), { target: { value: 'file:///tmp/source%20dir' } });
+    fireEvent.change(screen.getByLabelText('Marketplace source URL'), {
+      target: { value: 'file:///tmp/source%20dir' }
+    });
     fireEvent.click(screen.getByRole('button', { name: 'Add source' }));
 
-    await waitFor(() => expect(window.theOpenHub?.addDiscoverSource).toHaveBeenCalledWith({
-      name: 'Local Source',
-      sourceType: 'local',
-      url: '/tmp/source dir'
-    }));
+    await waitFor(() =>
+      expect(window.theOpenHub?.addDiscoverSource).toHaveBeenCalledWith({
+        name: 'Local Source',
+        sourceType: 'local',
+        url: '/tmp/source dir'
+      })
+    );
   });
 
   it('removes project roots from Settings without offering removal for detected roots', async () => {
@@ -1018,14 +1151,18 @@ describe('desktop app shell', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Settings' }));
     expect(await screen.findByText('/tmp/.codex/skills')).toBeInTheDocument();
     expect(screen.getByText('/tmp/project-skills')).toBeInTheDocument();
-    expect(screen.queryByRole('button', { name: 'Remove /tmp/.codex/skills' })).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole('button', { name: 'Remove /tmp/.codex/skills' })
+    ).not.toBeInTheDocument();
 
     fireEvent.click(screen.getByRole('button', { name: 'Remove /tmp/project-skills' }));
 
-    await waitFor(() => expect(window.theOpenHub?.removeProjectRoot).toHaveBeenCalledWith({
-      agentCode: 'codex',
-      rootPath: '/tmp/project-skills'
-    }));
+    await waitFor(() =>
+      expect(window.theOpenHub?.removeProjectRoot).toHaveBeenCalledWith({
+        agentCode: 'codex',
+        rootPath: '/tmp/project-skills'
+      })
+    );
     expect(await screen.findByText('Root removed')).toBeInTheDocument();
     expect(screen.queryByText('/tmp/project-skills')).not.toBeInTheDocument();
     expect(screen.getByText('/tmp/.codex/skills')).toBeInTheDocument();
@@ -1045,12 +1182,16 @@ describe('desktop app shell', () => {
     expect(await screen.findByText('No local roots')).toBeInTheDocument();
     expect(screen.getByText('No marketplace sources')).toBeInTheDocument();
 
-    fireEvent.change(screen.getByLabelText('Root path'), { target: { value: '/tmp/project-skills' } });
+    fireEvent.change(screen.getByLabelText('Root path'), {
+      target: { value: '/tmp/project-skills' }
+    });
     fireEvent.click(screen.getByRole('button', { name: 'Add root' }));
     expect(await screen.findByText('Root failed')).toHaveClass('status-error');
     expect(screen.getByText('No local roots')).toBeInTheDocument();
 
-    fireEvent.change(screen.getByLabelText('Marketplace source URL'), { target: { value: '/tmp/source' } });
+    fireEvent.change(screen.getByLabelText('Marketplace source URL'), {
+      target: { value: '/tmp/source' }
+    });
     fireEvent.click(screen.getByRole('button', { name: 'Add source' }));
     expect(await screen.findByText('Source failed')).toHaveClass('status-error');
     expect(screen.getByText('No marketplace sources')).toBeInTheDocument();
@@ -1074,7 +1215,9 @@ describe('desktop app shell', () => {
     expect(window.theOpenHub?.addProjectRoot).not.toHaveBeenCalled();
 
     fireEvent.click(screen.getByRole('button', { name: 'Add source' }));
-    expect(await screen.findByText('Enter a marketplace source URL first')).toHaveClass('status-error');
+    expect(await screen.findByText('Enter a marketplace source URL first')).toHaveClass(
+      'status-error'
+    );
     expect(window.theOpenHub?.addDiscoverSource).not.toHaveBeenCalled();
   });
 
@@ -1088,7 +1231,7 @@ describe('desktop app shell', () => {
     } as unknown as NonNullable<typeof window.theOpenHub>;
 
     render(<App initialState={state} />);
-    fireEvent.click(screen.getByRole('button', { name: 'Skills' }));
+    fireEvent.click(screen.getByRole('button', { name: 'My Skills' }));
     expect(await screen.findByText('market-helper')).toBeInTheDocument();
 
     expect(screen.queryByRole('button', { name: 'Uninstall' })).not.toBeInTheDocument();
@@ -1102,14 +1245,19 @@ describe('desktop app shell', () => {
   it('removes app-owned skills after successful uninstall even when refresh fails', async () => {
     const state = workspaceWithInstalledSkill(createEmptyWorkspaceState(), 'market-helper');
     window.theOpenHub = {
-      getWorkspaceState: vi.fn().mockResolvedValueOnce(state).mockRejectedValueOnce(new Error('Refresh failed')),
+      getWorkspaceState: vi
+        .fn()
+        .mockResolvedValueOnce(state)
+        .mockRejectedValueOnce(new Error('Refresh failed')),
       listAgentRoots: vi.fn().mockResolvedValue([]),
       listDiscoverSources: vi.fn().mockResolvedValue([]),
-      uninstallSkill: vi.fn().mockResolvedValue({ status: 'uninstalled', installationId: 'installation-market-helper' })
+      uninstallSkill: vi
+        .fn()
+        .mockResolvedValue({ status: 'uninstalled', installationId: 'installation-market-helper' })
     } as unknown as NonNullable<typeof window.theOpenHub>;
 
     render(<App initialState={state} />);
-    fireEvent.click(screen.getByRole('button', { name: 'Skills' }));
+    fireEvent.click(screen.getByRole('button', { name: 'My Skills' }));
     expect(await screen.findByText('market-helper')).toBeInTheDocument();
 
     fireEvent.click(screen.getByRole('button', { name: 'Uninstall market-helper' }));
@@ -1123,10 +1271,15 @@ describe('desktop app shell', () => {
   it('clears selected app-owned skill details after successful uninstall even when refresh fails', async () => {
     const state = workspaceWithInstalledSkill(createEmptyWorkspaceState(), 'market-helper');
     window.theOpenHub = {
-      getWorkspaceState: vi.fn().mockResolvedValueOnce(state).mockRejectedValueOnce(new Error('Refresh failed')),
+      getWorkspaceState: vi
+        .fn()
+        .mockResolvedValueOnce(state)
+        .mockRejectedValueOnce(new Error('Refresh failed')),
       listAgentRoots: vi.fn().mockResolvedValue([]),
       listDiscoverSources: vi.fn().mockResolvedValue([]),
-      uninstallSkill: vi.fn().mockResolvedValue({ status: 'uninstalled', installationId: 'installation-market-helper' }),
+      uninstallSkill: vi
+        .fn()
+        .mockResolvedValue({ status: 'uninstalled', installationId: 'installation-market-helper' }),
       getSkillDetail: vi.fn().mockResolvedValue({
         skill: {
           id: 'skill-market-helper',
@@ -1140,13 +1293,15 @@ describe('desktop app shell', () => {
         },
         source: { type: 'local', url: '/tmp/source/market-helper' },
         versions: [],
-        files: [{ relativePath: 'SKILL.md', hash: 'hash-market-helper', size: 120, kind: 'markdown' }],
+        files: [
+          { relativePath: 'SKILL.md', hash: 'hash-market-helper', size: 120, kind: 'markdown' }
+        ],
         skillMarkdown: '# market-helper'
       })
     } as unknown as NonNullable<typeof window.theOpenHub>;
 
     render(<App initialState={state} />);
-    fireEvent.click(screen.getByRole('button', { name: 'Skills' }));
+    fireEvent.click(screen.getByRole('button', { name: 'My Skills' }));
     fireEvent.click(screen.getByRole('button', { name: 'Open market-helper details' }));
     expect(await screen.findByRole('heading', { name: 'market-helper' })).toBeInTheDocument();
 
@@ -1196,13 +1351,19 @@ describe('desktop app shell', () => {
     } as unknown as NonNullable<typeof window.theOpenHub>;
 
     render(<App initialState={state} />);
-    fireEvent.click(screen.getByRole('button', { name: 'Skills' }));
+    fireEvent.click(screen.getByRole('button', { name: 'My Skills' }));
     fireEvent.click(screen.getByRole('button', { name: 'Open PDF Parser details' }));
 
     expect(await screen.findByRole('heading', { name: 'PDF Parser' })).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: 'Local Overview' })).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: 'Skill metadata' })).toBeInTheDocument();
+    expect(screen.getAllByText('documents')).toHaveLength(2);
     expect(screen.getByText('SKILL.md')).toBeInTheDocument();
     expect(screen.getByText('Version 2')).toBeInTheDocument();
     expect(screen.queryByRole('button', { name: /run test task/i })).not.toBeInTheDocument();
+    expect(
+      screen.queryByText(/reviews|ratings|execution logs|api endpoint|public installs/i)
+    ).not.toBeInTheDocument();
   });
 
   it('hides selected skill details when the active filters remove that skill row', async () => {
@@ -1224,13 +1385,15 @@ describe('desktop app shell', () => {
         },
         source: { type: 'local', url: '/tmp/.codex/skills/prompt-writer' },
         versions: [],
-        files: [{ relativePath: 'SKILL.md', hash: 'hash-prompt-writer', size: 120, kind: 'markdown' }],
+        files: [
+          { relativePath: 'SKILL.md', hash: 'hash-prompt-writer', size: 120, kind: 'markdown' }
+        ],
         skillMarkdown: '# Prompt Writer'
       })
     } as unknown as NonNullable<typeof window.theOpenHub>;
 
     render(<App initialState={state} />);
-    fireEvent.click(screen.getByRole('button', { name: 'Skills' }));
+    fireEvent.click(screen.getByRole('button', { name: 'My Skills' }));
     fireEvent.click(screen.getByRole('button', { name: 'Open Prompt Writer details' }));
     expect(await screen.findByRole('heading', { name: 'Prompt Writer' })).toBeInTheDocument();
 
@@ -1265,18 +1428,24 @@ describe('desktop app shell', () => {
         },
         source: { type: 'local', url: '/tmp/.codex/skills/mobile-detail-01' },
         versions: [],
-        files: [{ relativePath: 'SKILL.md', hash: 'hash-mobile-detail-01', size: 120, kind: 'markdown' }],
+        files: [
+          { relativePath: 'SKILL.md', hash: 'hash-mobile-detail-01', size: 120, kind: 'markdown' }
+        ],
         skillMarkdown: '# Mobile Detail 01'
       })
     } as unknown as NonNullable<typeof window.theOpenHub>;
 
     render(<App initialState={state} />);
-    fireEvent.click(screen.getByRole('button', { name: 'Skills' }));
+    fireEvent.click(screen.getByRole('button', { name: 'My Skills' }));
     fireEvent.click(screen.getByRole('button', { name: 'Open Mobile Detail 01 details' }));
 
     expect(await screen.findByRole('heading', { name: 'Mobile Detail 01' })).toBeInTheDocument();
     await waitFor(() =>
-      expect(scrollIntoView).toHaveBeenCalledWith({ block: 'start', inline: 'nearest', behavior: 'smooth' })
+      expect(scrollIntoView).toHaveBeenCalledWith({
+        block: 'start',
+        inline: 'nearest',
+        behavior: 'smooth'
+      })
     );
     expect(scrollIntoView.mock.contexts[0]).toBe(screen.getByLabelText('Mobile Detail 01 details'));
   });
@@ -1311,13 +1480,15 @@ describe('desktop app shell', () => {
         },
         source: { type: 'local', url: '/tmp/.codex/skills/desktop-detail' },
         versions: [],
-        files: [{ relativePath: 'SKILL.md', hash: 'hash-desktop-detail', size: 120, kind: 'markdown' }],
+        files: [
+          { relativePath: 'SKILL.md', hash: 'hash-desktop-detail', size: 120, kind: 'markdown' }
+        ],
         skillMarkdown: '# Desktop Detail'
       })
     } as unknown as NonNullable<typeof window.theOpenHub>;
 
     render(<App initialState={state} />);
-    fireEvent.click(screen.getByRole('button', { name: 'Skills' }));
+    fireEvent.click(screen.getByRole('button', { name: 'My Skills' }));
     fireEvent.click(screen.getByRole('button', { name: 'Open Desktop Detail details' }));
 
     expect(await screen.findByRole('heading', { name: 'Desktop Detail' })).toBeInTheDocument();
@@ -1342,7 +1513,7 @@ describe('desktop app shell', () => {
     } as unknown as NonNullable<typeof window.theOpenHub>;
 
     render(<App initialState={state} />);
-    fireEvent.click(screen.getByRole('button', { name: 'Skills' }));
+    fireEvent.click(screen.getByRole('button', { name: 'My Skills' }));
     fireEvent.click(screen.getByRole('button', { name: 'Favorite Prompt Writer' }));
 
     await waitFor(() => expect(setFavorite).toHaveBeenCalledWith('skill-prompt-writer', true));
@@ -1356,7 +1527,7 @@ describe('desktop app shell', () => {
     );
     render(<App initialState={state} />);
 
-    fireEvent.click(screen.getByRole('button', { name: 'Skills' }));
+    fireEvent.click(screen.getByRole('button', { name: 'My Skills' }));
     fireEvent.click(screen.getByRole('checkbox', { name: 'Favorites only' }));
 
     expect(screen.getByText('Prompt Writer')).toBeInTheDocument();
@@ -1367,12 +1538,18 @@ describe('desktop app shell', () => {
     render(<App />);
     fireEvent.click(screen.getByRole('button', { name: 'Settings' }));
 
+    expect(screen.getByRole('heading', { name: 'General' })).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: 'Skill Repositories' })).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: 'Local Privacy' })).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: 'About' })).toBeInTheDocument();
     expect(screen.getByRole('heading', { name: 'Local roots' })).toBeInTheDocument();
     expect(screen.getByRole('heading', { name: 'Marketplace sources' })).toBeInTheDocument();
     expect(screen.getByRole('heading', { name: 'Sync' })).toBeInTheDocument();
     expect(screen.getByRole('heading', { name: 'Plugins' })).toBeInTheDocument();
     expect(screen.queryByLabelText(/api key/i)).not.toBeInTheDocument();
-    expect(screen.queryByText(/share usage analytics|telemetry|crash reports/i)).not.toBeInTheDocument();
+    expect(
+      screen.queryByText(/share usage analytics|telemetry|crash reports/i)
+    ).not.toBeInTheDocument();
   });
 
   it('wires Settings app preferences to existing local settings IPC', async () => {
@@ -1426,7 +1603,9 @@ describe('desktop app shell', () => {
     render(<App />);
     fireEvent.click(screen.getByRole('button', { name: 'Settings' }));
 
-    fireEvent.change(await screen.findByLabelText('Sync remote path'), { target: { value: '/tmp/openhub-shared-sync' } });
+    fireEvent.change(await screen.findByLabelText('Sync remote path'), {
+      target: { value: '/tmp/openhub-shared-sync' }
+    });
     expect(screen.getByLabelText('Sync mode')).toHaveValue('shared-folder');
     expect(screen.getByRole('checkbox', { name: 'Enable sync profile' })).toBeChecked();
     expect(screen.queryByLabelText(/api key|token|secret/i)).not.toBeInTheDocument();
@@ -1534,10 +1713,14 @@ describe('desktop app shell', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Settings' }));
 
     expect(await screen.findByText('/tmp/openhub-existing-plugins')).toBeInTheDocument();
-    fireEvent.change(screen.getByLabelText('Plugin directory path'), { target: { value: addedDirectory.rootPath } });
+    fireEvent.change(screen.getByLabelText('Plugin directory path'), {
+      target: { value: addedDirectory.rootPath }
+    });
     fireEvent.click(screen.getByRole('button', { name: 'Add plugin directory' }));
 
-    await waitFor(() => expect(addSettingsPluginDirectory).toHaveBeenCalledWith(addedDirectory.rootPath));
+    await waitFor(() =>
+      expect(addSettingsPluginDirectory).toHaveBeenCalledWith(addedDirectory.rootPath)
+    );
     expect(await screen.findByText('/tmp/openhub-added-plugins')).toBeInTheDocument();
 
     fireEvent.click(screen.getByRole('button', { name: `Scan ${addedDirectory.rootPath}` }));
@@ -1545,7 +1728,9 @@ describe('desktop app shell', () => {
     expect(await screen.findByText('Local Importer')).toBeInTheDocument();
 
     fireEvent.click(screen.getByRole('button', { name: `Remove ${addedDirectory.rootPath}` }));
-    await waitFor(() => expect(removeSettingsPluginDirectory).toHaveBeenCalledWith(addedDirectory.id));
+    await waitFor(() =>
+      expect(removeSettingsPluginDirectory).toHaveBeenCalledWith(addedDirectory.id)
+    );
     expect(screen.queryByText('/tmp/openhub-added-plugins')).not.toBeInTheDocument();
   });
 });
@@ -1674,7 +1859,10 @@ function workspaceWithAgentSkill(
   };
 }
 
-function workspaceWithRepeatedAgentSkills(state: DesktopWorkspaceState, count: number): DesktopWorkspaceState {
+function workspaceWithRepeatedAgentSkills(
+  state: DesktopWorkspaceState,
+  count: number
+): DesktopWorkspaceState {
   const librarySkills = Array.from({ length: count }, (_, index) => {
     const skillNumber = String(index + 1).padStart(2, '0');
     const name = `Mobile Detail ${skillNumber}`;
@@ -1773,7 +1961,11 @@ function createReadOnlyRoot(rootPath: string) {
   };
 }
 
-function createAgentRoot(input: { agentCode: 'codex' | 'claude' | 'gemini' | 'opencode' | 'agents'; agentDisplayName: string; rootPath: string }) {
+function createAgentRoot(input: {
+  agentCode: 'codex' | 'claude' | 'gemini' | 'opencode' | 'agents';
+  agentDisplayName: string;
+  rootPath: string;
+}) {
   return {
     ...createRoot(input.rootPath),
     agentCode: input.agentCode,
@@ -1796,7 +1988,9 @@ function createSource() {
   };
 }
 
-function createMarketInstallPlan(writeStatus: InstallPlan['writes'][number]['status']): InstallPlan {
+function createMarketInstallPlan(
+  writeStatus: InstallPlan['writes'][number]['status']
+): InstallPlan {
   return {
     id: 'plan-market',
     skillId: 'skill-market',

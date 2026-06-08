@@ -1,6 +1,19 @@
-import { FolderSearch, Home, Library, Plug, RefreshCw, Search, Settings, Star } from 'lucide-react';
+import {
+  BarChart3,
+  Bell,
+  CircleHelp,
+  FolderSearch,
+  Home,
+  Library,
+  Plug,
+  RefreshCw,
+  Search,
+  Settings,
+  Star,
+  Store
+} from 'lucide-react';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import type { RefObject } from 'react';
+import type { CSSProperties, RefObject } from 'react';
 
 import type {
   AgentRootTarget,
@@ -28,7 +41,9 @@ import {
 
 const pageIcons = {
   home: Home,
+  marketplace: Store,
   skills: Library,
+  analytics: BarChart3,
   settings: Settings
 } as const;
 
@@ -37,8 +52,7 @@ const agentTabs = [
   { key: 'claude', label: 'Claude' },
   { key: 'gemini', label: 'Gemini' },
   { key: 'opencode', label: 'OpenCode' },
-  { key: 'agents', label: 'Agents' },
-  { key: 'marketplace', label: 'Marketplace' }
+  { key: 'agents', label: 'Agents' }
 ] as const;
 
 type SkillsTabKey = (typeof agentTabs)[number]['key'];
@@ -63,7 +77,9 @@ export function App({
   initialPluginRegistry = defaultPluginRegistry
 }: AppProps) {
   const [activePage, setActivePage] = useState<PageKey>('home');
-  const [state, setState] = useState<DesktopWorkspaceState>(initialState ?? createEmptyWorkspaceState());
+  const [state, setState] = useState<DesktopWorkspaceState>(
+    initialState ?? createEmptyWorkspaceState()
+  );
   const [agentRoots, setAgentRoots] = useState<AgentRootTarget[]>(initialAgentRoots);
   const [previewSkills, setPreviewSkills] = useState<DiscoverSkillPreview[]>(initialPreviewSkills);
   const [discoverSources, setDiscoverSources] = useState<DiscoverSource[]>([]);
@@ -117,29 +133,27 @@ export function App({
   const homeMetrics = useMemo(
     () => [
       {
-        label: 'Library skills',
+        label: 'Total active skills',
         value: String(state.skills.length || state.librarySkills.length),
-        detail: 'SQLite library'
+        detail: 'Library skills',
+        trend: state.librarySkills.length > 0 ? 'Indexed from local roots' : 'No index yet',
+        tone: 'blue' as const
       },
       {
-        label: 'Root locations',
+        label: 'Indexed root locations',
         value: String(new Set(state.librarySkills.map((skill) => skill.rootPath)).size),
-        detail: 'Indexed roots'
+        detail: 'Root locations',
+        trend: `${agentRoots.length} detected local root${agentRoots.length === 1 ? '' : 's'}`,
+        tone: 'green' as const
       },
       {
-        label: 'Local roots',
-        value: String(agentRoots.length),
-        detail: 'Detected roots'
-      },
-      {
-        label: 'Marketplace sources',
-        value: String(discoverSources.length),
-        detail: 'Configured sources'
-      },
-      {
-        label: 'App-owned installs',
-        value: String(state.librarySkills.filter((skill) => skill.ownership === 'app-owned').length),
-        detail: 'Managed files'
+        label: 'App-managed skills',
+        value: String(
+          state.librarySkills.filter((skill) => skill.ownership === 'app-owned').length
+        ),
+        detail: 'Managed files',
+        trend: `${discoverSources.length} marketplace source${discoverSources.length === 1 ? '' : 's'}`,
+        tone: 'amber' as const
       }
     ],
     [agentRoots.length, discoverSources.length, state.librarySkills, state.skills.length]
@@ -165,7 +179,12 @@ export function App({
     (page: PageKey) => {
       setActivePage(page);
       if (page === 'skills') {
-        setSkillsTab((current) => firstPopulatedAgentTab(state.librarySkills.map((skill) => skill.agentCode), current));
+        setSkillsTab((current) =>
+          firstPopulatedAgentTab(
+            state.librarySkills.map((skill) => skill.agentCode),
+            current
+          )
+        );
       }
     },
     [state.librarySkills]
@@ -173,10 +192,13 @@ export function App({
   const navigateHomeStep = useCallback(
     (step: ReturnType<typeof createWorkspaceUxModel>['actionSteps'][number]) => {
       setActivePage(step.targetPage);
-      if (step.targetSkillsTab) {
-        setSkillsTab(step.targetSkillsTab);
-      } else if (step.targetPage === 'skills') {
-        setSkillsTab((current) => firstPopulatedAgentTab(state.librarySkills.map((skill) => skill.agentCode), current));
+      if (step.targetPage === 'skills') {
+        setSkillsTab((current) =>
+          firstPopulatedAgentTab(
+            state.librarySkills.map((skill) => skill.agentCode),
+            current
+          )
+        );
       }
     },
     [state.librarySkills]
@@ -184,15 +206,21 @@ export function App({
   const updateSearchQuery = useCallback(
     (value: string) => {
       setQuery(value);
-      if (value.trim() && activePage !== 'skills') {
-        setActivePage('skills');
-        setSkillsTab((current) => firstSearchResultTab(state.librarySkills, previewSkills, value, current));
+      if (value.trim() && activePage === 'home') {
+        const nextPage = firstSearchResultPage(state.librarySkills, previewSkills, value);
+        setActivePage(nextPage);
+        if (nextPage === 'skills') {
+          setSkillsTab((current) => firstSearchResultTab(state.librarySkills, value, current));
+        }
       }
     },
     [activePage, previewSkills, state.librarySkills]
   );
 
-  const isInactive = useCallback((isCancelled?: AsyncGuard) => !mountedRef.current || Boolean(isCancelled?.()), []);
+  const isInactive = useCallback(
+    (isCancelled?: AsyncGuard) => !mountedRef.current || Boolean(isCancelled?.()),
+    []
+  );
 
   const refreshRootsAndSources = useCallback(
     async (isCancelled?: AsyncGuard) => {
@@ -241,7 +269,12 @@ export function App({
           return;
         }
         setState((current) => mergeScanIntoWorkspaceState(current, scan));
-        setSkillsTab((current) => firstPopulatedAgentTab(scan.indexedSkills.map((skill) => skill.agentCode), current));
+        setSkillsTab((current) =>
+          firstPopulatedAgentTab(
+            scan.indexedSkills.map((skill) => skill.agentCode),
+            current
+          )
+        );
         await refreshWorkspace(isCancelled).catch(() => undefined);
         if (!isInactive(isCancelled)) {
           setStatusMessage(formatScanStatus(scan), scan.errors.length > 0 ? 'error' : 'default');
@@ -301,7 +334,11 @@ export function App({
     if (!selectedSkillDetail || !window.matchMedia?.('(max-width: 900px)').matches) {
       return;
     }
-    skillDetailPanelRef.current?.scrollIntoView({ block: 'start', inline: 'nearest', behavior: 'smooth' });
+    skillDetailPanelRef.current?.scrollIntoView({
+      block: 'start',
+      inline: 'nearest',
+      behavior: 'smooth'
+    });
   }, [selectedSkillDetail]);
 
   async function refreshWorkspaceCommand() {
@@ -391,7 +428,12 @@ export function App({
       await api.removeProjectRoot({ agentCode: root.agentCode, rootPath: root.rootPath });
       await refreshWorkspace().catch(() => undefined);
       setAgentRoots((current) =>
-        current.filter((item) => item.rootPath !== root.rootPath || item.agentCode !== root.agentCode || item.rootKind !== 'project')
+        current.filter(
+          (item) =>
+            item.rootPath !== root.rootPath ||
+            item.agentCode !== root.agentCode ||
+            item.rootKind !== 'project'
+        )
       );
       setSelectedTargetRoot((current) => (current === root.rootPath ? '' : current));
       setStatusMessage('Root removed');
@@ -443,7 +485,12 @@ export function App({
         agentCode: rootAgentCode,
         rootPath: trimmedRootPath
       });
-      setAgentRoots((current) => [root, ...current.filter((item) => item.rootPath !== root.rootPath || item.agentCode !== root.agentCode)]);
+      setAgentRoots((current) => [
+        root,
+        ...current.filter(
+          (item) => item.rootPath !== root.rootPath || item.agentCode !== root.agentCode
+        )
+      ]);
       setSelectedTargetRoot(root.rootPath);
       setStatusMessage(`Root added: ${root.agentDisplayName}`);
     } catch (error: unknown) {
@@ -471,7 +518,10 @@ export function App({
         ...current,
         syncCenter: {
           ...current.syncCenter,
-          profiles: upsertSyncCenterProfile(current.syncCenter.profiles, syncProfileToCenterProfile(profile))
+          profiles: upsertSyncCenterProfile(
+            current.syncCenter.profiles,
+            syncProfileToCenterProfile(profile)
+          )
         }
       }));
       setSyncRemoteUrl('');
@@ -494,7 +544,12 @@ export function App({
     try {
       const directory = await api.addSettingsPluginDirectory(trimmedPluginDirectoryPath);
       setAppSettings((current) =>
-        current ? { ...current, pluginDirectories: upsertPluginDirectory(current.pluginDirectories, directory) } : current
+        current
+          ? {
+              ...current,
+              pluginDirectories: upsertPluginDirectory(current.pluginDirectories, directory)
+            }
+          : current
       );
       setState((current) => ({
         ...current,
@@ -518,14 +573,23 @@ export function App({
     try {
       const result = await api.scanPluginDirectory(directoryId);
       setAppSettings((current) =>
-        current ? { ...current, pluginDirectories: upsertPluginDirectory(current.pluginDirectories, result.directory) } : current
+        current
+          ? {
+              ...current,
+              pluginDirectories: upsertPluginDirectory(current.pluginDirectories, result.directory)
+            }
+          : current
       );
       setState((current) => ({
         ...current,
         plugins: {
           ...current.plugins,
           directories: upsertPluginDirectory(current.plugins.directories, result.directory),
-          catalog: replacePluginCatalogForDirectory(current.plugins.catalog, directoryId, result.catalog)
+          catalog: replacePluginCatalogForDirectory(
+            current.plugins.catalog,
+            directoryId,
+            result.catalog
+          )
         }
       }));
       setStatusMessage(`${result.catalog.length} plugin entries`);
@@ -543,14 +607,21 @@ export function App({
       await api.removeSettingsPluginDirectory(directoryId);
       setAppSettings((current) =>
         current
-          ? { ...current, pluginDirectories: current.pluginDirectories.filter((directory) => directory.id !== directoryId) }
+          ? {
+              ...current,
+              pluginDirectories: current.pluginDirectories.filter(
+                (directory) => directory.id !== directoryId
+              )
+            }
           : current
       );
       setState((current) => ({
         ...current,
         plugins: {
           ...current.plugins,
-          directories: current.plugins.directories.filter((directory) => directory.id !== directoryId),
+          directories: current.plugins.directories.filter(
+            (directory) => directory.id !== directoryId
+          ),
           catalog: current.plugins.catalog.filter((entry) => entry.directoryId !== directoryId)
         }
       }));
@@ -622,7 +693,10 @@ export function App({
         return;
       }
       const installed = await api.applyInstallPlan(plan, false);
-      setInstalledSkillIds((current) => ({ ...current, [installed.skillId]: installed.installationId }));
+      setInstalledSkillIds((current) => ({
+        ...current,
+        [installed.skillId]: installed.installationId
+      }));
       await refreshWorkspace();
       setStatusMessage(`Installed ${skill.name}`);
     } catch (error: unknown) {
@@ -640,7 +714,10 @@ export function App({
     try {
       const installed = await api.applyInstallPlan(pendingPlan, true);
       setPendingPlan(null);
-      setInstalledSkillIds((current) => ({ ...current, [installed.skillId]: installed.installationId }));
+      setInstalledSkillIds((current) => ({
+        ...current,
+        [installed.skillId]: installed.installationId
+      }));
       await refreshWorkspace();
       setStatusMessage(`Installed ${pendingPlan.skillName}`);
     } catch (error: unknown) {
@@ -656,16 +733,26 @@ export function App({
     try {
       await api.uninstallSkill(installationId);
       const removedSkillIds = new Set(
-        state.librarySkills.filter((skill) => skill.installationId === installationId).map((skill) => skill.id)
+        state.librarySkills
+          .filter((skill) => skill.installationId === installationId)
+          .map((skill) => skill.id)
       );
       setInstalledSkillIds((current) =>
-        Object.fromEntries(Object.entries(current).filter(([, currentInstallationId]) => currentInstallationId !== installationId))
+        Object.fromEntries(
+          Object.entries(current).filter(
+            ([, currentInstallationId]) => currentInstallationId !== installationId
+          )
+        )
       );
       setState((current) => ({
         ...current,
-        librarySkills: current.librarySkills.filter((skill) => skill.installationId !== installationId)
+        librarySkills: current.librarySkills.filter(
+          (skill) => skill.installationId !== installationId
+        )
       }));
-      setSelectedSkillDetail((detail) => (detail && removedSkillIds.has(detail.skill.id) ? null : detail));
+      setSelectedSkillDetail((detail) =>
+        detail && removedSkillIds.has(detail.skill.id) ? null : detail
+      );
       let refreshFailed = false;
       await refreshWorkspace().catch((error: unknown) => {
         refreshFailed = true;
@@ -703,11 +790,15 @@ export function App({
       const favorite = Boolean(updated.favorite);
       setState((current) => ({
         ...current,
-        librarySkills: current.librarySkills.map((item) => (item.id === skill.id ? { ...item, favorite } : item)),
+        librarySkills: current.librarySkills.map((item) =>
+          item.id === skill.id ? { ...item, favorite } : item
+        ),
         skills: current.skills.map((item) => (item.id === skill.id ? { ...item, favorite } : item))
       }));
       setSelectedSkillDetail((current) =>
-        current?.skill.id === skill.id ? { ...current, skill: { ...current.skill, favorite } } : current
+        current?.skill.id === skill.id
+          ? { ...current, skill: { ...current.skill, favorite } }
+          : current
       );
       setStatusMessage(favorite ? `Favorited ${updated.name}` : `Unfavorited ${updated.name}`);
     } catch (error: unknown) {
@@ -733,6 +824,7 @@ export function App({
               <button
                 key={page}
                 type="button"
+                aria-label={item?.label ?? page}
                 aria-current={activePage === page ? 'page' : undefined}
                 onClick={() => openPage(page)}
               >
@@ -752,7 +844,7 @@ export function App({
             <input
               type="search"
               aria-label="Search skills"
-              placeholder="Search skills"
+              placeholder={searchPlaceholderForPage(activePage)}
               value={query}
               onChange={(event) => updateSearchQuery(event.target.value)}
             />
@@ -766,41 +858,48 @@ export function App({
               <RefreshCw size={16} aria-hidden="true" />
               Refresh
             </button>
+            <button type="button" className="top-icon-button" aria-label="Notifications">
+              <Bell size={18} aria-hidden="true" />
+            </button>
+            <button type="button" className="top-icon-button" aria-label="Help">
+              <CircleHelp size={18} aria-hidden="true" />
+            </button>
           </div>
         </header>
 
         <section className="workspace" aria-label={`${titleForPage(activePage)} workspace`}>
           <div className="page-title">
             <div>
-              <p>{state.appInfo.localFirst ? 'Local-first workspace' : state.appInfo.productName}</p>
+              <p>
+                {state.appInfo.localFirst ? 'Local-first workspace' : state.appInfo.productName}
+              </p>
               <h1>{titleForPage(activePage)}</h1>
             </div>
-            <span className={statusTone === 'error' ? 'status status-error' : 'status'}>{status}</span>
+            <span className={statusTone === 'error' ? 'status status-error' : 'status'}>
+              {status}
+            </span>
           </div>
 
           {activePage === 'home' ? (
-            <HomePage metrics={homeMetrics} steps={uxModel.actionSteps} onNavigate={navigateHomeStep} />
+            <HomePage
+              metrics={homeMetrics}
+              steps={uxModel.actionSteps}
+              onNavigate={navigateHomeStep}
+            />
           ) : null}
-          {activePage === 'skills' ? (
-            <SkillsPage
-              rows={state.librarySkills}
-              searchQuery={query}
-              activeTab={skillsTab}
-              setActiveTab={setSkillsTab}
-              agentRoots={agentRoots}
-              discoverSources={discoverSources}
+          {activePage === 'marketplace' ? (
+            <MarketplacePage
+              roots={agentRoots}
+              sources={discoverSources}
               selectedSourceId={selectedSourceId}
               setSelectedSourceId={selectMarketplaceSource}
               previewSkills={previewSkills}
+              searchQuery={query}
               selectedTargetRoot={selectedTargetRoot}
               setSelectedTargetRoot={setSelectedTargetRoot}
               projectionMode={projectionMode}
               setProjectionMode={setProjectionMode}
               pendingPlan={pendingPlan}
-              selectedSkillDetail={selectedSkillDetail}
-              skillDetailPanelRef={skillDetailPanelRef}
-              favoritesOnly={favoritesOnly}
-              setFavoritesOnly={setFavoritesOnly}
               importedCandidates={importedCandidates}
               installedSkillIds={installedSkillIds}
               installedCandidateSourcePaths={installedCandidateSourcePaths}
@@ -808,9 +907,30 @@ export function App({
               onImport={importCandidate}
               onInstall={installCandidate}
               onConfirmOverwrite={applyPendingPlan}
+              onOpenSettings={() => setActivePage('settings')}
+            />
+          ) : null}
+          {activePage === 'skills' ? (
+            <SkillsPage
+              rows={state.librarySkills}
+              searchQuery={query}
+              activeTab={skillsTab}
+              setActiveTab={setSkillsTab}
+              selectedSkillDetail={selectedSkillDetail}
+              skillDetailPanelRef={skillDetailPanelRef}
+              favoritesOnly={favoritesOnly}
+              setFavoritesOnly={setFavoritesOnly}
               onUninstall={uninstallSkill}
               onOpenDetail={openSkillDetail}
               onToggleFavorite={toggleFavorite}
+            />
+          ) : null}
+          {activePage === 'analytics' ? (
+            <AnalyticsPage
+              state={state}
+              roots={agentRoots}
+              sources={discoverSources}
+              previewSkills={previewSkills}
             />
           ) : null}
           {activePage === 'settings' ? (
@@ -859,20 +979,60 @@ function HomePage({
   steps,
   onNavigate
 }: {
-  metrics: ReturnType<typeof createWorkspaceViewModel>['dashboard']['metrics'];
+  metrics: Array<{
+    label: string;
+    value: string;
+    detail: string;
+    trend: string;
+    tone: 'blue' | 'green' | 'amber';
+  }>;
   steps: ReturnType<typeof createWorkspaceUxModel>['actionSteps'];
   onNavigate: (step: ReturnType<typeof createWorkspaceUxModel>['actionSteps'][number]) => void;
 }) {
+  const metricIcons = [Library, FolderSearch, Store] as const;
+  const readiness = Math.round(
+    (steps.filter((step) => step.status === 'done').length / steps.length) * 100
+  );
+
   return (
     <div className="content-grid">
-      <section className="metric-grid" aria-label="Workspace metrics">
-        {metrics.map((metric) => (
-          <article className="metric" key={metric.label}>
-            <span>{metric.label}</span>
-            <strong>{metric.value}</strong>
-            <p>{metric.detail}</p>
-          </article>
-        ))}
+      <section className="metric-grid metric-grid-primary" aria-label="Workspace metrics">
+        {metrics.map((metric, index) => {
+          const Icon = metricIcons[index] ?? Library;
+          return (
+            <article className={`metric metric-${metric.tone}`} key={metric.label}>
+              <div className="metric-heading">
+                <span>{metric.label}</span>
+                <span className="metric-icon">
+                  <Icon size={22} aria-hidden="true" />
+                </span>
+              </div>
+              <strong>{metric.value}</strong>
+              <div className="metric-footer">
+                <span className="trend-chip">{metric.trend}</span>
+                <p>{metric.detail}</p>
+              </div>
+              {index === 2 ? (
+                <div className="metric-progress">
+                  <div className="metric-progress-label">
+                    <span>Workspace readiness</span>
+                    <strong>{readiness}%</strong>
+                  </div>
+                  <div
+                    className="progress-track"
+                    role="progressbar"
+                    aria-label="Workspace readiness"
+                    aria-valuemin={0}
+                    aria-valuemax={100}
+                    aria-valuenow={readiness}
+                  >
+                    <span style={{ '--progress-value': `${readiness}%` } as CSSProperties} />
+                  </div>
+                </div>
+              ) : null}
+            </article>
+          );
+        })}
       </section>
       <section className="panel">
         <h2>Start here</h2>
@@ -903,27 +1063,10 @@ function SkillsPage({
   searchQuery,
   activeTab,
   setActiveTab,
-  agentRoots,
-  discoverSources,
-  selectedSourceId,
-  setSelectedSourceId,
-  previewSkills,
-  selectedTargetRoot,
-  setSelectedTargetRoot,
-  projectionMode,
-  setProjectionMode,
-  pendingPlan,
   selectedSkillDetail,
   skillDetailPanelRef,
   favoritesOnly,
   setFavoritesOnly,
-  importedCandidates,
-  installedSkillIds,
-  installedCandidateSourcePaths,
-  onPreview,
-  onImport,
-  onInstall,
-  onConfirmOverwrite,
   onUninstall,
   onOpenDetail,
   onToggleFavorite
@@ -932,27 +1075,10 @@ function SkillsPage({
   searchQuery: string;
   activeTab: SkillsTabKey;
   setActiveTab: (value: SkillsTabKey) => void;
-  agentRoots: AgentRootTarget[];
-  discoverSources: DiscoverSource[];
-  selectedSourceId: string;
-  setSelectedSourceId: (value: string) => void;
-  previewSkills: DiscoverSkillPreview[];
-  selectedTargetRoot: string;
-  setSelectedTargetRoot: (value: string) => void;
-  projectionMode: 'copy' | 'symlink';
-  setProjectionMode: (value: 'copy' | 'symlink') => void;
-  pendingPlan: InstallPlan | null;
   selectedSkillDetail: SkillDetail | null;
   skillDetailPanelRef: RefObject<HTMLElement | null>;
   favoritesOnly: boolean;
   setFavoritesOnly: (value: boolean) => void;
-  importedCandidates: Record<string, string>;
-  installedSkillIds: Record<string, string>;
-  installedCandidateSourcePaths: Record<string, string>;
-  onPreview: () => void;
-  onImport: (skill: DiscoverSkillPreview) => Promise<string | null>;
-  onInstall: (skill: DiscoverSkillPreview) => void;
-  onConfirmOverwrite: () => void;
   onUninstall: (installationId: string) => void;
   onOpenDetail: (skillId: string) => void;
   onToggleFavorite: (skill: LibrarySkillSummary) => void;
@@ -960,13 +1086,19 @@ function SkillsPage({
   const normalizedSearchQuery = normalizeSearchText(searchQuery);
   const favoriteFilteredRows = favoritesOnly ? rows.filter((skill) => skill.favorite) : rows;
   const agentRows = favoriteFilteredRows.filter((skill) => skill.agentCode === activeTab);
-  const visibleAgentRows = normalizedSearchQuery ? agentRows.filter((skill) => skillMatchesSearch(skill, normalizedSearchQuery)) : agentRows;
+  const visibleAgentRows = normalizedSearchQuery
+    ? agentRows.filter((skill) => skillMatchesSearch(skill, normalizedSearchQuery))
+    : agentRows;
   const visibleSkillIds = new Set(visibleAgentRows.map((skill) => skill.id));
   const visibleSelectedSkillDetail =
-    selectedSkillDetail && visibleSkillIds.has(selectedSkillDetail.skill.id) ? selectedSkillDetail : null;
+    selectedSkillDetail && visibleSkillIds.has(selectedSkillDetail.skill.id)
+      ? selectedSkillDetail
+      : null;
   const rootGroups = groupByRoot(visibleAgentRows);
   const emptyMessage =
-    agentRows.length > 0 && normalizedSearchQuery ? `No skills match "${searchQuery.trim()}"` : 'No indexed skills';
+    agentRows.length > 0 && normalizedSearchQuery
+      ? `No skills match "${searchQuery.trim()}"`
+      : 'No indexed skills';
 
   return (
     <div className="content-grid">
@@ -984,29 +1116,7 @@ function SkillsPage({
         ))}
       </div>
 
-      {activeTab === 'marketplace' ? (
-        <MarketplaceTab
-          roots={agentRoots}
-          sources={discoverSources}
-          selectedSourceId={selectedSourceId}
-          setSelectedSourceId={setSelectedSourceId}
-          previewSkills={previewSkills}
-          searchQuery={searchQuery}
-          selectedTargetRoot={selectedTargetRoot}
-          setSelectedTargetRoot={setSelectedTargetRoot}
-          projectionMode={projectionMode}
-          setProjectionMode={setProjectionMode}
-          pendingPlan={pendingPlan}
-          importedCandidates={importedCandidates}
-          installedSkillIds={installedSkillIds}
-          installedCandidateSourcePaths={installedCandidateSourcePaths}
-          onPreview={onPreview}
-          onImport={onImport}
-          onInstall={onInstall}
-          onConfirmOverwrite={onConfirmOverwrite}
-        />
-      ) : (
-        <>
+      <>
         <section className="panel">
           <h2>{agentTabs.find((tab) => tab.key === activeTab)?.label} skills</h2>
           <div className="skill-toolbar">
@@ -1026,7 +1136,11 @@ function SkillsPage({
                 <strong>{group.rootPath}</strong>
                 <span>{group.rows.length} skills</span>
               </div>
-              <div className="table skills-table" role="table" aria-label={`${group.rootPath} skills`}>
+              <div
+                className="table skills-table"
+                role="table"
+                aria-label={`${group.rootPath} skills`}
+              >
                 <div className="table-head" role="row">
                   <span role="columnheader">Name</span>
                   <span role="columnheader">Path</span>
@@ -1055,7 +1169,12 @@ function SkillsPage({
                     <span role="cell">{skill.ownership}</span>
                     <span role="cell">
                       <span className="row-actions">
-                        <button type="button" className="inline-action" aria-label={`Open ${skill.name} details`} onClick={() => onOpenDetail(skill.id)}>
+                        <button
+                          type="button"
+                          className="inline-action"
+                          aria-label={`Open ${skill.name} details`}
+                          onClick={() => onOpenDetail(skill.id)}
+                        >
                           Details
                         </button>
                         {skill.ownership === 'app-owned' && skill.installationId ? (
@@ -1078,9 +1197,53 @@ function SkillsPage({
             </section>
           ))}
         </section>
-        <SkillDetailPanel detail={visibleSelectedSkillDetail} detailPanelRef={skillDetailPanelRef} />
-        </>
-      )}
+        <SkillDetailPanel
+          detail={visibleSelectedSkillDetail}
+          detailPanelRef={skillDetailPanelRef}
+        />
+      </>
+    </div>
+  );
+}
+
+function MarketplacePage(props: {
+  roots: AgentRootTarget[];
+  sources: DiscoverSource[];
+  selectedSourceId: string;
+  setSelectedSourceId: (value: string) => void;
+  previewSkills: DiscoverSkillPreview[];
+  searchQuery: string;
+  selectedTargetRoot: string;
+  setSelectedTargetRoot: (value: string) => void;
+  projectionMode: 'copy' | 'symlink';
+  setProjectionMode: (value: 'copy' | 'symlink') => void;
+  pendingPlan: InstallPlan | null;
+  importedCandidates: Record<string, string>;
+  installedSkillIds: Record<string, string>;
+  installedCandidateSourcePaths: Record<string, string>;
+  onPreview: () => void;
+  onImport: (skill: DiscoverSkillPreview) => Promise<string | null>;
+  onInstall: (skill: DiscoverSkillPreview) => void;
+  onConfirmOverwrite: () => void;
+  onOpenSettings: () => void;
+}) {
+  return (
+    <div className="content-grid">
+      <section className="market-hero" aria-label="Marketplace source preview">
+        <span>LOCAL / GIT PREVIEW</span>
+        <h2>Bring external skills into a managed local workflow.</h2>
+        <p>
+          Preview a source, inspect candidates, then explicitly import or copy into a writable agent
+          root.
+        </p>
+      </section>
+      <div className="market-filters" aria-label="Marketplace filters">
+        <span className="chip chip-active">All candidates</span>
+        <span className="chip">Local folders</span>
+        <span className="chip">Git sources</span>
+        <span className="chip">Ready to import</span>
+      </div>
+      <MarketplaceTab {...props} />
     </div>
   );
 }
@@ -1103,7 +1266,8 @@ function MarketplaceTab({
   onPreview,
   onImport,
   onInstall,
-  onConfirmOverwrite
+  onConfirmOverwrite,
+  onOpenSettings
 }: {
   roots: AgentRootTarget[];
   sources: DiscoverSource[];
@@ -1123,6 +1287,7 @@ function MarketplaceTab({
   onImport: (skill: DiscoverSkillPreview) => Promise<string | null>;
   onInstall: (skill: DiscoverSkillPreview) => void;
   onConfirmOverwrite: () => void;
+  onOpenSettings: () => void;
 }) {
   const normalizedSearchQuery = normalizeSearchText(searchQuery);
   const visiblePreviewSkills = normalizedSearchQuery
@@ -1130,7 +1295,11 @@ function MarketplaceTab({
     : previewSkills;
   const writableRoots = roots.filter((root) => root.writable);
   const candidateEmptyMessage =
-    previewSkills.length > 0 && normalizedSearchQuery ? `No candidates match "${searchQuery.trim()}"` : 'No sources previewed';
+    previewSkills.length > 0 && normalizedSearchQuery
+      ? `No candidates match "${searchQuery.trim()}"`
+      : 'No sources previewed';
+  const showEmptyGuidance =
+    sources.length === 0 && previewSkills.length === 0 && !normalizedSearchQuery;
 
   return (
     <div className="split-two">
@@ -1188,63 +1357,139 @@ function MarketplaceTab({
             <FolderSearch size={16} aria-hidden="true" />
             Preview source
           </button>
-          {pendingPlan ? <ConflictBox plan={pendingPlan} onConfirmOverwrite={onConfirmOverwrite} /> : null}
+          {pendingPlan ? (
+            <ConflictBox plan={pendingPlan} onConfirmOverwrite={onConfirmOverwrite} />
+          ) : null}
         </div>
       </section>
       <section className="panel">
         <h2>Candidates</h2>
-        {sources.length === 0 ? <p className="empty">No marketplace sources</p> : null}
-        {visiblePreviewSkills.length === 0 ? <p className="empty">{candidateEmptyMessage}</p> : null}
-        <div className="candidate-list">
-          {visiblePreviewSkills.map((skill) => {
-            const importedSkillId = importedCandidates[skill.path];
-            const isInstalled = Boolean(
-              installedCandidateSourcePaths[normalizeSourcePath(skill.path)] || (importedSkillId && installedSkillIds[importedSkillId])
-            );
+        {showEmptyGuidance ? (
+          <MarketplaceEmptyGuidance
+            sourceCount={sources.length}
+            previewCount={previewSkills.length}
+            writableRootCount={writableRoots.length}
+            onOpenSettings={onOpenSettings}
+          />
+        ) : (
+          <>
+            {sources.length === 0 ? <p className="empty">No marketplace sources</p> : null}
+            {visiblePreviewSkills.length === 0 ? (
+              <p className="empty">{candidateEmptyMessage}</p>
+            ) : null}
+            <div className="candidate-list marketplace-cards">
+              {visiblePreviewSkills.map((skill) => {
+                const importedSkillId = importedCandidates[skill.path];
+                const isInstalled = Boolean(
+                  installedCandidateSourcePaths[normalizeSourcePath(skill.path)] ||
+                  (importedSkillId && installedSkillIds[importedSkillId])
+                );
 
-            return (
-              <article key={skill.path} className="candidate skill-card" aria-label={skill.name}>
-                <div className="candidate-heading">
-                  <strong>{skill.name}</strong>
-                  <span className="tag">preview</span>
-                </div>
-                <span>{skill.path}</span>
-                <p>{skill.description}</p>
-                <div className="tag-row" aria-label={`${skill.name} tags`}>
-                  {skill.tags.map((tag) => (
-                    <span className="tag tag-neutral" key={tag}>
-                      {tag}
-                    </span>
-                  ))}
-                </div>
-                <div className="candidate-actions">
-                  {isInstalled ? (
-                    <span className="tag">Installed</span>
-                  ) : (
-                    <>
-                      {importedSkillId ? (
-                        <span className="tag">Imported</span>
+                return (
+                  <article
+                    key={skill.path}
+                    className="candidate skill-card"
+                    aria-label={skill.name}
+                  >
+                    <div className="candidate-heading">
+                      <strong>{skill.name}</strong>
+                      <span className="tag">preview</span>
+                    </div>
+                    <span>{skill.path}</span>
+                    <p>{skill.description}</p>
+                    <div className="tag-row" aria-label={`${skill.name} tags`}>
+                      {skill.tags.map((tag) => (
+                        <span className="tag tag-neutral" key={tag}>
+                          {tag}
+                        </span>
+                      ))}
+                    </div>
+                    <div className="candidate-actions">
+                      {isInstalled ? (
+                        <span className="tag">Installed</span>
                       ) : (
-                        <button type="button" onClick={() => void onImport(skill)}>
-                          Import
-                        </button>
+                        <>
+                          {importedSkillId ? (
+                            <span className="tag">Imported</span>
+                          ) : (
+                            <button type="button" onClick={() => void onImport(skill)}>
+                              Import
+                            </button>
+                          )}
+                          <button type="button" onClick={() => onInstall(skill)}>
+                            Install
+                          </button>
+                        </>
                       )}
-                      <button type="button" onClick={() => onInstall(skill)}>
-                        Install
-                      </button>
-                    </>
-                  )}
-                </div>
-              </article>
-            );
-          })}
-        </div>
+                    </div>
+                  </article>
+                );
+              })}
+            </div>
+          </>
+        )}
       </section>
     </div>
   );
 }
 
-function ConflictBox({ plan, onConfirmOverwrite }: { plan: InstallPlan; onConfirmOverwrite: () => void }) {
+function MarketplaceEmptyGuidance({
+  sourceCount,
+  previewCount,
+  writableRootCount,
+  onOpenSettings
+}: {
+  sourceCount: number;
+  previewCount: number;
+  writableRootCount: number;
+  onOpenSettings: () => void;
+}) {
+  return (
+    <div className="market-empty-grid" aria-label="Marketplace setup steps">
+      <article className="market-empty-card" aria-label="Add a local source">
+        <div className="market-empty-icon">
+          <FolderSearch size={22} aria-hidden="true" />
+        </div>
+        <span className="market-empty-count">{sourceCount} sources</span>
+        <h3>Add a local source</h3>
+        <p>Point OpenHub at a folder that contains SKILL.md files and inspect it before import.</p>
+        <button type="button" onClick={onOpenSettings}>
+          Configure sources
+        </button>
+      </article>
+      <article className="market-empty-card" aria-label="Preview a Git source">
+        <div className="market-empty-icon market-empty-icon-dark">
+          <Store size={22} aria-hidden="true" />
+        </div>
+        <span className="market-empty-count">{previewCount} previewed</span>
+        <h3>Preview a Git source</h3>
+        <p>Register a repository URL, preview candidates, then import only the selected skills.</p>
+        <button type="button" onClick={onOpenSettings}>
+          Add source URL
+        </button>
+      </article>
+      <article className="market-empty-card" aria-label="Choose a writable root">
+        <div className="market-empty-icon market-empty-icon-green">
+          <Library size={22} aria-hidden="true" />
+        </div>
+        <span className="market-empty-count">{writableRootCount} writable roots</span>
+        <h3>Choose a writable root</h3>
+        <p>Copy or symlink selected skills into an app-managed target after preview.</p>
+        <button type="button" onClick={onOpenSettings}>
+          Configure roots
+        </button>
+      </article>
+    </div>
+  );
+}
+
+function ConflictBox({
+  plan,
+  onConfirmOverwrite
+}: {
+  plan: InstallPlan;
+  onConfirmOverwrite: () => void;
+}) {
   const conflicts = plan.writes.filter((write) => write.status === 'conflict');
   const visibleConflicts = conflicts.slice(0, 3);
   const hiddenConflictCount = conflicts.length - visibleConflicts.length;
@@ -1267,7 +1512,114 @@ function ConflictBox({ plan, onConfirmOverwrite }: { plan: InstallPlan; onConfir
   );
 }
 
-function SkillDetailPanel({ detail, detailPanelRef }: { detail: SkillDetail | null; detailPanelRef: RefObject<HTMLElement | null> }) {
+function AnalyticsPage({
+  state,
+  roots,
+  sources,
+  previewSkills
+}: {
+  state: DesktopWorkspaceState;
+  roots: AgentRootTarget[];
+  sources: DiscoverSource[];
+  previewSkills: DiscoverSkillPreview[];
+}) {
+  const localEvents = buildLocalActivityRows(state, roots, sources, previewSkills);
+  const activeCategories = [
+    { label: 'Indexed skills', value: state.librarySkills.length, tone: 'blue' },
+    { label: 'Agent roots', value: roots.length, tone: 'dark' },
+    { label: 'Source candidates', value: previewSkills.length, tone: 'green' }
+  ];
+  const totalLocalSignals = activeCategories.reduce((total, item) => total + item.value, 0);
+
+  return (
+    <div className="content-grid">
+      <section className="analytics-toolbar" aria-label="Analytics range">
+        <div>
+          <strong>Local signal review</strong>
+          <span>Derived from local library, roots, source previews, and app-managed changes.</span>
+        </div>
+        <div className="range-tabs" role="tablist" aria-label="Activity range">
+          {['7D', '30D', '3M', '1Y'].map((range) => (
+            <button key={range} type="button" role="tab" aria-selected={range === '30D'}>
+              {range}
+            </button>
+          ))}
+        </div>
+      </section>
+
+      <section className="analytics-grid">
+        <article className="panel chart-panel">
+          <div className="panel-heading">
+            <div>
+              <h2>Workspace Activity</h2>
+              <p>Local signals across the current workspace.</p>
+            </div>
+            <strong>{totalLocalSignals}</strong>
+          </div>
+          <div className="line-chart" aria-label="Local activity trend">
+            {[28, 42, 34, 55, 49, 67, 59, 78, 72].map((height, index) => (
+              <span key={index} style={{ '--bar-height': `${height}%` } as CSSProperties} />
+            ))}
+          </div>
+        </article>
+
+        <article className="panel">
+          <h2>Activity by Category</h2>
+          <div className="donut-card" aria-label="Local activity category summary">
+            <div className="donut-value">
+              {activeCategories.filter((item) => item.value > 0).length}
+            </div>
+            <span>Active local groups</span>
+          </div>
+          <div className="legend-list">
+            {activeCategories.map((item) => (
+              <div className="legend-row" key={item.label}>
+                <span className={`legend-dot legend-${item.tone}`} />
+                <span>{item.label}</span>
+                <strong>{item.value}</strong>
+              </div>
+            ))}
+          </div>
+        </article>
+      </section>
+
+      <section className="panel activity-table-panel">
+        <div className="panel-heading">
+          <div>
+            <h2>Recent Local Events</h2>
+            <p>App-observable changes, not skill runtime traces.</p>
+          </div>
+        </div>
+        <div className="activity-table" role="table" aria-label="Recent local activity">
+          <div className="activity-row activity-head" role="row">
+            <span role="columnheader">Time</span>
+            <span role="columnheader">Event</span>
+            <span role="columnheader">Category</span>
+            <span role="columnheader">State</span>
+          </div>
+          {localEvents.map((event) => (
+            <div className="activity-row" role="row" key={`${event.time}:${event.label}`}>
+              <span role="cell">{event.time}</span>
+              <span role="cell">{event.label}</span>
+              <span role="cell">{event.category}</span>
+              <span role="cell">
+                <span className="tag">{event.state}</span>
+              </span>
+            </div>
+          ))}
+        </div>
+      </section>
+    </div>
+  );
+}
+
+function SkillDetailPanel({
+  detail,
+  detailPanelRef
+}: {
+  detail: SkillDetail | null;
+  detailPanelRef: RefObject<HTMLElement | null>;
+}) {
   if (!detail) {
     return (
       <section className="panel detail-panel" aria-label="Skill detail" ref={detailPanelRef}>
@@ -1277,47 +1629,101 @@ function SkillDetailPanel({ detail, detailPanelRef }: { detail: SkillDetail | nu
   }
 
   return (
-    <section className="panel detail-panel" aria-label={`${detail.skill.name} details`} ref={detailPanelRef}>
-      <div className="detail-heading">
-        <div>
-          <h2>{detail.skill.name}</h2>
+    <section
+      className="panel detail-panel"
+      aria-label={`${detail.skill.name} details`}
+      ref={detailPanelRef}
+    >
+      <div className="detail-crumbs" aria-label="Skill detail breadcrumb">
+        <span>My Skills</span>
+        <span>/</span>
+        <strong>{detail.skill.name}</strong>
+      </div>
+      <div className="detail-hero">
+        <div className="detail-glyph">
+          <Library size={36} aria-hidden="true" />
+        </div>
+        <div className="detail-copy">
+          <div className="detail-title-row">
+            <h2>{detail.skill.name}</h2>
+            <span className="tag">Version {detail.skill.versionNo}</span>
+          </div>
           <p>{detail.skill.description}</p>
         </div>
-        <span className="tag">Version {detail.skill.versionNo}</span>
       </div>
-      <div className="tag-row">
-        <span className="tag tag-neutral">{detail.source.url ?? detail.source.type}</span>
-        {detail.skill.favorite ? <span className="tag tag-neutral">favorite</span> : null}
-        {detail.skill.tags.map((tag) => (
-          <span className="tag tag-neutral" key={tag}>
-            {tag}
-          </span>
-        ))}
+      <div className="detail-tab-strip" aria-label="Skill detail sections">
+        <span aria-current="page">Overview</span>
+        <span>Files</span>
+        <span>Versions</span>
+        <span>Markdown</span>
       </div>
-      <div className="split-two detail-grid">
-        <section>
-          <h3>Files</h3>
-          {detail.files.length === 0 ? <p className="empty">No files recorded</p> : null}
-          {detail.files.map((file) => (
-            <div className="key-row" key={file.relativePath}>
-              <span>{file.kind}</span>
-              <strong>{file.relativePath}</strong>
+      <div className="detail-columns">
+        <div className="detail-main-stack">
+          <section className="detail-section">
+            <h3>Local Overview</h3>
+            <div className="tag-row">
+              <span className="tag tag-neutral">{detail.source.url ?? detail.source.type}</span>
+              {detail.skill.favorite ? <span className="tag tag-neutral">favorite</span> : null}
+              {detail.skill.tags.map((tag) => (
+                <span className="tag tag-neutral" key={tag}>
+                  {tag}
+                </span>
+              ))}
             </div>
-          ))}
-        </section>
-        <section>
-          <h3>Versions</h3>
-          {detail.versions.length === 0 ? <p className="empty">No version history</p> : null}
-          {detail.versions.map((version) => (
-            <div className="key-row" key={version.versionId}>
-              <span>v{version.versionNo}</span>
-              <strong>{version.changeSummary || version.createdAt}</strong>
+            <div className="key-row">
+              <span>Source</span>
+              <strong>{detail.source.url ?? detail.source.type}</strong>
             </div>
-          ))}
-        </section>
+            <div className="key-row">
+              <span>Slug</span>
+              <strong>{detail.skill.slug}</strong>
+            </div>
+          </section>
+          <section className="detail-section">
+            <h3>Files</h3>
+            {detail.files.length === 0 ? <p className="empty">No files recorded</p> : null}
+            {detail.files.map((file) => (
+              <div className="key-row" key={file.relativePath}>
+                <span>{file.kind}</span>
+                <strong>{file.relativePath}</strong>
+              </div>
+            ))}
+          </section>
+          <section className="detail-section">
+            <h3>Versions</h3>
+            {detail.versions.length === 0 ? <p className="empty">No version history</p> : null}
+            {detail.versions.map((version) => (
+              <div className="key-row" key={version.versionId}>
+                <span>v{version.versionNo}</span>
+                <strong>{version.changeSummary || version.createdAt}</strong>
+              </div>
+            ))}
+          </section>
+          <section className="detail-section">
+            <h3>Skill markdown</h3>
+            <pre className="markdown-preview">{detail.skillMarkdown}</pre>
+          </section>
+        </div>
+        <aside className="detail-meta-panel">
+          <h3>Skill metadata</h3>
+          <div className="key-row">
+            <span>Source type</span>
+            <strong>{detail.source.type}</strong>
+          </div>
+          <div className="key-row">
+            <span>Version</span>
+            <strong>{detail.skill.versionNo}</strong>
+          </div>
+          <div className="key-row">
+            <span>Favorite</span>
+            <strong>{detail.skill.favorite ? 'Yes' : 'No'}</strong>
+          </div>
+          <div className="key-row">
+            <span>Tags</span>
+            <strong>{detail.skill.tags.length > 0 ? detail.skill.tags.join(', ') : 'None'}</strong>
+          </div>
+        </aside>
       </div>
-      <h3>Skill markdown</h3>
-      <pre className="markdown-preview">{detail.skillMarkdown}</pre>
     </section>
   );
 }
@@ -1390,183 +1796,19 @@ function SettingsPage({
   const pluginDirectories = appSettings?.pluginDirectories ?? state.plugins.directories;
 
   return (
-    <div className="split-two">
-      <div className="settings-stack">
-        <section className="panel">
-          <h2>Local roots</h2>
-          <div className="form-grid compact-form">
-            <label>
-              Agent
-              <select
-                aria-label="Root agent"
-                value={rootAgentCode}
-                onChange={(event) => setRootAgentCode(event.target.value as RootAgentCode)}
-              >
-                <option value="codex">Codex</option>
-                <option value="claude">Claude</option>
-                <option value="gemini">Gemini</option>
-                <option value="opencode">OpenCode</option>
-                <option value="agents">Agents</option>
-              </select>
-            </label>
-            <label>
-              Root path
-              <input value={rootPath} onChange={(event) => setRootPath(event.target.value)} />
-            </label>
-            <button type="button" onClick={onAddRoot}>
-              Add root
-            </button>
+    <div className="settings-layout">
+      <section className="panel settings-card">
+        <div className="settings-card-title">
+          <span className="settings-icon">
+            <Settings size={22} aria-hidden="true" />
+          </span>
+          <div>
+            <h2>General</h2>
+            <p>Desktop preferences backed by local app settings.</p>
           </div>
-          {roots.length === 0 ? <p className="empty">No local roots</p> : null}
-          {roots.map((root) => (
-            <div className="key-row three-col" key={`${root.agentCode}:${root.rootPath}:${root.scope}`}>
-              <span>{root.agentDisplayName}</span>
-              <strong>{root.rootPath}</strong>
-              {root.rootKind === 'project' ? (
-                <button type="button" className="inline-action" aria-label={`Remove ${root.rootPath}`} onClick={() => onRemoveRoot(root)}>
-                  Remove
-                </button>
-              ) : (
-                <span className="muted">Detected</span>
-              )}
-            </div>
-          ))}
-          <h2>Marketplace sources</h2>
-          <div className="form-grid compact-form">
-            <label>
-              Marketplace source name
-              <input value={sourceName} onChange={(event) => setSourceName(event.target.value)} />
-            </label>
-            <label>
-              Marketplace source URL
-              <input value={sourceUrl} onChange={(event) => setSourceUrl(event.target.value)} />
-            </label>
-            <button type="button" onClick={onAddSource}>
-              Add source
-            </button>
-          </div>
-          {discoverSources.length === 0 ? <p className="empty">No marketplace sources</p> : null}
-          {discoverSources.map((source) => (
-            <div className="key-row three-col" key={source.id}>
-              <span>{source.name}</span>
-              <strong>{source.url}</strong>
-              <button type="button" className="inline-action" aria-label={`Remove ${source.name}`} onClick={() => onRemoveSource(source.id)}>
-                Remove
-              </button>
-            </div>
-          ))}
-          <h2>Sync</h2>
-          <div className="form-grid compact-form">
-            <label>
-              Sync mode
-              <select
-                aria-label="Sync mode"
-                value={syncMode}
-                onChange={(event) => setSyncMode(event.target.value as SyncProfileMode)}
-              >
-                <option value="shared-folder">shared-folder</option>
-                <option value="git">git</option>
-              </select>
-            </label>
-            <label>
-              Sync remote path
-              <input value={syncRemoteUrl} onChange={(event) => setSyncRemoteUrl(event.target.value)} />
-            </label>
-            <label className="toggle-row">
-              <input
-                type="checkbox"
-                aria-label="Enable sync profile"
-                checked={syncProfileEnabled}
-                onChange={(event) => setSyncProfileEnabled(event.target.checked)}
-              />
-              Enable sync profile
-            </label>
-            <button type="button" onClick={onAddSyncProfile}>
-              Add sync profile
-            </button>
-          </div>
-          {state.syncCenter.profiles.length === 0 ? <p className="empty">No sync profiles</p> : null}
-          {state.syncCenter.profiles.map((profile) => (
-            <div className="key-row three-col" key={profile.id}>
-              <span>{profile.mode}</span>
-              <strong>{profile.remoteUrl}</strong>
-              <span className="tag">{profile.status}</span>
-            </div>
-          ))}
-        </section>
-      </div>
-      <div className="settings-stack">
-        <section className="panel">
-          <h2>Plugins</h2>
-          <div className="capability-grid">
-            <div>
-              <span>Agent adapters</span>
-              <strong>{pluginRegistry.agentAdapters.length}</strong>
-            </div>
-            <div>
-              <span>Importers</span>
-              <strong>{pluginRegistry.importers.length}</strong>
-            </div>
-            <div>
-              <span>Sync drivers</span>
-              <strong>{pluginRegistry.syncDrivers.length}</strong>
-            </div>
-          </div>
-          {state.plugins.plugins.length === 0 ? <p className="empty">No plugins enabled</p> : null}
-          {state.plugins.plugins.map((plugin) => (
-            <div className="plugin-row" key={plugin.id ?? plugin.name}>
-              <Plug size={16} aria-hidden="true" />
-              <span>{plugin.name}</span>
-              <strong>{plugin.status}</strong>
-            </div>
-          ))}
-          <h2>Plugin directories</h2>
-          <div className="form-grid compact-form">
-            <label>
-              Plugin directory path
-              <input value={pluginDirectoryPath} onChange={(event) => setPluginDirectoryPath(event.target.value)} />
-            </label>
-            <button type="button" onClick={onAddPluginDirectory}>
-              Add plugin directory
-            </button>
-          </div>
-          {pluginDirectories.length === 0 ? <p className="empty">No plugin directories</p> : null}
-          {pluginDirectories.map((directory) => (
-            <div className="key-row three-col" key={directory.id}>
-              <span>{directory.status}</span>
-              <strong>{directory.rootPath}</strong>
-              <span className="row-actions">
-                <button
-                  type="button"
-                  className="inline-action"
-                  aria-label={`Scan ${directory.rootPath}`}
-                  onClick={() => onScanPluginDirectory(directory.id)}
-                >
-                  Scan
-                </button>
-                <button
-                  type="button"
-                  className="inline-action"
-                  aria-label={`Remove ${directory.rootPath}`}
-                  onClick={() => onRemovePluginDirectory(directory.id)}
-                >
-                  Remove
-                </button>
-              </span>
-            </div>
-          ))}
-          <h2>Plugin catalog</h2>
-          {state.plugins.catalog.length === 0 ? <p className="empty">No plugin catalog entries</p> : null}
-          {state.plugins.catalog.map((entry) => (
-            <div className="key-row three-col" key={entry.id}>
-              <span>{entry.name}</span>
-              <strong>{entry.rootPath}</strong>
-              <span className="tag">{entry.installed ? 'Installed' : entry.status}</span>
-            </div>
-          ))}
-        </section>
-        <section className="panel">
-          <h2>App preferences</h2>
+        </div>
+        <div className="settings-subsection">
+          <h3>App preferences</h3>
           {appSettings ? (
             <div className="settings-stack">
               <label className="preference-row">
@@ -1601,50 +1843,383 @@ function SettingsPage({
           ) : (
             <p className="empty">Local app preferences unavailable</p>
           )}
-        </section>
-      </div>
+        </div>
+      </section>
+
+      <section className="panel settings-card">
+        <div className="settings-card-title">
+          <span className="settings-icon">
+            <Library size={22} aria-hidden="true" />
+          </span>
+          <div>
+            <h2>Skill Repositories</h2>
+            <p>Manage local roots, marketplace preview sources, and sync profiles.</p>
+          </div>
+        </div>
+        <div className="settings-subsection">
+          <h3>Local roots</h3>
+          <div className="form-grid compact-form settings-fields-three">
+            <label>
+              Agent
+              <select
+                aria-label="Root agent"
+                value={rootAgentCode}
+                onChange={(event) => setRootAgentCode(event.target.value as RootAgentCode)}
+              >
+                <option value="codex">Codex</option>
+                <option value="claude">Claude</option>
+                <option value="gemini">Gemini</option>
+                <option value="opencode">OpenCode</option>
+                <option value="agents">Agents</option>
+              </select>
+            </label>
+            <label>
+              Root path
+              <input value={rootPath} onChange={(event) => setRootPath(event.target.value)} />
+            </label>
+            <button type="button" onClick={onAddRoot}>
+              Add root
+            </button>
+          </div>
+          {roots.length === 0 ? <p className="empty">No local roots</p> : null}
+          {roots.map((root) => (
+            <div
+              className="key-row three-col"
+              key={`${root.agentCode}:${root.rootPath}:${root.scope}`}
+            >
+              <span>{root.agentDisplayName}</span>
+              <strong>{root.rootPath}</strong>
+              {root.rootKind === 'project' ? (
+                <button
+                  type="button"
+                  className="inline-action"
+                  aria-label={`Remove ${root.rootPath}`}
+                  onClick={() => onRemoveRoot(root)}
+                >
+                  Remove
+                </button>
+              ) : (
+                <span className="muted">Detected</span>
+              )}
+            </div>
+          ))}
+        </div>
+        <div className="settings-subsection">
+          <h3>Marketplace sources</h3>
+          <div className="form-grid compact-form settings-fields-three">
+            <label>
+              Marketplace source name
+              <input value={sourceName} onChange={(event) => setSourceName(event.target.value)} />
+            </label>
+            <label>
+              Marketplace source URL
+              <input value={sourceUrl} onChange={(event) => setSourceUrl(event.target.value)} />
+            </label>
+            <button type="button" onClick={onAddSource}>
+              Add source
+            </button>
+          </div>
+          {discoverSources.length === 0 ? <p className="empty">No marketplace sources</p> : null}
+          {discoverSources.map((source) => (
+            <div className="key-row three-col" key={source.id}>
+              <span>{source.name}</span>
+              <strong>{source.url}</strong>
+              <button
+                type="button"
+                className="inline-action"
+                aria-label={`Remove ${source.name}`}
+                onClick={() => onRemoveSource(source.id)}
+              >
+                Remove
+              </button>
+            </div>
+          ))}
+        </div>
+        <div className="settings-subsection">
+          <h3>Sync</h3>
+          <div className="form-grid compact-form settings-fields-four">
+            <label>
+              Sync mode
+              <select
+                aria-label="Sync mode"
+                value={syncMode}
+                onChange={(event) => setSyncMode(event.target.value as SyncProfileMode)}
+              >
+                <option value="shared-folder">shared-folder</option>
+                <option value="git">git</option>
+              </select>
+            </label>
+            <label>
+              Sync remote path
+              <input
+                value={syncRemoteUrl}
+                onChange={(event) => setSyncRemoteUrl(event.target.value)}
+              />
+            </label>
+            <label className="toggle-row">
+              <input
+                type="checkbox"
+                aria-label="Enable sync profile"
+                checked={syncProfileEnabled}
+                onChange={(event) => setSyncProfileEnabled(event.target.checked)}
+              />
+              Enable sync profile
+            </label>
+            <button type="button" onClick={onAddSyncProfile}>
+              Add sync profile
+            </button>
+          </div>
+          {state.syncCenter.profiles.length === 0 ? (
+            <p className="empty">No sync profiles</p>
+          ) : null}
+          {state.syncCenter.profiles.map((profile) => (
+            <div className="key-row three-col" key={profile.id}>
+              <span>{profile.mode}</span>
+              <strong>{profile.remoteUrl}</strong>
+              <span className="tag">{profile.status}</span>
+            </div>
+          ))}
+        </div>
+      </section>
+
+      <section className="panel settings-card">
+        <div className="settings-card-title">
+          <span className="settings-icon">
+            <Bell size={22} aria-hidden="true" />
+          </span>
+          <div>
+            <h2>Local Privacy</h2>
+            <p>Workspace data remains in the local OpenHub runtime.</p>
+          </div>
+        </div>
+        <div className="settings-privacy-list">
+          <div className="preference-row">
+            <span>
+              <strong>Source previews</strong>
+              <small>Local and Git candidates stay in preview until you import a selection.</small>
+            </span>
+            <span className="settings-value-pill">Explicit</span>
+          </div>
+          <div className="preference-row">
+            <span>
+              <strong>Workspace records</strong>
+              <small>
+                Roots, sources, sync profiles, and plugin paths are read from local state.
+              </small>
+            </span>
+            <span className="settings-value-pill">Local</span>
+          </div>
+        </div>
+      </section>
+
+      <section className="panel settings-card">
+        <div className="settings-card-title">
+          <span className="settings-icon settings-icon-blue">
+            <Plug size={22} aria-hidden="true" />
+          </span>
+          <div>
+            <h2>About</h2>
+            <p>{state.appInfo.productName} desktop runtime and extension catalog.</p>
+          </div>
+          <span className="settings-value-pill">
+            {state.appInfo.localFirst ? 'Local-first' : 'App'}
+          </span>
+        </div>
+        <div className="settings-about-row">
+          <div>
+            <strong>{state.appInfo.productName} Desktop</strong>
+            <span>{state.appInfo.phase}</span>
+          </div>
+          <span className="settings-value-pill">OpenHub</span>
+        </div>
+        <div className="settings-subsection">
+          <h3>Plugins</h3>
+          <div className="capability-grid">
+            <div>
+              <span>Agent adapters</span>
+              <strong>{pluginRegistry.agentAdapters.length}</strong>
+            </div>
+            <div>
+              <span>Importers</span>
+              <strong>{pluginRegistry.importers.length}</strong>
+            </div>
+            <div>
+              <span>Sync drivers</span>
+              <strong>{pluginRegistry.syncDrivers.length}</strong>
+            </div>
+          </div>
+          {state.plugins.plugins.length === 0 ? <p className="empty">No plugins enabled</p> : null}
+          {state.plugins.plugins.map((plugin) => (
+            <div className="plugin-row" key={plugin.id ?? plugin.name}>
+              <Plug size={16} aria-hidden="true" />
+              <span>{plugin.name}</span>
+              <strong>{plugin.status}</strong>
+            </div>
+          ))}
+        </div>
+        <div className="settings-subsection">
+          <h3>Plugin directories</h3>
+          <div className="form-grid compact-form settings-fields-two">
+            <label>
+              Plugin directory path
+              <input
+                value={pluginDirectoryPath}
+                onChange={(event) => setPluginDirectoryPath(event.target.value)}
+              />
+            </label>
+            <button type="button" onClick={onAddPluginDirectory}>
+              Add plugin directory
+            </button>
+          </div>
+          {pluginDirectories.length === 0 ? <p className="empty">No plugin directories</p> : null}
+          {pluginDirectories.map((directory) => (
+            <div className="key-row three-col" key={directory.id}>
+              <span>{directory.status}</span>
+              <strong>{directory.rootPath}</strong>
+              <span className="row-actions">
+                <button
+                  type="button"
+                  className="inline-action"
+                  aria-label={`Scan ${directory.rootPath}`}
+                  onClick={() => onScanPluginDirectory(directory.id)}
+                >
+                  Scan
+                </button>
+                <button
+                  type="button"
+                  className="inline-action"
+                  aria-label={`Remove ${directory.rootPath}`}
+                  onClick={() => onRemovePluginDirectory(directory.id)}
+                >
+                  Remove
+                </button>
+              </span>
+            </div>
+          ))}
+        </div>
+        <div className="settings-subsection">
+          <h3>Plugin catalog</h3>
+          {state.plugins.catalog.length === 0 ? (
+            <p className="empty">No plugin catalog entries</p>
+          ) : null}
+          {state.plugins.catalog.map((entry) => (
+            <div className="key-row three-col" key={entry.id}>
+              <span>{entry.name}</span>
+              <strong>{entry.rootPath}</strong>
+              <span className="tag">{entry.installed ? 'Installed' : entry.status}</span>
+            </div>
+          ))}
+        </div>
+      </section>
     </div>
   );
 }
 
 function titleForPage(page: PageKey): string {
   return {
-    home: 'Dashboard',
-    skills: 'Skills',
+    home: 'Dashboard Overview',
+    marketplace: 'Marketplace',
+    skills: 'My Skills',
+    analytics: 'Local Activity Analytics',
     settings: 'Settings'
   }[page];
 }
 
-function firstPopulatedAgentTab(agentCodes: string[], current: SkillsTabKey): SkillsTabKey {
-  if (current === 'marketplace') {
-    return current;
-  }
+function searchPlaceholderForPage(page: PageKey): string {
+  return {
+    home: 'Search skills, sources, or settings...',
+    marketplace: 'Search marketplace candidates...',
+    skills: 'Search skills...',
+    analytics: 'Search local activity...',
+    settings: 'Search settings...'
+  }[page];
+}
 
+function firstPopulatedAgentTab(agentCodes: string[], current: SkillsTabKey): SkillsTabKey {
   const populatedAgents = new Set(agentCodes);
   if (populatedAgents.has(current)) {
     return current;
   }
 
-  return agentTabs.find((tab) => tab.key !== 'marketplace' && populatedAgents.has(tab.key))?.key ?? current;
+  return agentTabs.find((tab) => populatedAgents.has(tab.key))?.key ?? current;
 }
 
 function firstSearchResultTab(
   rows: DesktopWorkspaceState['librarySkills'],
-  previewSkills: DiscoverSkillPreview[],
   searchQuery: string,
   current: SkillsTabKey
 ): SkillsTabKey {
   const normalizedSearchQuery = normalizeSearchText(searchQuery);
-  const matchingAgentTab = agentTabs.find(
-    (tab) => tab.key !== 'marketplace' && rows.some((skill) => skill.agentCode === tab.key && skillMatchesSearch(skill, normalizedSearchQuery))
+  const matchingAgentTab = agentTabs.find((tab) =>
+    rows.some(
+      (skill) => skill.agentCode === tab.key && skillMatchesSearch(skill, normalizedSearchQuery)
+    )
   );
   if (matchingAgentTab) {
     return matchingAgentTab.key;
   }
+  return agentTabs.find((tab) => rows.some((skill) => skill.agentCode === tab.key))?.key ?? current;
+}
+
+function firstSearchResultPage(
+  rows: DesktopWorkspaceState['librarySkills'],
+  previewSkills: DiscoverSkillPreview[],
+  searchQuery: string
+): PageKey {
+  const normalizedSearchQuery = normalizeSearchText(searchQuery);
   if (previewSkills.some((skill) => candidateMatchesSearch(skill, normalizedSearchQuery))) {
     return 'marketplace';
   }
-  return agentTabs.find((tab) => tab.key !== 'marketplace' && rows.some((skill) => skill.agentCode === tab.key))?.key ?? current;
+  if (rows.some((skill) => skillMatchesSearch(skill, normalizedSearchQuery))) {
+    return 'skills';
+  }
+  return 'skills';
+}
+
+function buildLocalActivityRows(
+  state: DesktopWorkspaceState,
+  roots: AgentRootTarget[],
+  sources: DiscoverSource[],
+  previewSkills: DiscoverSkillPreview[]
+) {
+  const rows = [
+    {
+      time: 'Current session',
+      label: `${state.librarySkills.length} indexed skill${state.librarySkills.length === 1 ? '' : 's'}`,
+      category: 'Library',
+      state: state.librarySkills.length > 0 ? 'Available' : 'Empty'
+    },
+    {
+      time: 'Current session',
+      label: `${roots.length} agent root${roots.length === 1 ? '' : 's'} detected`,
+      category: 'Roots',
+      state: roots.length > 0 ? 'Ready' : 'Pending'
+    },
+    {
+      time: 'Current session',
+      label: `${sources.length} marketplace source${sources.length === 1 ? '' : 's'} configured`,
+      category: 'Sources',
+      state: sources.length > 0 ? 'Configured' : 'Pending'
+    },
+    {
+      time: 'Current session',
+      label: `${previewSkills.length} preview candidate${previewSkills.length === 1 ? '' : 's'} visible`,
+      category: 'Preview',
+      state: previewSkills.length > 0 ? 'Reviewed' : 'Empty'
+    },
+    {
+      time: 'Current session',
+      label: `${state.librarySkills.filter((skill) => skill.ownership === 'app-owned').length} app-managed skill${
+        state.librarySkills.filter((skill) => skill.ownership === 'app-owned').length === 1
+          ? ''
+          : 's'
+      }`,
+      category: 'Managed files',
+      state: 'Local'
+    }
+  ];
+
+  return rows;
 }
 
 function groupByRoot(rows: DesktopWorkspaceState['librarySkills']) {
@@ -1670,7 +2245,9 @@ function upsertSyncCenterProfile(
   return [profile, ...profiles.filter((item) => item.id !== profile.id)];
 }
 
-function syncProfileToCenterProfile(profile: SyncProfile): DesktopWorkspaceState['syncCenter']['profiles'][number] {
+function syncProfileToCenterProfile(
+  profile: SyncProfile
+): DesktopWorkspaceState['syncCenter']['profiles'][number] {
   return {
     id: profile.id,
     mode: profile.mode,
@@ -1688,7 +2265,10 @@ function replacePluginCatalogForDirectory(
   return [...catalog.filter((entry) => entry.directoryId !== directoryId), ...entries];
 }
 
-function skillMatchesSearch(skill: DesktopWorkspaceState['librarySkills'][number], normalizedSearchQuery: string): boolean {
+function skillMatchesSearch(
+  skill: DesktopWorkspaceState['librarySkills'][number],
+  normalizedSearchQuery: string
+): boolean {
   return [
     skill.name,
     skill.path,
@@ -1700,7 +2280,10 @@ function skillMatchesSearch(skill: DesktopWorkspaceState['librarySkills'][number
   ].some((value) => normalizeSearchText(value).includes(normalizedSearchQuery));
 }
 
-function candidateMatchesSearch(skill: DiscoverSkillPreview, normalizedSearchQuery: string): boolean {
+function candidateMatchesSearch(
+  skill: DiscoverSkillPreview,
+  normalizedSearchQuery: string
+): boolean {
   return [skill.name, skill.description, skill.path, ...skill.tags].some((value) =>
     normalizeSearchText(value).includes(normalizedSearchQuery)
   );
@@ -1724,7 +2307,10 @@ function formatScanStatus(scan: LibraryScanResult): string {
   return `${scan.indexedSkills.length} indexed, ${errorLabel}: ${firstError.code} at ${firstError.skillPath} - ${firstError.message}`;
 }
 
-function normalizeDiscoverSourceInput(sourceUrl: string): { sourceType: 'local' | 'git'; url: string } {
+function normalizeDiscoverSourceInput(sourceUrl: string): {
+  sourceType: 'local' | 'git';
+  url: string;
+} {
   if (sourceUrl.startsWith('file://')) {
     return { sourceType: 'local', url: fileUrlToLocalPath(sourceUrl) };
   }
