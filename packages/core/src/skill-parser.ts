@@ -26,11 +26,14 @@ export function parseSkillManifest(content: string, manifestPath: string): Parse
   try {
     parsed = YAML.parse(frontmatter);
   } catch (error) {
-    throw new SkillParseError(
-      'malformed_frontmatter',
-      manifestPath,
-      `SKILL.md has malformed frontmatter: ${error instanceof Error ? error.message : 'unknown error'}`
-    );
+    parsed = parseFlatFrontmatter(frontmatter);
+    if (!parsed) {
+      throw new SkillParseError(
+        'malformed_frontmatter',
+        manifestPath,
+        `SKILL.md has malformed frontmatter: ${error instanceof Error ? error.message : 'unknown error'}`
+      );
+    }
   }
 
   const metadata = parsed as { name?: unknown; description?: unknown; tags?: unknown };
@@ -53,6 +56,66 @@ export function parseSkillManifest(content: string, manifestPath: string): Parse
 function extractFrontmatter(content: string): string {
   const match = /^---\r?\n([\s\S]*?)\r?\n---(?:\r?\n|$)/.exec(content);
   return match?.[1] ?? '';
+}
+
+function parseFlatFrontmatter(frontmatter: string): Record<string, unknown> | null {
+  const metadata: Record<string, unknown> = {};
+  const listValues = new Map<string, string[]>();
+  let activeListKey: string | null = null;
+
+  for (const line of frontmatter.split(/\r?\n/)) {
+    if (line.trim() === '') {
+      continue;
+    }
+
+    const listItem = /^\s+-\s*(.*)$/.exec(line);
+    if (activeListKey && listItem) {
+      listValues.get(activeListKey)?.push(stripWrappingQuotes(listItem[1]?.trim() ?? ''));
+      continue;
+    }
+
+    const keyValue = /^([A-Za-z0-9_-]+):(?:\s*(.*))?$/.exec(line);
+    if (!keyValue) {
+      return null;
+    }
+
+    const key = keyValue[1];
+    if (!key) {
+      return null;
+    }
+    const value = keyValue[2] ?? '';
+    if (value === '') {
+      const list: string[] = [];
+      listValues.set(key, list);
+      metadata[key] = list;
+      activeListKey = key;
+      continue;
+    }
+
+    metadata[key] = parseFlatValue(value);
+    activeListKey = null;
+  }
+
+  return metadata;
+}
+
+function parseFlatValue(value: string): string | string[] {
+  const trimmed = value.trim();
+  if (trimmed.startsWith('[') && trimmed.endsWith(']')) {
+    return trimmed
+      .slice(1, -1)
+      .split(',')
+      .map((entry) => stripWrappingQuotes(entry.trim()))
+      .filter(Boolean);
+  }
+  return stripWrappingQuotes(trimmed);
+}
+
+function stripWrappingQuotes(value: string): string {
+  if ((value.startsWith('"') && value.endsWith('"')) || (value.startsWith("'") && value.endsWith("'"))) {
+    return value.slice(1, -1);
+  }
+  return value;
 }
 
 function parseTags(tags: unknown): string[] {

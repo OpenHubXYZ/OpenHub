@@ -807,9 +807,10 @@ function expandToken(token: string): Array<{ token: string; weight: number }> {
     bundle: ['package', 'archive', 'export'],
     archive: ['package', 'bundle', 'export']
   };
+  const tokenSynonyms = Object.prototype.hasOwnProperty.call(synonyms, token) ? (synonyms[token] ?? []) : [];
   return [
     { token, weight: 1 },
-    ...(synonyms[token] ?? []).map((synonym) => ({ token: synonym, weight: 0.75 }))
+    ...tokenSynonyms.map((synonym) => ({ token: synonym, weight: 0.75 }))
   ];
 }
 

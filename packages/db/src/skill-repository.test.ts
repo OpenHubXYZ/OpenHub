@@ -196,6 +196,43 @@ describe('skill repository', () => {
     expect(repository.searchSkills('binary')).toEqual([]);
   });
 
+  it('indexes text containing object prototype token names without throwing', () => {
+    const db = createMemoryDatabase();
+    runMigrations(db);
+    const repository = createSkillRepository(db);
+
+    expect(() =>
+      repository.createSkill({
+        slug: 'openai-docs',
+        name: 'openai-docs',
+        description: 'Docs helper.',
+        tags: ['docs'],
+        source: {
+          type: 'agent-root',
+          url: '/tmp/.codex/skills/.system/openai-docs',
+        },
+        files: [
+          {
+            relativePath: 'SKILL.md',
+            content: '# OpenAI Docs'
+          },
+          {
+            relativePath: 'scripts/fetch-codex-manual.mjs',
+            content: 'class ManualFetchError extends Error { constructor(message) { super(message); } }'
+          },
+          {
+            relativePath: 'scripts/resolve-latest-model-info.js',
+            content: 'return new URL(value, baseUrl).toString();'
+          }
+        ]
+      })
+    ).not.toThrow();
+
+    expect(repository.searchSkills('constructor')).toEqual([
+      expect.objectContaining({ name: 'openai-docs' })
+    ]);
+  });
+
   it('skips corrupt local semantic index JSON without throwing', () => {
     const db = createMemoryDatabase();
     runMigrations(db);

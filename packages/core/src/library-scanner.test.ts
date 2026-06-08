@@ -22,6 +22,7 @@ describe('agent library scanner', () => {
     const codexSkill = path.join(homeDirectory, '.codex/skills/path-safety');
     const codexSystemSkill = path.join(homeDirectory, '.codex/skills/.system/openai-docs');
     const claudeMissing = path.join(homeDirectory, '.claude/skills/missing-manifest');
+    const claudeColonDescriptionSkill = path.join(homeDirectory, '.claude/skills/code-principles');
     const geminiMalformed = path.join(homeDirectory, '.gemini/skills/malformed');
     const opencodeSkill = path.join(homeDirectory, '.opencode/skills/story-helper');
     const agentsSkill = path.join(homeDirectory, '.agents/skills/chinese-novelist');
@@ -30,6 +31,7 @@ describe('agent library scanner', () => {
     await mkdir(codexSkill, { recursive: true });
     await mkdir(codexSystemSkill, { recursive: true });
     await mkdir(claudeMissing, { recursive: true });
+    await mkdir(claudeColonDescriptionSkill, { recursive: true });
     await mkdir(geminiMalformed, { recursive: true });
     await mkdir(opencodeSkill, { recursive: true });
     await mkdir(path.join(agentsSkill, 'scripts'), { recursive: true });
@@ -57,7 +59,26 @@ describe('agent library scanner', () => {
         '# OpenAI Docs'
       ].join('\n')
     );
+    await mkdir(path.join(codexSystemSkill, 'scripts'), { recursive: true });
+    await writeFile(
+      path.join(codexSystemSkill, 'scripts/fetch-codex-manual.mjs'),
+      'class ManualFetchError extends Error { constructor(message) { super(message); } }\n'
+    );
+    await writeFile(
+      path.join(codexSystemSkill, 'scripts/resolve-latest-model-info.js'),
+      'return new URL(value, baseUrl).toString();\n'
+    );
     await writeFile(path.join(codexSkill, 'checklist.md'), 'zip slip symlink escape');
+    await writeFile(
+      path.join(claudeColonDescriptionSkill, 'SKILL.md'),
+      [
+        '---',
+        'name: code-principles',
+        'description: Agent-first code architecture principles. Trigger on keywords: "分层", "架构原则", "lint".',
+        '---',
+        '# Code Principles'
+      ].join('\n')
+    );
     await writeFile(path.join(geminiMalformed, 'SKILL.md'), '---\ndescription: Missing name.\n---\n');
     await writeFile(
       path.join(opencodeSkill, 'SKILL.md'),
@@ -89,6 +110,7 @@ describe('agent library scanner', () => {
 
     expect(result.indexedSkills.map((skill) => skill.name).sort()).toEqual([
       'chinese-novelist',
+      'code-principles',
       'openai-docs',
       'path-safety',
       'story-helper'
@@ -118,6 +140,12 @@ describe('agent library scanner', () => {
         name: 'chinese-novelist',
         sourceAgent: 'Agents',
         path: agentsSkill,
+        visibilityStatus: 'indexed'
+      }),
+      expect.objectContaining({
+        name: 'code-principles',
+        sourceAgent: 'Claude',
+        path: claudeColonDescriptionSkill,
         visibilityStatus: 'indexed'
       }),
       expect.objectContaining({
